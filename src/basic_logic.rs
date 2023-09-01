@@ -26,6 +26,7 @@ impl Signal {
 struct Node {
     connections: Vec<Rc<Node>>,
     parent: Weak<LogicNodes>,
+    signal: Signal,
     current_clock_tick: usize,
     oscillations: usize,
 }
@@ -35,6 +36,7 @@ impl Node {
         Node {
             connections: Vec::new(),
             parent,
+            signal: LOW,
             current_clock_tick: 0,
             oscillations: 0,
         }
@@ -83,6 +85,18 @@ impl LogicNodes {
     }
 }
 
+//So lets say I start somewhere. Then I go through
+
+// 1) So first and foremost I want to go through all nodes of the clock. These will be the output
+//  nodes.
+// 2) I will go through and collect each gate that is connected to the output nodes (I can get them
+//  through the input nodes, skip the ones that don't change at all I suppose).
+// 3) Once all output nodes have been iterated through, I will go through the collected gates and
+//  iterate through each output node again (the loop starts over).
+//TODO: Does this approach really go through a single logic object at a time? Or is that even what
+// I want? So should it go through the ALU first?
+
+
 //TODO: Extract this to a separate struct and trait.
 //TODO: Maybe wrap this in something to eliminate the need to make a reference count every time. Or
 // maybe this is the wrapper for LogicNodes.
@@ -96,7 +110,7 @@ impl And {
         let mut logic_nodes = LogicNodes::new(input_size, output_size);
 
         And {
-           logic_nodes,
+            logic_nodes,
         }
     }
 
@@ -113,6 +127,72 @@ impl And {
 
     //TODO: Will need to think about de-allocations. This is because the And stores a reference to
     // Nodes and Node stores a reference to And.
+}
+
+trait LogicGate {
+    fn connect_output(&mut self, output_index: usize, next_gate: Rc<dyn LogicGate>, next_gate_input_index: usize);
+
+    //Returns true if something changed.
+    fn change_input(&mut self, input_index: usize, signal: Signal) -> bool;
+
+    fn collect_output(&self) -> Vec<OutputNode>;
+}
+
+#[derive(Clone)]
+struct OutputNode {
+    output_signal: Signal,
+    input_index: usize,
+    gate: Rc<dyn LogicGate>,
+}
+
+//Let me re-think this a little bit, I don't really see the point of the Nodes themselves. As long
+// as I just make a Vector of traits as output along with the pin number I think it should be fine.
+pub struct Or {
+    inputs: Vec<Signal>,
+    outputs: Vec<OutputNode>, //TODO: may need to be Rc
+}
+
+impl Or {
+    pub fn new(input_num: usize, output_num: usize) -> Self {
+        Or {
+            inputs: Vec::with_capacity(input_num),
+            outputs: Vec::with_capacity(output_num),
+        }
+    }
+}
+
+impl LogicGate for Or {
+    fn connect_output(&mut self, output_index: usize, next_gate: Rc<dyn LogicGate>, next_gate_input_index: usize) {
+        self.outputs[output_index] = OutputNode {
+            output_signal: LOW,
+            input_index: next_gate_input_index,
+            gate: next_gate,
+        };
+    }
+
+    fn change_input(&mut self, input_index: usize, signal: Signal) -> bool {
+        if self.inputs[input_index] == signal {
+            false
+        } else {
+            self.inputs[input_index] == signal;
+            true
+        }
+    }
+
+    fn collect_output(&self) -> Vec<OutputNode> {
+        let mut output_signal = LOW;
+        for s in self.inputs.iter() {
+            if *s == HIGH {
+                output_signal = HIGH;
+                break;
+            }
+        }
+
+        let mut output_clone = self.outputs.clone();
+        output_clone.iter_mut().for_each(|mut f| f.output_signal = output_signal.clone());
+
+        output_clone
+    }
 }
 
 // pub trait LogicUnit {
