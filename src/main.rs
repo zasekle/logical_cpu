@@ -1,77 +1,126 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use crate::basic_logic::{Clock, GateOutput, LogicGate};
+
 mod basic_logic;
 
-// use crate::basic_logic::{Signal::{HIGH, LOW}, And, Or, Nor, Nand, LogicUnit};
+/// This will represent the current clock tick number. It should only ever by incremented directly
+/// after a clock tick occurs with only a single thread running.
+static mut CLOCK_TICK_NUMBER: usize = 0;
+
+pub fn get_clock_tick_number() -> usize {
+    let clock_tick_number;
+    unsafe {
+        clock_tick_number = CLOCK_TICK_NUMBER;
+    }
+    clock_tick_number
+}
+
+/// This is the maximum number of times an input can change in a single clock tick. After this,
+/// oscillation will be assumed and the program will panic.
+static MAX_NUMBER_TIMES_INPUTS_CHANGE: usize = 5000;
 
 fn main() {
-    // let and_gate = And {};
-    // let or_gate = Or {};
-    // let nor_gate = Nor {};
-    // let nand_gate = Nand {};
-    //
-    // let input = [HIGH, HIGH, HIGH, HIGH];
-    // println!("and_gate: {:#?}", and_gate.input(&input).unwrap());
-    //
-    // let input = [HIGH, HIGH];
-    // println!("or_gate: {:#?}", or_gate.input(&input).unwrap());
-    //
-    // let input = [HIGH, HIGH, LOW];
-    // println!("nor_gate: {:#?}", nor_gate.input(&input).unwrap());
-    //
-    // let input = [HIGH, HIGH];
-    // println!("nand_gate: {:#?}", nand_gate.input(&input).unwrap());
-
-    //There is a bit of a problem with how I am thinking about things. That is the idea that state
-    // itself can be considered here. For example, with the very basic circuit that is used in memory
-    // the Active S R latches, they actually change based on the previous state. So maybe these need
-    // to store the current input, then I can simply 'check' what their output is.
-
-    //Also with this model how would I simulate a gate attaching back to itself? Maybe Instead of
-    // Signal inputs, I actually give them a copy of an object that represents input or output?
-
-    //I could do a few things.
-    // 1) Keep track of state.
-    //   - So the way this would need to work is that I would have an input and an output for each
-    //     gate. Then the start would need to be the clock. Then I suppose there would be something
-    //     I could modify so that I could have human input. But something else would need to keep
-    //     track of the order of logic gates and such.
-    // 2) Maybe add in connections or nodes or something.
-    //   - I could have a 'connection' somehow. Say instead of just the logic gate, it also stores
-    //     the units it connects to.
-
-    //TODO: How would I eliminate loops? Maybe when I pass the connection through I assign each
-    // logic unit a clock tick number. Then if the clock has already ticked ignore it. This could
-    // cause other problems I assume. For example, if I propagate something out depth-wise maybe
-    // when I increase the breadth, it will change these? Or maybe I should propagate based on the
-    // unit, then go depth after that. This way
-
-    //So my current idea is that, lets leave it the way it is. All solutions will have problems.
-    // I will 'wire' it up manually inside larger and larger units. And I will add a clock tick
-    // number to each unit.
 
     //TODO: How do I give it manual inputs? Maybe the clock works on a separate thread to the input
     // and I just feed it commands from the GUI? Maybe have the clock always running and it checks
     // a vector for possible commands, then on the main thread here I input commands.
+    //TODO: Think about future debugging, what will be the best way to implement it. I would like
+    // something to print the circuit in a human readable way. Maybe make it print the schematic or
+    // something.
+    //TODO: Write some tests.
+    //TODO: Can I set this up to somehow allow multithreading in the future?
 
+    //TODO: Probably want to separate out LogicGate and OutputNode into a different file so they can be used in other gates.
 
+    // TODO Make sure these 2 Situations are covered
+    //  NOT gate feeding back into itself (state will oscillate).
+    //  OR gate feeding back into itself (on forever).
 
+    //TODO: I need an ID for each of them, so maybe a better way to do this is to store all gates inside an array
+    // (can drop the RefCell) then each of them can have their unique ID set up by their index
+    // inside the array. This would let me change the return value to an index instead of using an Rc as well.
 
-    //I think that what I want is to add in two things to my gate, the first is to save current
-    // inputs. The second is to keep track of clock ticks. I think the big problem at the moment is
-    // that all inputs need to be put in at the same time. But there is no guarantee of that, also
-    // the clock tick thing may not be such a good idea. Say that I have an OR gate, I do some
-    // stuff and get a signal to it and update the clock tick. Then I get something else that goes
-    // to the other side of it, won't this NOT update? Maybe instead of the gate itself having one
-    // I have each little node have one? Is this more a flow problem?
+    //TODO: Redo the names of the major components so they make sense.
 
+    let clock = Clock::new(1);
+    // let first_or_gate = basic_logic::Or::new(2, 1);
+    // let second_or_gate = basic_logic::Or::new(2, 1);
+    let not_gate = basic_logic::Not::new(1);
 
-    //2 Situations
-    // NOT gate feeding back into itself (state will oscillate).
-    // OR gate feeding back into itself (on forever).
+    clock.borrow_mut().connect_output(
+        0,
+        not_gate.clone(),
+        0,
+    );
 
+    not_gate.borrow_mut().connect_output(
+        0,
+        not_gate.clone(),
+        0,
+    );
 
-    //So what I can do is measure the number of changes during a single clock cycle. Then if the
-    // number of changes gets above a certain number, I can just panic! or something. But the number
-    // must only be when the value CHANGES, not just when an update comes.
+    // clock.borrow_mut().connect_output(
+    //     0,
+    //     first_or_gate.clone(),
+    //     0,
+    // );
 
+    // first_or_gate.borrow_mut().connect_output(
+    //     0,
+    //     second_or_gate.clone(),
+    //     1,
+    // );
 
+    for _ in 0..2 {
+        //This should be the ONLY place this is ever updated.
+        unsafe {
+            CLOCK_TICK_NUMBER += 1;
+        }
+
+        let mut next_gates: Vec<Rc<RefCell<dyn LogicGate>>> = vec![];
+        let mut final_output = Vec::new();
+
+        next_gates.push(clock.clone());
+
+        while !next_gates.is_empty() {
+            let gates = next_gates;
+            next_gates = Vec::new();
+
+            for gate in gates.iter() {
+                let mut gate = gate.borrow_mut();
+                let gate_output = gate.collect_output().unwrap();
+
+                for output in gate_output {
+                    match output {
+                        GateOutput::NotConnected(signal) => {
+                            final_output.push(signal);
+                        }
+                        GateOutput::Connected(next_gate_info) => {
+                            let next_gate = Rc::clone(&next_gate_info.gate);
+
+                            next_gate.borrow_mut().change_input(&next_gate_info.input);
+
+                            //TODO: I need to make sure to only add the gate if the ID is unique (follow the comment below), I think
+                            // maybe it truly is better to store them all in a big vector and just
+                            // access them. This would also give an 'index' value to each one and allow
+                            // for ease of storing in say a set (or an ordered vector).
+
+                            //It is important to remember that a situation such as an OR gate feeding
+                            // back into itself is perfectly valid. This can be interpreted that if the
+                            // input was not changed, the output was not changed either and so nothing
+                            // needs to be done with this gate.
+                            next_gates.push(next_gate);
+                        }
+                    }
+                }
+            }
+        }
+
+        for o in final_output.iter() {
+            println!("o: {:#?}", o);
+        }
+    }
+
+    println!("Program Completed!");
 }
