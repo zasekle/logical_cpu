@@ -1,7 +1,9 @@
 use std::cell::RefCell;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::sync::atomic::Ordering;
 use crate::basic_logic::Signal::{HIGH, LOW};
-use crate::{get_clock_tick_number, MAX_NUMBER_TIMES_INPUTS_CHANGE};
+use crate::{get_clock_tick_number, MAX_NUMBER_TIMES_INPUTS_CHANGE, UNIQUE_INDEXING_NUMBER};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Signal {
@@ -18,6 +20,35 @@ pub struct GateInput {
     pub signal: Signal,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct UniqueID {
+    id: usize,
+}
+
+impl UniqueID {
+    fn new() -> Self {
+        let id = UNIQUE_INDEXING_NUMBER.fetch_add(
+            1,
+            Ordering::SeqCst
+        );
+        Self { id }
+    }
+}
+
+impl PartialEq for UniqueID {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for UniqueID {}  // Eq requires that you've implemented PartialEq
+
+impl Hash for UniqueID {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 impl GateInput {
     pub fn new(input_index: usize, signal: Signal) -> Self {
         GateInput {
@@ -28,7 +59,7 @@ impl GateInput {
 }
 
 pub trait LogicGate {
-    fn connect_output(&mut self, output_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>, next_gate_input_index: usize);
+    fn connect_output(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>);
 
     ///Returns true if something changed.
     fn change_input(&mut self, input: &GateInput) -> bool;
@@ -36,6 +67,8 @@ pub trait LogicGate {
     fn collect_output(&mut self) -> Result<Vec<GateOutput>, GateLogicError>;
 
     fn get_tag(&self) -> String;
+
+    fn get_id(&self) -> UniqueID;
 }
 
 #[derive(Clone)]
@@ -53,6 +86,7 @@ pub struct OutputNode {
 pub struct Or {
     inputs: Vec<Signal>,
     outputs: Vec<GateOutput>,
+    id: UniqueID,
     current_clock_tick_num: usize,
     num_times_changed_current_clock_tick: usize,
 }
@@ -68,6 +102,7 @@ impl Or {
                 Or {
                     inputs: Vec::with_capacity(input_num),
                     outputs: Vec::with_capacity(output_num),
+                    id: UniqueID::new(),
                     current_clock_tick_num: clock_tick_number,
                     num_times_changed_current_clock_tick: 0,
                 }
@@ -107,10 +142,10 @@ impl Or {
 }
 
 impl LogicGate for Or {
-    fn connect_output(&mut self, output_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>, next_gate_input_index: usize) {
+    fn connect_output(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         let output_signal = self.calculate_output_from_inputs();
 
-        self.outputs[output_index] =
+        self.outputs[current_gate_output_index] =
             GateOutput::Connected(
                 OutputNode {
                     input: GateInput::new(next_gate_input_index, output_signal),
@@ -167,10 +202,15 @@ impl LogicGate for Or {
     fn get_tag(&self) -> String {
         String::from("OR")
     }
+
+    fn get_id(&self) -> UniqueID {
+        self.id.clone()
+    }
 }
 
 pub struct Clock {
     outputs: Vec<GateOutput>,
+    id: UniqueID,
 }
 
 impl Clock {
@@ -181,6 +221,7 @@ impl Clock {
             RefCell::new(
                 Clock {
                     outputs: Vec::with_capacity(output_num),
+                    id: UniqueID::new(),
                 }
             )
         );
@@ -200,8 +241,8 @@ impl Clock {
 }
 
 impl LogicGate for Clock {
-    fn connect_output(&mut self, output_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>, next_gate_input_index: usize) {
-        self.outputs[output_index] =
+    fn connect_output(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+        self.outputs[current_gate_output_index] =
             GateOutput::Connected(
                 OutputNode {
                     input: GateInput::new(next_gate_input_index, HIGH),
@@ -235,11 +276,17 @@ impl LogicGate for Clock {
     fn get_tag(&self) -> String {
         String::from("AND")
     }
+
+
+    fn get_id(&self) -> UniqueID {
+        self.id.clone()
+    }
 }
 
 pub struct Not {
     inputs: Vec<Signal>,
     outputs: Vec<GateOutput>,
+    id: UniqueID,
     current_clock_tick_num: usize,
     num_times_changed_current_clock_tick: usize,
 }
@@ -255,6 +302,7 @@ impl Not {
                 Not {
                     inputs: Vec::with_capacity(1),
                     outputs: Vec::with_capacity(output_num),
+                    id: UniqueID::new(),
                     current_clock_tick_num: clock_tick_number,
                     num_times_changed_current_clock_tick: 0,
                 }
@@ -293,10 +341,10 @@ impl Not {
 }
 
 impl LogicGate for Not {
-    fn connect_output(&mut self, output_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>, next_gate_input_index: usize) {
+    fn connect_output(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         let output_signal = self.calculate_output_from_inputs();
 
-        self.outputs[output_index] =
+        self.outputs[current_gate_output_index] =
             GateOutput::Connected(
                 OutputNode {
                     input: GateInput::new(next_gate_input_index, output_signal),
@@ -351,7 +399,12 @@ impl LogicGate for Not {
     }
 
     fn get_tag(&self) -> String {
-        String::from("OR")
+        String::from("NOT")
+    }
+
+
+    fn get_id(&self) -> UniqueID {
+        self.id.clone()
     }
 }
 
