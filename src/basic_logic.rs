@@ -1,4 +1,6 @@
+use core::fmt;
 use std::cell::RefCell;
+use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
@@ -69,9 +71,11 @@ pub trait LogicGate {
     fn get_tag(&self) -> String;
 
     fn get_id(&self) -> UniqueID;
+
+    fn print_output(&mut self, print_output: bool);
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum GateOutput {
     NotConnected(Signal),
     Connected(OutputNode),
@@ -83,12 +87,28 @@ pub struct OutputNode {
     pub gate: Rc<RefCell<dyn LogicGate>>,
 }
 
+impl fmt::Debug for OutputNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut_gate = self.gate.borrow_mut();
+        let tag = mut_gate.get_tag();
+        let id = mut_gate.get_id();
+
+        drop(mut_gate);
+
+        f.debug_struct("OutputNode")
+            .field("input", &self.input)
+            .field("gate", &format!("{} gate with id {}", tag, id.id))
+            .finish()
+    }
+}
+
 pub struct Or {
     inputs: Vec<Signal>,
     outputs: Vec<GateOutput>,
     id: UniqueID,
     current_clock_tick_num: usize,
     num_times_changed_current_clock_tick: usize,
+    print_output: bool,
 }
 
 impl Or {
@@ -105,6 +125,7 @@ impl Or {
                     id: UniqueID::new(),
                     current_clock_tick_num: clock_tick_number,
                     num_times_changed_current_clock_tick: 0,
+                    print_output: false,
                 }
             )
         );
@@ -196,6 +217,15 @@ impl LogicGate for Or {
 
         let output_clone = self.outputs.clone();
 
+        if self.print_output {
+            println!(
+                "{} gate id {} output is\n{:#?}",
+                self.get_tag(),
+                self.get_id().id,
+                output_clone
+            );
+        }
+
         Ok(output_clone)
     }
 
@@ -206,11 +236,16 @@ impl LogicGate for Or {
     fn get_id(&self) -> UniqueID {
         self.id.clone()
     }
+
+    fn print_output(&mut self, print_output: bool) {
+        self.print_output = print_output;
+    }
 }
 
 pub struct Clock {
     outputs: Vec<GateOutput>,
     id: UniqueID,
+    print_output: bool,
 }
 
 impl Clock {
@@ -222,6 +257,7 @@ impl Clock {
                 Clock {
                     outputs: Vec::with_capacity(output_num),
                     id: UniqueID::new(),
+                    print_output: false,
                 }
             )
         );
@@ -270,6 +306,15 @@ impl LogicGate for Clock {
 
         let output_clone = self.outputs.clone();
 
+        if self.print_output {
+            println!(
+                "{} gate id {} output is\n{:#?}",
+                self.get_tag(),
+                self.get_id().id,
+                output_clone
+            );
+        }
+
         Ok(output_clone)
     }
 
@@ -281,6 +326,10 @@ impl LogicGate for Clock {
     fn get_id(&self) -> UniqueID {
         self.id.clone()
     }
+
+    fn print_output(&mut self, print_output: bool) {
+        self.print_output = print_output;
+    }
 }
 
 pub struct Not {
@@ -289,6 +338,7 @@ pub struct Not {
     id: UniqueID,
     current_clock_tick_num: usize,
     num_times_changed_current_clock_tick: usize,
+    print_output: bool,
 }
 
 impl Not {
@@ -305,6 +355,7 @@ impl Not {
                     id: UniqueID::new(),
                     current_clock_tick_num: clock_tick_number,
                     num_times_changed_current_clock_tick: 0,
+                    print_output: false,
                 }
             )
         );
@@ -395,6 +446,15 @@ impl LogicGate for Not {
 
         let output_clone = self.outputs.clone();
 
+        if self.print_output {
+            println!(
+                "{} gate id {} output is\n{:#?}",
+                self.get_tag(),
+                self.get_id().id,
+                output_clone
+            );
+        }
+
         Ok(output_clone)
     }
 
@@ -405,6 +465,10 @@ impl LogicGate for Not {
 
     fn get_id(&self) -> UniqueID {
         self.id.clone()
+    }
+
+    fn print_output(&mut self, print_output: bool) {
+        self.print_output = print_output;
     }
 }
 

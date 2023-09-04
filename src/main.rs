@@ -1,3 +1,5 @@
+extern crate core;
+
 use std::cell::RefCell;
 use std::collections::{HashMap};
 use std::rc::Rc;
@@ -30,17 +32,11 @@ fn main() {
     //TODO: How do I give it manual inputs? Maybe the clock works on a separate thread to the input
     // and I just feed it commands from the GUI? Maybe have the clock always running and it checks
     // a vector for possible commands, then on the main thread here I input commands.
-    //TODO: Think about future debugging, what will be the best way to implement it. I would like
-    // something to print the circuit in a human readable way. Maybe make it print the schematic or
-    // something.
+    // Maybe I can just have an object that is `manual inputs`.
     //TODO: Do some light documentation.
     //TODO: Write some tests.
     //  NOT gate feeding back into itself (state will oscillate).
     //  OR gate feeding back into itself (on forever).
-    //TODO: Can I set this up to somehow allow multithreading in the future? I may be able to
-    // roughly separate out chunks of the map and divide them up into different maps, then combine
-    // them at the end somehow (probably store all output in a personal map, then return it somehow
-    // and combine them at the end).
 
     //TODO: Probably want to separate out LogicGate and OutputNode into a different file so they
     // can be used in other gates. (All of the basic stuff, UniqueId should go with it).
