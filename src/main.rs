@@ -1,12 +1,24 @@
 extern crate core;
 
+mod logic;
+
 use std::cell::RefCell;
 use std::collections::{HashMap};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize};
-use crate::basic_logic::{Clock, GateOutput, LogicGate, UniqueID};
+use crate::logic::basic_gates::{
+    Or,
+    Not,
+};
+use crate::logic::input_gates::{
+    Clock,
+};
+use crate::logic::foundations::{
+    GateOutputState,
+    LogicGate,
+    UniqueID
+};
 
-mod basic_logic;
 
 /// This will represent the current clock tick number. It should only ever by incremented directly
 /// after a clock tick occurs with only a single thread running.
@@ -22,45 +34,44 @@ pub fn get_clock_tick_number() -> usize {
 
 /// This is the maximum number of times an input can change in a single clock tick. After this,
 /// oscillation will be assumed and the program will panic.
-static MAX_NUMBER_TIMES_INPUTS_CHANGE: usize = 5000;
+static MAX_INPUT_CHANGES: usize = 5000;
 
 /// This will allow each gate to have a unique indexing number.
-static UNIQUE_INDEXING_NUMBER: AtomicUsize = AtomicUsize::new(0);
+static NEXT_UNIQUE_ID: AtomicUsize = AtomicUsize::new(0);
 
 fn main() {
+
+    //TODO: Maybe a little more cleanup on the code, it is much better than it was.
 
     //TODO: How do I give it manual inputs? Maybe the clock works on a separate thread to the input
     // and I just feed it commands from the GUI? Maybe have the clock always running and it checks
     // a vector for possible commands, then on the main thread here I input commands.
     // Maybe I can just have an object that is `manual inputs`.
+    //TODO: So maybe I want to actually make something I can control the input in. Maybe call it
+    // `input` type logic gate or something?
+
     //TODO: Do some light documentation.
     //TODO: Write some tests.
     //  NOT gate feeding back into itself (state will oscillate).
     //  OR gate feeding back into itself (on forever).
 
-    //TODO: Probably want to separate out LogicGate and OutputNode into a different file so they
-    // can be used in other gates. (All of the basic stuff, UniqueId should go with it).
-
-    //TODO: Redo the names of the major components so they make sense.
-    //TODO: Need to do some other stuff with the code to make it nicer and more extendable.
-
     let clock = Clock::new(1);
-    let first_or_gate = basic_logic::Or::new(2, 2);
-    let not_gate = basic_logic::Not::new(1);
+    let first_or_gate = Or::new(2, 2);
+    let not_gate = Not::new(1);
 
-    clock.borrow_mut().connect_output(
+    clock.borrow_mut().connect_output_to_next_gate(
         0,
         0,
         not_gate.clone(),
     );
 
-    not_gate.borrow_mut().connect_output(
+    not_gate.borrow_mut().connect_output_to_next_gate(
         0,
         0,
         first_or_gate.clone(),
     );
 
-    first_or_gate.borrow_mut().connect_output(
+    first_or_gate.borrow_mut().connect_output_to_next_gate(
         0,
         1,
         first_or_gate.clone(),
@@ -75,7 +86,7 @@ fn main() {
         let mut next_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
         let mut final_output = Vec::new();
 
-        next_gates.insert(clock.borrow_mut().get_id(), clock.clone());
+        next_gates.insert(clock.borrow_mut().get_unique_id(), clock.clone());
 
         while !next_gates.is_empty() {
             let gates = next_gates;
@@ -83,20 +94,20 @@ fn main() {
 
             for gate in gates.values() {
                 let mut gate = gate.borrow_mut();
-                let gate_output = gate.collect_output().unwrap();
+                let gate_output = gate.fetch_output_signals().unwrap();
 
                 drop(gate);
                 for output in gate_output {
                     match output {
-                        GateOutput::NotConnected(signal) => {
+                        GateOutputState::NotConnected(signal) => {
                             final_output.push(signal);
                         }
-                        GateOutput::Connected(next_gate_info) => {
+                        GateOutputState::Connected(next_gate_info) => {
                             let next_gate = Rc::clone(&next_gate_info.gate);
                             let mut mutable_next_gate = next_gate.borrow_mut();
 
-                            let input_changed = mutable_next_gate.change_input(&next_gate_info.input);
-                            let gate_id = mutable_next_gate.get_id();
+                            let input_changed = mutable_next_gate.update_input_signal(next_gate_info.throughput);
+                            let gate_id = mutable_next_gate.get_unique_id();
 
                             //It is important to remember that a situation such as an OR gate feeding
                             // back into itself is perfectly valid. This can be interpreted that if the
