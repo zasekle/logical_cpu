@@ -7,18 +7,17 @@ pub struct Or {
     members: BasicGateMembers,
 }
 
+#[allow(dead_code)]
 impl Or {
     pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        let members = BasicGateMembers::new(
-            input_num,
-            output_num,
-            GateType::OR,
-        );
-
         Rc::new(
             RefCell::new(
                 Or {
-                    members
+                    members: BasicGateMembers::new(
+                        input_num,
+                        output_num,
+                        GateType::Or,
+                    )
                 }
             )
         )
@@ -43,11 +42,11 @@ impl LogicGate for Or {
     }
 
     fn get_gate_type(&self) -> GateType {
-        self.members.gate_type.clone()
+        self.members.gate_type
     }
 
     fn get_unique_id(&self) -> UniqueID {
-        self.members.unique_id.clone()
+        self.members.unique_id
     }
 
     fn toggle_output_printing(&mut self, print_output: bool) {
@@ -59,18 +58,17 @@ pub struct Not {
     members: BasicGateMembers,
 }
 
+#[allow(dead_code)]
 impl Not {
     pub fn new(output_num: usize) -> Rc<RefCell<Self>> {
-        let members = BasicGateMembers::new(
-            1,
-            output_num,
-            GateType::NOT,
-        );
-
         Rc::new(
             RefCell::new(
                 Not {
-                    members
+                    members: BasicGateMembers::new(
+                        1,
+                        output_num,
+                        GateType::Not,
+                    )
                 }
             )
         )
@@ -95,11 +93,11 @@ impl LogicGate for Not {
     }
 
     fn get_gate_type(&self) -> GateType {
-        self.members.gate_type.clone()
+        self.members.gate_type
     }
 
     fn get_unique_id(&self) -> UniqueID {
-        self.members.unique_id.clone()
+        self.members.unique_id
     }
 
     fn toggle_output_printing(&mut self, print_output: bool) {

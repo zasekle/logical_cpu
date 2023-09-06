@@ -14,7 +14,9 @@ pub enum Signal {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum GateLogicError {}
+pub enum GateLogicError {
+    NoMoreAutomaticInputsRemaining,
+}
 
 #[derive(Debug, Clone)]
 pub struct GateInput {
@@ -142,23 +144,27 @@ impl OscillationDetection {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum GateType {
-    NOT,
-    OR,
-    AND,
-    NOR,
-    NAND,
-    CLOCK,
+    Not,
+    Or,
+    And,
+    Nor,
+    Nand,
+    Clock,
+    AutomaticInput,
+    SimpleOutput,
 }
 
 impl fmt::Display for GateType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match *self {
-            GateType::NOT => "NOT",
-            GateType::OR => "OR",
-            GateType::AND => "AND",
-            GateType::NOR => "NOR",
-            GateType::NAND => "NAND",
-            GateType::CLOCK => "CLOCK",
+            GateType::Not => "NOT",
+            GateType::Or => "OR",
+            GateType::And => "AND",
+            GateType::Nor => "NOR",
+            GateType::Nand => "NAND",
+            GateType::Clock => "CLOCK",
+            GateType::AutomaticInput => "AUTOMATIC_INPUT",
+            GateType::SimpleOutput => "SIMPLE_OUTPUT",
         };
         write!(f, "{}", printable)
     }
@@ -255,6 +261,10 @@ impl GateLogic {
         HIGH
     }
 
+    pub fn calculate_output_for_automatic_input(input_signals: &Vec<Signal>) -> Signal {
+        input_signals.first().unwrap().clone()
+    }
+
     pub fn fetch_output_signals_basic_gate(
         basic_gate: &mut BasicGateMembers
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
@@ -291,11 +301,10 @@ impl GateLogic {
         let output_clone = output_states.clone();
 
         if should_print_output {
-            println!(
-                "{} gate id {} output is\n{:#?}",
+            GateLogic::print_gate_output(
                 gate_type,
-                unique_id.id(),
-                output_clone
+                &unique_id,
+                &output_clone
             );
         }
 
@@ -329,12 +338,27 @@ impl GateLogic {
         input_signals: Option<&Vec<Signal>>,
     ) -> Signal {
         match gate_type {
-            GateType::NOT => GateLogic::calculate_output_for_not(input_signals.unwrap()),
-            GateType::OR => GateLogic::calculate_output_for_or(input_signals.unwrap()),
-            GateType::AND => panic!(),
-            GateType::NOR => panic!(),
-            GateType::NAND => panic!(),
-            GateType::CLOCK => GateLogic::calculate_output_for_clock(),
+            GateType::Not => GateLogic::calculate_output_for_not(input_signals.unwrap()),
+            GateType::Or => GateLogic::calculate_output_for_or(input_signals.unwrap()),
+            GateType::And => panic!(),
+            GateType::Nor => panic!(),
+            GateType::Nand => panic!(),
+            GateType::Clock => GateLogic::calculate_output_for_clock(),
+            GateType::AutomaticInput => GateLogic::calculate_output_for_automatic_input(input_signals.unwrap()),
+            GateType::SimpleOutput => panic!(),
         }
+    }
+
+    pub fn print_gate_output<T: fmt::Debug>(
+        gate_type: &GateType,
+        unique_id: &UniqueID,
+        output: &T,
+    ) {
+        println!(
+            "{} gate id {} output is\n{:#?}",
+            gate_type,
+            unique_id.id(),
+            output,
+        );
     }
 }
