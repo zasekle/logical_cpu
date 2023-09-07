@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
-use crate::{get_clock_tick_number, MAX_INPUT_CHANGES, NEXT_UNIQUE_ID};
+use crate::globals::{get_clock_tick_number, MAX_INPUT_CHANGES, NEXT_UNIQUE_ID};
 use crate::logic::foundations::Signal::{HIGH, LOW};
 
 #[derive(PartialEq, Debug, Clone)]
@@ -66,11 +66,15 @@ impl GateInput {
     }
 }
 
+pub struct InputSignalReturn {
+    pub changed_count_this_tick: usize,
+    pub input_signal_updated: bool,
+}
+
 pub trait LogicGate {
     fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>);
 
-    ///Returns true if something changed.
-    fn update_input_signal(&mut self, input: GateInput) -> bool;
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn;
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError>;
 
@@ -122,7 +126,7 @@ impl OscillationDetection {
         }
     }
 
-    pub fn detect_oscillation(&mut self, gate_type: &GateType)
+    pub fn detect_oscillation(&mut self, gate_type: &GateType) -> usize
     {
         let clock_tick_number = get_clock_tick_number();
 
@@ -137,8 +141,10 @@ impl OscillationDetection {
             }
         } else {
             self.current_tick = clock_tick_number;
-            self.changed_count_this_tick = 0;
+            self.changed_count_this_tick = 1;
         }
+
+        self.changed_count_this_tick
     }
 }
 
@@ -155,7 +161,7 @@ pub enum GateType {
 }
 
 impl fmt::Display for GateType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let printable = match *self {
             GateType::Not => "NOT",
             GateType::Or => "OR",
@@ -181,6 +187,10 @@ pub struct BasicGateMembers {
 
 impl BasicGateMembers {
     pub fn new(input_num: usize, output_num: usize, gate_type: GateType) -> Self {
+
+        //Must have at least one input.
+        assert_ne!(input_num, 0);
+
         let mut result = BasicGateMembers {
             input_signals: vec![LOW; input_num],
             output_states: Vec::with_capacity(output_num),
@@ -203,15 +213,21 @@ impl BasicGateMembers {
         result
     }
 
-    pub fn update_input_signal(&mut self, input: GateInput) -> bool {
-        self.oscillation_detection.detect_oscillation(&self.gate_type);
+    pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
 
-        if self.input_signals[input.input_index] == input.signal {
+        let input_signal_updated = if self.input_signals[input.input_index] == input.signal {
             false
         } else {
             self.input_signals[input.input_index] = input.signal.clone();
             true
+        };
+
+        InputSignalReturn {
+            changed_count_this_tick,
+            input_signal_updated
         }
+
     }
 
     pub fn connect_output_to_next_gate(
@@ -246,6 +262,16 @@ impl GateLogic {
         output_signal
     }
 
+    pub fn calculate_output_for_and(input_signals: &Vec<Signal>) -> Signal {
+        for s in input_signals.iter() {
+            if *s == LOW {
+                return LOW;
+            }
+        }
+
+        HIGH
+    }
+
     pub fn calculate_output_for_not(input_signals: &Vec<Signal>) -> Signal {
         //This only has a single input.
         let current_signal = input_signals.first().unwrap();
@@ -255,6 +281,16 @@ impl GateLogic {
         } else {
             HIGH
         }
+    }
+
+    pub fn calculate_output_for_nor(input_signals: &Vec<Signal>) -> Signal {
+        let or_signal = vec![GateLogic::calculate_output_for_or(input_signals)];
+        GateLogic::calculate_output_for_not(&or_signal)
+    }
+
+    pub fn calculate_output_for_nand(input_signals: &Vec<Signal>) -> Signal {
+        let and_signal = vec![GateLogic::calculate_output_for_and(input_signals)];
+        GateLogic::calculate_output_for_not(&and_signal)
     }
 
     pub fn calculate_output_for_clock() -> Signal {
@@ -340,9 +376,9 @@ impl GateLogic {
         match gate_type {
             GateType::Not => GateLogic::calculate_output_for_not(input_signals.unwrap()),
             GateType::Or => GateLogic::calculate_output_for_or(input_signals.unwrap()),
-            GateType::And => panic!(),
-            GateType::Nor => panic!(),
-            GateType::Nand => panic!(),
+            GateType::And => GateLogic::calculate_output_for_and(input_signals.unwrap()),
+            GateType::Nor => GateLogic::calculate_output_for_nor(input_signals.unwrap()),
+            GateType::Nand => GateLogic::calculate_output_for_nand(input_signals.unwrap()),
             GateType::Clock => GateLogic::calculate_output_for_clock(),
             GateType::AutomaticInput => GateLogic::calculate_output_for_automatic_input(input_signals.unwrap()),
             GateType::SimpleOutput => panic!(),

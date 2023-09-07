@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn};
 
 pub struct SimpleOutput {
     output_state: Signal,
@@ -36,14 +36,19 @@ impl LogicGate for SimpleOutput {
         _next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {}
 
-    fn update_input_signal(&mut self, input: GateInput) -> bool {
-        self.oscillation_detection.detect_oscillation(&self.gate_type);
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
 
-        if self.output_state == input.signal {
+        let input_signal_updated = if self.output_state == input.signal {
             false
         } else {
             self.output_state = input.signal.clone();
             true
+        };
+
+        InputSignalReturn {
+            changed_count_this_tick,
+            input_signal_updated
         }
     }
 

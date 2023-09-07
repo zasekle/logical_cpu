@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, InputSignalReturn};
 use crate::logic::foundations::{Signal::HIGH};
 
 pub struct Clock {
@@ -42,8 +42,11 @@ impl LogicGate for Clock {
         );
     }
 
-    fn update_input_signal(&mut self, _input: GateInput) -> bool {
-        false
+    fn update_input_signal(&mut self, _input: GateInput) -> InputSignalReturn {
+        InputSignalReturn{
+            changed_count_this_tick: 0,
+            input_signal_updated: false
+        }
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
@@ -114,9 +117,13 @@ impl LogicGate for AutomaticInput {
         );
     }
 
-    fn update_input_signal(&mut self, input: GateInput) -> bool {
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.values_to_be_output.push(input.signal);
-        true
+
+        InputSignalReturn {
+            changed_count_this_tick: 0,
+            input_signal_updated: false,
+        }
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
