@@ -274,7 +274,7 @@ mod tests {
     use crate::logic::foundations::Signal;
     use crate::logic::foundations::Signal::{HIGH, LOW};
     use crate::logic::input_gates::AutomaticInput;
-    use crate::logic::output_gates::SimpleOutput;
+    use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
     use crate::run_circuit::run_circuit;
     use crate::test_stuff::check_for_single_element_signal;
     use super::*;
@@ -285,11 +285,11 @@ mod tests {
         second_input: Option<Signal>,
         output: Signal,
     ) {
-        let first_pin_input = AutomaticInput::new(vec![first_input], 1);
-        let output_gate = SimpleOutput::new();
+        let first_pin_input = AutomaticInput::new(vec![first_input], 1, "");
+        let output_gate = SimpleOutput::new("");
 
         let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-        let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
+        let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
 
         input_gates.insert(first_pin_input.borrow_mut().get_unique_id(), first_pin_input.clone());
         output_gates.insert(output_gate.borrow_mut().get_unique_id(), output_gate.clone());
@@ -301,7 +301,7 @@ mod tests {
         );
 
         if let Some(second_input) = second_input {
-            let second_pin_input = AutomaticInput::new(vec![second_input], 1);
+            let second_pin_input = AutomaticInput::new(vec![second_input], 1, "");
 
             second_pin_input.borrow_mut().connect_output_to_next_gate(
                 0,
@@ -321,7 +321,7 @@ mod tests {
         run_circuit(
             input_gates,
             output_gates,
-            |output_gates| {
+            |_clock_tick_inputs, output_gates| {
                 check_for_single_element_signal(output_gates, output.clone());
             },
         );

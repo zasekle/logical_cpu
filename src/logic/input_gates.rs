@@ -9,16 +9,18 @@ pub struct Clock {
     unique_id: UniqueID,
     should_print_output: bool,
     gate_type: GateType,
+    tag: String,
 }
 
 #[allow(dead_code)]
 impl Clock {
-    pub fn new(output_num: usize) -> Rc<RefCell<Self>> {
+    pub fn new(output_num: usize, tag: &str) -> Rc<RefCell<Self>> {
         let mut clock = Clock {
             output_states: Vec::with_capacity(output_num),
             unique_id: UniqueID::generate(),
             should_print_output: false,
             gate_type: GateType::Clock,
+            tag: String::from(tag),
         };
 
         clock.output_states.resize_with(
@@ -70,6 +72,14 @@ impl LogicGate for Clock {
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.should_print_output = print_output;
     }
+
+    fn get_tag(&self) -> String {
+        self.tag.clone()
+    }
+
+    fn is_input_gate(&self) -> bool {
+        true
+    }
 }
 
 pub struct AutomaticInput {
@@ -78,17 +88,19 @@ pub struct AutomaticInput {
     unique_id: UniqueID,
     should_print_output: bool,
     gate_type: GateType,
+    tag: String,
 }
 
 #[allow(dead_code)]
 impl AutomaticInput {
-    pub fn new(values_to_be_output: Vec<Signal>, output_num: usize) -> Rc<RefCell<Self>> {
+    pub fn new(values_to_be_output: Vec<Signal>, output_num: usize, tag: &str) -> Rc<RefCell<Self>> {
         let mut clock = AutomaticInput {
             values_to_be_output,
             output_states: Vec::with_capacity(output_num),
             unique_id: UniqueID::generate(),
             should_print_output: false,
             gate_type: GateType::AutomaticInput,
+            tag: String::from(tag),
         };
 
         clock.output_states.resize_with(
@@ -153,5 +165,13 @@ impl LogicGate for AutomaticInput {
 
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.tag.clone()
+    }
+
+    fn is_input_gate(&self) -> bool {
+        true
     }
 }

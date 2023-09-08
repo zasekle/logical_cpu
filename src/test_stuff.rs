@@ -4,11 +4,12 @@ use std::rc::Rc;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use crate::logic::foundations::{GateOutputState, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{GateOutputState, Signal, UniqueID};
+use crate::logic::output_gates::LogicGateAndOutputGate;
 
 #[allow(dead_code)]
 pub fn check_for_single_element_signal(
-    output_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>>,
+    output_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
     output: Signal,
 ) {
     assert_eq!(output_gates.len(), 1);

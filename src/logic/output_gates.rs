@@ -3,17 +3,26 @@ use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn};
 
+pub trait OutputGate {
+    fn get_output_tag(&self) -> String;
+}
+
+pub trait LogicGateAndOutputGate: LogicGate + OutputGate {}
+
+impl<T: LogicGate + OutputGate> LogicGateAndOutputGate for T {}
+
 pub struct SimpleOutput {
     output_state: Signal,
     unique_id: UniqueID,
     oscillation_detection: OscillationDetection,
     should_print_output: bool,
     gate_type: GateType,
+    tag: String,
 }
 
 #[allow(dead_code)]
 impl SimpleOutput {
-    pub fn new() -> Rc<RefCell<Self>> {
+    pub fn new(tag: &str) -> Rc<RefCell<Self>> {
         Rc::new(
             RefCell::new(
                 SimpleOutput {
@@ -22,9 +31,16 @@ impl SimpleOutput {
                     oscillation_detection: OscillationDetection::new(),
                     should_print_output: false,
                     gate_type: GateType::SimpleOutput,
+                    tag: String::from(tag),
                 }
             )
         )
+    }
+}
+
+impl OutputGate for SimpleOutput {
+    fn get_output_tag(&self) -> String {
+        self.tag.clone()
     }
 }
 

@@ -83,6 +83,15 @@ pub trait LogicGate {
     fn get_unique_id(&self) -> UniqueID;
 
     fn toggle_output_printing(&mut self, print_output: bool);
+
+    ///Currently only used with input gates.
+    fn get_tag(&self) -> String {
+        String::new()
+    }
+
+    fn is_input_gate(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Clone)]
