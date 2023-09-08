@@ -16,6 +16,13 @@ use crate::run_circuit::run_circuit;
 
 fn main() {
 
+    //TODO: Working on SR Latch
+    //TODO: What I want is either
+    // 1) For the entire SR Latch to propagate when it is reached, then to use the `LogicGate` trait
+    //  in order to access it.
+    // 2) For it to run along with the run_circuit function where the electricity propagates through
+    //  the circuit just as a series of very basic gates.
+
     println!("Building circuit!");
 
     let InputAndOutputGates{input_gates, output_gates} =

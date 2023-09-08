@@ -167,6 +167,7 @@ pub enum GateType {
     Clock,
     AutomaticInput,
     SimpleOutput,
+    SRLatch,
 }
 
 impl fmt::Display for GateType {
@@ -180,6 +181,7 @@ impl fmt::Display for GateType {
             GateType::Clock => "CLOCK",
             GateType::AutomaticInput => "AUTOMATIC_INPUT",
             GateType::SimpleOutput => "SIMPLE_OUTPUT",
+            GateType::SRLatch => "SR_LATCH",
         };
         write!(f, "{}", printable)
     }
@@ -391,6 +393,7 @@ impl GateLogic {
             GateType::Clock => GateLogic::calculate_output_for_clock(),
             GateType::AutomaticInput => GateLogic::calculate_output_for_automatic_input(input_signals.unwrap()),
             GateType::SimpleOutput => panic!(),
+            GateType::SRLatch => panic!(),
         }
     }
 
