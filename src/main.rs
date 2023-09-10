@@ -12,16 +12,21 @@ use crate::logic::foundations::{GateOutputState, Signal};
 
 use build_circuit::build_simple_circuit;
 use crate::build_circuit::InputAndOutputGates;
-use crate::run_circuit::run_circuit;
+use crate::run_circuit::start_clock;
 
 fn main() {
 
     //TODO: Working on SR Latch
-    //TODO: What I want is either
-    // 1) For the entire SR Latch to propagate when it is reached, then to use the `LogicGate` trait
-    //  in order to access it.
-    // 2) For it to run along with the run_circuit function where the electricity propagates through
-    //  the circuit just as a series of very basic gates.
+    // The output are 'interesting' because of how this latch works and how I simulate the propagating
+    //  of electricity, the latch can start in either the state 0 1 or 1 0 if the input are both low
+    //  will need to research how this is actually handled. Apparently this mimics real life to some
+    //  extent because depending on which gate receives power first, the output changes. So this
+    //  initial state will need to be handled when building the circuit. Not 100% sure I understand,
+    //  on real circuits, there may be a defined state on something called 'power up'.
+    // BUT shouldn't my switch be deterministic because when a new SRLatch is created it primes it
+    //  right? Why is it changing with different inputs?
+    // Make some tests for it
+    // Allow me to connect by tag as well
 
     println!("Building circuit!");
 
@@ -30,9 +35,9 @@ fn main() {
 
     println!("Running circuit!");
 
-    run_circuit(
-        input_gates,
-        output_gates,
+    start_clock(
+        &input_gates,
+        &output_gates,
         |clock_tick_inputs, output_gates| {
             let clock_tick_number = get_clock_tick_number();
             println!("Inputs for clock-tick #{}", clock_tick_number);

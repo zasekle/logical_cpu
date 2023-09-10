@@ -5,94 +5,118 @@ use crate::globals::CLOCK_TICK_NUMBER;
 use crate::logic::foundations::{GateLogicError, GateOutputState, InputSignalReturn, LogicGate, UniqueID};
 use crate::logic::output_gates::LogicGateAndOutputGate;
 
-pub fn run_circuit<F>(
-    input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>>,
-    output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+pub fn start_clock<F>(
+    input_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>>,
+    output_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
     mut handle_output: F,
 ) where
-    F: FnMut(&Vec<(String, Vec<GateOutputState>)>,&HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>)
+    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>)
 {
     assert!(!input_gates.is_empty());
     assert!(!output_gates.is_empty());
 
-    let mut first_tick = true;
+    let mut propagate_signal_through_circuit = true;
+    let mut continue_clock = true;
 
-    'clock_cycle: loop {
+    while continue_clock {
         //This should be the ONLY place this is ever updated.
         unsafe {
             CLOCK_TICK_NUMBER += 1;
         }
 
-        let mut clock_tick_inputs = Vec::new();
-        let mut next_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = input_gates.clone();
-        let mut final_output = Vec::new();
+        continue_clock = run_circuit(
+            input_gates,
+            output_gates,
+            propagate_signal_through_circuit,
+            &mut handle_output,
+        );
 
-        while !next_gates.is_empty() {
-            let gates = next_gates;
-            next_gates = HashMap::new();
+        propagate_signal_through_circuit = false;
+    }
+}
 
-            for gate in gates.values() {
-                let mut gate = gate.borrow_mut();
-                let gate_output = gate.fetch_output_signals();
+//Returns true if the circuit has input remaining, false if it does not.
+pub fn run_circuit<F>(
+    input_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>>,
+    output_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    propagate_signal_through_circuit: bool,
+    handle_output: &mut F,
+) -> bool where
+    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>)
+{
 
-                let gate_output = if let Err(err) = gate_output {
-                    match err {
-                        GateLogicError::NoMoreAutomaticInputsRemaining => {
-                            break 'clock_cycle;
-                        }
+    let mut clock_tick_inputs = Vec::new();
+    let mut next_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = input_gates.clone();
+    let mut final_output = Vec::new();
+
+    while !next_gates.is_empty() {
+        // println!("next_gates.len() = {}", next_gates.len());
+        let gates = next_gates;
+        next_gates = HashMap::new();
+
+        for gate in gates.values() {
+            let mut gate = gate.borrow_mut();
+            let gate_output = gate.fetch_output_signals();
+
+            let gate_output = if let Err(err) = gate_output {
+                return match err {
+                    GateLogicError::NoMoreAutomaticInputsRemaining => {
+                        false
                     }
-                } else {
-                    gate_output.unwrap()
-                };
-
-                if gate.is_input_gate() {
-                    clock_tick_inputs.push(
-                        (gate.get_tag(), gate_output.clone())
-                    );
                 }
+            } else {
+                gate_output.unwrap()
+            };
 
-                drop(gate);
-                for output in gate_output {
-                     match output {
-                        GateOutputState::NotConnected(signal) => {
-                            final_output.push(signal);
-                        }
-                        GateOutputState::Connected(next_gate_info) => {
-                            let next_gate = Rc::clone(&next_gate_info.gate);
-                            let mut mutable_next_gate = next_gate.borrow_mut();
+            if gate.is_input_gate() {
+                clock_tick_inputs.push(
+                    (gate.get_tag(), gate_output.clone())
+                );
+            }
 
-                            let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
-                                mutable_next_gate.update_input_signal(next_gate_info.throughput);
-                            let gate_id = mutable_next_gate.get_unique_id();
+            drop(gate);
+            for output in gate_output {
+                match output {
+                    GateOutputState::NotConnected(signal) => {
+                        final_output.push(signal);
+                    }
+                    GateOutputState::Connected(next_gate_info) => {
+                        let next_gate = Rc::clone(&next_gate_info.gate);
+                        let mut mutable_next_gate = next_gate.borrow_mut();
 
-                            //It is important to remember that a situation such as an OR gate feeding
-                            // back into itself is perfectly valid. This can be interpreted that if the
-                            // input was not changed, the output was not changed either and so nothing
-                            // needs to be done with this gate.
-                            //The first tick is a bit special, because the circuit needs to propagate
-                            // the signal regardless of if the gates change or not. This leads to
-                            // checking if it is the first time the gate is updated on the first
-                            // clock tick.
-                            //Also each gate only needs to be stored inside the map once. All changed
-                            // inputs are saved as part of the state, so collect_output() only needs
-                            // to run once.
-                            if (input_signal_updated || (first_tick && changed_count_this_tick == 1)) && !next_gates.contains_key(&gate_id) {
-                                drop(mutable_next_gate);
-                                next_gates.insert(gate_id, next_gate);
-                            }
+                        let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
+                            mutable_next_gate.update_input_signal(next_gate_info.throughput);
+                        let gate_id = mutable_next_gate.get_unique_id();
+
+                        // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
+                        //It is important to remember that a situation such as an OR gate feeding
+                        // back into itself is perfectly valid. This can be interpreted that if the
+                        // input was not changed, the output was not changed either and so nothing
+                        // needs to be done with this gate.
+                        //The first tick is a bit special, because the circuit needs to propagate
+                        // the signal regardless of if the gates change or not. This leads to
+                        // checking if it is the first time the gate is updated on the first
+                        // clock tick.
+                        //Also each gate only needs to be stored inside the map once. All changed
+                        // inputs are saved as part of the state, so collect_output() only needs
+                        // to run once.
+                        if (input_signal_updated || (propagate_signal_through_circuit && changed_count_this_tick == 1)) && !next_gates.contains_key(&gate_id) {
+                            drop(mutable_next_gate);
+                            // println!("next_gates.insert()");
+                            next_gates.insert(gate_id, next_gate);
                         }
                     }
                 }
             }
         }
-
-        handle_output(
-            &clock_tick_inputs,
-            &output_gates,
-        );
-
-        first_tick = false;
     }
+
+    handle_output(
+        &clock_tick_inputs,
+        &output_gates,
+    );
+
+    true
 }
 
 #[cfg(test)]

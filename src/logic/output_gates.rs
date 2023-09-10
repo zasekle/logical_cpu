@@ -50,7 +50,9 @@ impl LogicGate for SimpleOutput {
         _current_gate_output_index: usize,
         _next_gate_input_index: usize,
         _next_gate: Rc<RefCell<dyn LogicGate>>,
-    ) {}
+    ) {
+        panic!("An output gate should be the end of the circuit, it should never connect to another input.");
+    }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
@@ -75,6 +77,7 @@ impl LogicGate for SimpleOutput {
             GateLogic::print_gate_output(
                 &self.gate_type,
                 &self.unique_id,
+                &self.get_tag(),
                 &output_clone,
             );
         }

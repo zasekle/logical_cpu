@@ -27,6 +27,7 @@ impl Or {
                         input_num,
                         output_num,
                         GateType::Or,
+                        None,
                     )
                 }
             )
@@ -78,6 +79,7 @@ impl And {
                         input_num,
                         output_num,
                         GateType::And,
+                        None,
                     )
                 }
             )
@@ -129,6 +131,7 @@ impl Not {
                         1,
                         output_num,
                         GateType::Not,
+                        None,
                     )
                 }
             )
@@ -180,6 +183,7 @@ impl Nor {
                         input_num,
                         output_num,
                         GateType::Nor,
+                        None,
                     )
                 }
             )
@@ -231,6 +235,7 @@ impl Nand {
                         input_num,
                         output_num,
                         GateType::Nand,
+                        None,
                     )
                 }
             )
@@ -275,7 +280,7 @@ mod tests {
     use crate::logic::foundations::Signal::{HIGH, LOW};
     use crate::logic::input_gates::AutomaticInput;
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
-    use crate::run_circuit::run_circuit;
+    use crate::run_circuit::start_clock;
     use crate::test_stuff::check_for_single_element_signal;
     use super::*;
 
@@ -318,10 +323,10 @@ mod tests {
             output_gate.clone(),
         );
 
-        run_circuit(
-            input_gates,
-            output_gates,
-            |_clock_tick_inputs, output_gates| {
+        start_clock(
+            &input_gates,
+            &output_gates,
+            &mut |_clock_tick_inputs, output_gates| {
                 check_for_single_element_signal(output_gates, output.clone());
             },
         );

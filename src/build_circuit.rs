@@ -17,6 +17,7 @@ use crate::logic::input_gates::{
     AutomaticInput,
     Clock
 };
+use crate::logic::memory_gates::SRLatch;
 use crate::logic::output_gates::LogicGateAndOutputGate;
 #[allow(unused_imports)]
 use crate::logic::output_gates::SimpleOutput;
@@ -29,10 +30,12 @@ pub struct InputAndOutputGates {
 pub fn build_simple_circuit() -> InputAndOutputGates {
 
     // let clock = Clock::new(1);
-    let first_input = AutomaticInput::new(vec![LOW, LOW, HIGH, HIGH], 1, "Reset");
-    let second_input = AutomaticInput::new(vec![LOW, HIGH, LOW, HIGH], 1, "Set");
-    let first_output_gate = SimpleOutput::new("Q");
-    let second_output_gate = SimpleOutput::new("~Q");
+    // let first_input = AutomaticInput::new(vec![LOW, LOW, HIGH, HIGH], 1, "Reset");
+    // let second_input = AutomaticInput::new(vec![LOW, HIGH, LOW, HIGH], 1, "Set");
+    let first_input = AutomaticInput::new(vec![LOW], 1, "OUT_Reset");
+    let second_input = AutomaticInput::new(vec![LOW], 1, "OUT_Set");
+    let first_output_gate = SimpleOutput::new("OUT_Q");
+    let second_output_gate = SimpleOutput::new("OUT_~Q");
     let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
     let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
 
@@ -41,43 +44,31 @@ pub fn build_simple_circuit() -> InputAndOutputGates {
     output_gates.insert(first_output_gate.borrow_mut().get_unique_id(), first_output_gate.clone());
     output_gates.insert(second_output_gate.borrow_mut().get_unique_id(), second_output_gate.clone());
 
-    let first_nor_gate = Nor::new(2, 2);
-    let second_nor_gate = Nor::new(2, 2);
+    let sr_latch = SRLatch::new();
+    sr_latch.borrow_mut().toggle_output_printing(true);
 
     first_input.borrow_mut().connect_output_to_next_gate(
         0,
         0,
-        first_nor_gate.clone(),
+        sr_latch.clone()
     );
 
     second_input.borrow_mut().connect_output_to_next_gate(
         0,
         1,
-        second_nor_gate.clone(),
+        sr_latch.clone()
     );
 
-    first_nor_gate.borrow_mut().connect_output_to_next_gate(
+    sr_latch.borrow_mut().connect_output_to_next_gate(
         0,
         0,
-        first_output_gate.clone(),
+        first_output_gate.clone()
     );
 
-    first_nor_gate.borrow_mut().connect_output_to_next_gate(
+    sr_latch.borrow_mut().connect_output_to_next_gate(
         1,
         0,
-        second_nor_gate.clone(),
-    );
-
-    second_nor_gate.borrow_mut().connect_output_to_next_gate(
-        0,
-        0,
-        second_output_gate.clone(),
-    );
-
-    second_nor_gate.borrow_mut().connect_output_to_next_gate(
-        1,
-        1,
-        first_nor_gate.clone(),
+        second_output_gate.clone()
     );
 
     InputAndOutputGates {
