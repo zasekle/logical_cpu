@@ -1,7 +1,8 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
-use crate::logic::foundations::{LogicGate, UniqueID};
+use crate::logic::foundations::LogicGate;
+
+#[allow(unused_imports)]
 use crate::logic::foundations::Signal::{HIGH, LOW};
 
 #[allow(unused_imports)]
@@ -23,50 +24,51 @@ use crate::logic::output_gates::LogicGateAndOutputGate;
 use crate::logic::output_gates::SimpleOutput;
 
 pub struct InputAndOutputGates {
-    pub input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>>,
-    pub output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    pub input_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+    pub output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
 }
 
 pub fn build_simple_circuit() -> InputAndOutputGates {
 
     // let clock = Clock::new(1);
-    // let first_input = AutomaticInput::new(vec![LOW, LOW, HIGH, HIGH], 1, "Reset");
-    // let second_input = AutomaticInput::new(vec![LOW, HIGH, LOW, HIGH], 1, "Set");
-    let first_input = AutomaticInput::new(vec![LOW], 1, "OUT_Reset");
-    let second_input = AutomaticInput::new(vec![LOW], 1, "OUT_Set");
-    let first_output_gate = SimpleOutput::new("OUT_Q");
-    let second_output_gate = SimpleOutput::new("OUT_~Q");
-    let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-    let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
+    let first_input = AutomaticInput::new(vec![LOW, HIGH, LOW, LOW, LOW, HIGH, LOW], 1, "R");
+    let second_input = AutomaticInput::new(vec![LOW, LOW, LOW, HIGH, LOW, HIGH, LOW], 1, "S");
+    let first_output_gate = SimpleOutput::new("Q");
+    let second_output_gate = SimpleOutput::new("~Q");
+    let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-    input_gates.insert(first_input.borrow_mut().get_unique_id(), first_input.clone());
-    input_gates.insert(second_input.borrow_mut().get_unique_id(), second_input.clone());
-    output_gates.insert(first_output_gate.borrow_mut().get_unique_id(), first_output_gate.clone());
-    output_gates.insert(second_output_gate.borrow_mut().get_unique_id(), second_output_gate.clone());
+    input_gates.push(first_input.clone());
+    input_gates.push(second_input.clone());
+    output_gates.push(first_output_gate.clone());
+    output_gates.push(second_output_gate.clone());
 
     let sr_latch = SRLatch::new();
-    sr_latch.borrow_mut().toggle_output_printing(true);
+    // sr_latch.borrow_mut().toggle_output_printing(true);
 
     first_input.borrow_mut().connect_output_to_next_gate(
         0,
-        0,
+        sr_latch.borrow_mut().get_index_from_tag("R"),
         sr_latch.clone()
     );
 
     second_input.borrow_mut().connect_output_to_next_gate(
         0,
-        1,
+        sr_latch.borrow_mut().get_index_from_tag("S"),
         sr_latch.clone()
     );
 
-    sr_latch.borrow_mut().connect_output_to_next_gate(
-        0,
+    let mut mut_sr_latch = sr_latch.borrow_mut();
+    let q_output_idx = mut_sr_latch.get_index_from_tag("Q");
+    mut_sr_latch.connect_output_to_next_gate(
+        q_output_idx,
         0,
         first_output_gate.clone()
     );
 
-    sr_latch.borrow_mut().connect_output_to_next_gate(
-        1,
+    let not_q_output_idx = mut_sr_latch.get_index_from_tag("~Q");
+    mut_sr_latch.connect_output_to_next_gate(
+        not_q_output_idx,
         0,
         second_output_gate.clone()
     );

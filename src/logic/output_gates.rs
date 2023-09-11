@@ -47,8 +47,8 @@ impl OutputGate for SimpleOutput {
 impl LogicGate for SimpleOutput {
     fn connect_output_to_next_gate(
         &mut self,
-        _current_gate_output_index: usize,
-        _next_gate_input_index: usize,
+        _current_gate_output_key: usize,
+        _next_gate_input_key: usize,
         _next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
         panic!("An output gate should be the end of the circuit, it should never connect to another input.");
@@ -95,5 +95,9 @@ impl LogicGate for SimpleOutput {
 
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.tag.to_string()
     }
 }

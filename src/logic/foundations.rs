@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
@@ -74,7 +75,7 @@ pub struct InputSignalReturn {
 }
 
 pub trait LogicGate {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>);
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>);
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn;
 
@@ -93,6 +94,10 @@ pub trait LogicGate {
 
     fn is_input_gate(&self) -> bool {
         false
+    }
+
+    fn get_index_from_tag(&self, tag: &str) -> usize {
+        panic!("Gate {} using tag {} id {} did not implement get_index_from_tag()", self.get_tag(), tag, self.get_unique_id().id)
     }
 }
 
@@ -244,7 +249,7 @@ impl BasicGateMembers {
 
         InputSignalReturn {
             changed_count_this_tick,
-            input_signal_updated
+            input_signal_updated,
         }
     }
 
@@ -269,10 +274,10 @@ pub struct ComplexGateMembers {
     pub simple_gate: BasicGateMembers,
     pub input_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
     pub output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    pub gate_tags_to_index: HashMap<String, usize>,
 }
 
 impl ComplexGateMembers {
-
     pub fn new(
         input_num: usize,
         output_num: usize,
@@ -285,6 +290,25 @@ impl ComplexGateMembers {
         assert_ne!(input_num, 0);
         assert_ne!(output_num, 0);
 
+        let mut gate_tags_to_index = HashMap::new();
+
+        for (i, gate) in input_gates.iter().enumerate() {
+            gate_tags_to_index.insert(
+                gate.borrow_mut().get_tag(),
+                i,
+            );
+        }
+
+        for (i, gate) in output_gates.iter().enumerate() {
+            gate_tags_to_index.insert(
+                gate.borrow_mut().get_tag(),
+                i,
+            );
+        }
+
+        //Make sure there are enough tags for each gate.
+        assert_eq!(gate_tags_to_index.len(), input_num + output_num);
+
         ComplexGateMembers {
             simple_gate: BasicGateMembers::new(
                 input_num,
@@ -294,40 +318,27 @@ impl ComplexGateMembers {
             ),
             input_gates,
             output_gates,
+            gate_tags_to_index,
         }
     }
 
     pub fn calculate_output_from_inputs(&mut self, propagate_signal_through_circuit: bool) {
-        let input_gates_map = self.input_gates.iter().map(
-            |gate| {
-                (gate.borrow_mut().get_unique_id(), gate.clone())
-            }
-        ).collect();
-
-        let output_gates_map = self.output_gates.iter().map(
-            |gate| {
-                (gate.borrow_mut().get_unique_id(), gate.clone())
-            }
-        ).collect();
-
         run_circuit(
-            &input_gates_map,
-            &output_gates_map,
+            &self.input_gates,
+            &self.output_gates,
             propagate_signal_through_circuit,
-            &mut |_clock_tick_inputs, output_gates| {
-                //TODO: maybe do something here? not 100% sure
+            &mut |clock_tick_inputs, output_gates| {
+                let clock_tick_number = get_clock_tick_number();
+                let input_string = format!("Gate {} id {} inputs for clock-tick #{}", self.simple_gate.gate_type, self.simple_gate.unique_id.id, clock_tick_number);
+                let output_string = format!("Gate {} id {} outputs for clock-tick #{}", self.simple_gate.gate_type, self.simple_gate.unique_id.id, clock_tick_number);
 
-                for (_id, output_gate) in output_gates.iter() {
-                    let mut output_gate = output_gate.borrow_mut();
-                    let fetched_signal = output_gate.fetch_output_signals().unwrap();
-                    let output = fetched_signal.first().unwrap();
-
-                    if let GateOutputState::NotConnected(signal) = output {
-                        println!("         tag: {:?} signal: {:?}", output_gate.get_output_tag(), signal);
-                    } else {
-                        panic!("An output gate did not have any output.");
-                    }
-                }
+                pretty_print_output(
+                    self.simple_gate.should_print_output,
+                    clock_tick_inputs,
+                    output_gates,
+                    input_string.as_str(),
+                    output_string.as_str(),
+                );
             },
         );
 
@@ -362,6 +373,15 @@ impl ComplexGateMembers {
                     connected_output.throughput.signal = new_signal
                 }
             }
+        }
+    }
+
+    pub fn get_index_from_tag(&self, tag: &str) -> usize {
+        match self.gate_tags_to_index.get(tag) {
+            None => {
+                panic!("Gate {} id {} did not contain tag {}.", self.simple_gate.gate_type, self.simple_gate.unique_id.id, tag)
+            }
+            Some(index) => index.clone()
         }
     }
 }
@@ -464,7 +484,7 @@ impl GateLogic {
                 gate_type,
                 &unique_id,
                 &String::from(""),
-                &output_clone
+                &output_clone,
             );
         }
 
@@ -532,6 +552,48 @@ impl GateLogic {
                 unique_id.id(),
                 output,
             );
+        }
+    }
+}
+
+pub fn pretty_print_output(
+    should_print_output: bool,
+    clock_tick_inputs: &Vec<(String, Vec<GateOutputState>)>,
+    output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    input_string: &str,
+    output_string: &str,
+) {
+
+    if should_print_output {
+        println!("{}", input_string);
+        for (tag, gate_input_state) in clock_tick_inputs.iter() {
+            let output_states: Vec<Signal> = gate_input_state
+                .iter()
+                .map(|g| {
+                    match g {
+                        GateOutputState::NotConnected(signal) => {
+                            signal.clone()
+                        }
+                        GateOutputState::Connected(connected_output) => {
+                            connected_output.throughput.signal.clone()
+                        }
+                    }
+                })
+                .collect();
+            println!("   tag: {:?} signals: {:?}", tag, output_states);
+        }
+
+        println!("{}", output_string);
+        for output_gate in output_gates.iter() {
+            let mut output_gate = output_gate.borrow_mut();
+            let fetched_signal = output_gate.fetch_output_signals().unwrap();
+            let output = fetched_signal.first().unwrap();
+
+            if let GateOutputState::NotConnected(signal) = output {
+                println!("   tag: {:?} signal: {:?}", output_gate.get_output_tag(), signal);
+            } else {
+                panic!("An output gate did not have any output.");
+            }
         }
     }
 }

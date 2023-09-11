@@ -1,16 +1,16 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 use crate::globals::CLOCK_TICK_NUMBER;
-use crate::logic::foundations::{GateLogicError, GateOutputState, InputSignalReturn, LogicGate, UniqueID};
+use crate::logic::foundations::{GateLogicError, GateOutputState, InputSignalReturn, LogicGate};
 use crate::logic::output_gates::LogicGateAndOutputGate;
 
 pub fn start_clock<F>(
-    input_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>>,
-    output_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    input_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+    output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
     mut handle_output: F,
 ) where
-    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>)
+    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>)
 {
     assert!(!input_gates.is_empty());
     assert!(!output_gates.is_empty());
@@ -36,25 +36,28 @@ pub fn start_clock<F>(
 }
 
 //Returns true if the circuit has input remaining, false if it does not.
+//Note that elements must be ordered so that some of the undetermined gates such as SR latches can
+// have a defined starting state. Therefore, vectors are used even though they must be iterated
+// through to guarantee uniqueness.
 pub fn run_circuit<F>(
-    input_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>>,
-    output_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    input_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+    output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
     propagate_signal_through_circuit: bool,
     handle_output: &mut F,
 ) -> bool where
-    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>)
+    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>)
 {
-
     let mut clock_tick_inputs = Vec::new();
-    let mut next_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = input_gates.clone();
+    let mut next_gates: Vec<Rc<RefCell<dyn LogicGate>>> = input_gates.clone();
     let mut final_output = Vec::new();
 
     while !next_gates.is_empty() {
         // println!("next_gates.len() = {}", next_gates.len());
         let gates = next_gates;
-        next_gates = HashMap::new();
+        next_gates = Vec::new();
+        let mut next_gates_set = HashSet::new();
 
-        for gate in gates.values() {
+        for gate in gates.iter() {
             let mut gate = gate.borrow_mut();
             let gate_output = gate.fetch_output_signals();
 
@@ -63,7 +66,7 @@ pub fn run_circuit<F>(
                     GateLogicError::NoMoreAutomaticInputsRemaining => {
                         false
                     }
-                }
+                };
             } else {
                 gate_output.unwrap()
             };
@@ -88,6 +91,8 @@ pub fn run_circuit<F>(
                             mutable_next_gate.update_input_signal(next_gate_info.throughput);
                         let gate_id = mutable_next_gate.get_unique_id();
 
+                        let contains_id = next_gates_set.contains(&gate_id);
+
                         // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
                         //It is important to remember that a situation such as an OR gate feeding
                         // back into itself is perfectly valid. This can be interpreted that if the
@@ -100,10 +105,11 @@ pub fn run_circuit<F>(
                         //Also each gate only needs to be stored inside the map once. All changed
                         // inputs are saved as part of the state, so collect_output() only needs
                         // to run once.
-                        if (input_signal_updated || (propagate_signal_through_circuit && changed_count_this_tick == 1)) && !next_gates.contains_key(&gate_id) {
+                        if (input_signal_updated || (propagate_signal_through_circuit && changed_count_this_tick == 1)) && !contains_id {
                             drop(mutable_next_gate);
                             // println!("next_gates.insert()");
-                            next_gates.insert(gate_id, next_gate);
+                            next_gates_set.insert(gate_id);
+                            next_gates.push(next_gate);
                         }
                     }
                 }
@@ -121,7 +127,6 @@ pub fn run_circuit<F>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::time::Duration;
     use crate::logic::basic_gates::{Not, Or};
     use crate::logic::foundations::Signal::{HIGH, LOW};
@@ -136,11 +141,11 @@ mod tests {
         let input_gate = AutomaticInput::new(vec![HIGH], 1, "");
         let output_gate = SimpleOutput::new("");
 
-        let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-        let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-        input_gates.insert(input_gate.borrow_mut().get_unique_id(), input_gate.clone());
-        output_gates.insert(output_gate.borrow_mut().get_unique_id(), output_gate.clone());
+        input_gates.push(input_gate.clone());
+        output_gates.push(output_gate.clone());
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             0,
@@ -149,9 +154,10 @@ mod tests {
         );
 
         run_circuit(
-            input_gates,
-            output_gates,
-            |_clock_tick_inputs, output_gates| {
+            &input_gates,
+            &output_gates,
+            false,
+            &mut |_clock_tick_inputs, output_gates| {
                 check_for_single_element_signal(output_gates, HIGH);
             },
         );
@@ -167,11 +173,11 @@ mod tests {
                 let output_gate = SimpleOutput::new("");
                 let not_gate = Not::new(2);
 
-                let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-                let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
+                let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+                let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-                input_gates.insert(input_gate.borrow_mut().get_unique_id(), input_gate.clone());
-                output_gates.insert(output_gate.borrow_mut().get_unique_id(), output_gate.clone());
+                input_gates.push(input_gate.clone());
+                output_gates.push(output_gate.clone());
 
                 input_gate.borrow_mut().connect_output_to_next_gate(
                     0,
@@ -193,9 +199,10 @@ mod tests {
                 );
 
                 run_circuit(
-                    input_gates,
-                    output_gates,
-                    |_clock_tick_inputs, _output_gates| {
+                    &input_gates,
+                    &output_gates,
+                    false,
+                    &mut |_clock_tick_inputs, _output_gates| {
                         //An oscillation should panic! before it ever reaches this point. Cannot use the
                         // panic! macro because the test will not be able to check if it failed properly or
                         // not.
@@ -215,11 +222,11 @@ mod tests {
                 let output_gate = SimpleOutput::new("");
                 let or_gate = Or::new(2, 2);
 
-                let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-                let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
+                let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+                let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-                input_gates.insert(input_gate.borrow_mut().get_unique_id(), input_gate.clone());
-                output_gates.insert(output_gate.borrow_mut().get_unique_id(), output_gate.clone());
+                input_gates.push(input_gate.clone());
+                output_gates.push(output_gate.clone());
 
                 input_gate.borrow_mut().connect_output_to_next_gate(
                     0,
@@ -241,9 +248,10 @@ mod tests {
                 );
 
                 run_circuit(
-                    input_gates,
-                    output_gates,
-                    |_clock_tick_inputs, output_gates| {
+                    &input_gates,
+                    &output_gates,
+                    false,
+                    &mut |_clock_tick_inputs, output_gates| {
                         check_for_single_element_signal(output_gates, HIGH);
                     },
                 );
@@ -261,11 +269,11 @@ mod tests {
         let output_gate = SimpleOutput::new("");
         let not_gate = Not::new(1);
 
-        let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-        let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-        input_gates.insert(input_gate.borrow_mut().get_unique_id(), input_gate.clone());
-        output_gates.insert(output_gate.borrow_mut().get_unique_id(), output_gate.clone());
+        input_gates.push(input_gate.clone());
+        output_gates.push(output_gate.clone());
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             0,
@@ -279,10 +287,10 @@ mod tests {
             output_gate.clone(),
         );
 
-        run_circuit(
-            input_gates,
-            output_gates,
-            |_clock_tick_inputs, output_gates| {
+        start_clock(
+            &input_gates,
+            &output_gates,
+            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
                 check_for_single_element_signal(output_gates, HIGH);
             },
         );
@@ -294,11 +302,11 @@ mod tests {
         let output_gate = SimpleOutput::new("");
         let not_gate = Not::new(1);
 
-        let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-        let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-        input_gates.insert(input_gate.borrow_mut().get_unique_id(), input_gate.clone());
-        output_gates.insert(output_gate.borrow_mut().get_unique_id(), output_gate.clone());
+        input_gates.push(input_gate.clone());
+        output_gates.push(output_gate.clone());
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             0,
@@ -315,14 +323,14 @@ mod tests {
         let expected_outputs = vec![HIGH, LOW, LOW];
         let mut current_index = 0;
 
-        run_circuit(
-            input_gates,
-            output_gates,
-            |_clock_tick_inputs, output_gates| {
+        start_clock(
+            &input_gates,
+            &output_gates,
+            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
                 assert!(current_index < expected_outputs.len());
                 assert_eq!(output_gates.len(), 1);
 
-                let (_key, value) = output_gates.into_iter().next().unwrap();
+                let value = output_gates.into_iter().next().unwrap();
                 let mut value = value.borrow_mut();
                 let output_signals = value.fetch_output_signals().unwrap();
 

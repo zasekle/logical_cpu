@@ -1,21 +1,19 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use crate::logic::foundations::{GateOutputState, Signal, UniqueID};
+use crate::logic::foundations::{GateOutputState, Signal};
 use crate::logic::output_gates::LogicGateAndOutputGate;
 
 #[allow(dead_code)]
 pub fn check_for_single_element_signal(
-    output_gates: &HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
     output: Signal,
 ) {
     assert_eq!(output_gates.len(), 1);
-    let (_key, value) = output_gates.into_iter().next().unwrap();
-    let mut value = value.borrow_mut();
-    let output_signals = value.fetch_output_signals().unwrap();
+    let mut output_gate = output_gates.first().unwrap().borrow_mut();
+    let output_signals = output_gate.fetch_output_signals().unwrap();
 
     assert_eq!(output_signals.len(), 1);
 

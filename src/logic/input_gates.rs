@@ -33,23 +33,22 @@ impl Clock {
 }
 
 impl LogicGate for Clock {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
             None,
             &mut self.output_states,
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }
 
     fn update_input_signal(&mut self, _input: GateInput) -> InputSignalReturn {
-        //TODO: This needs to handle oscillation properly and return a formatted count tick.
-        // self.members.update_input_signal(input)
 
+        //Want to return 1 here because run_circuit expects it.
         InputSignalReturn {
-            changed_count_this_tick: 0,
+            changed_count_this_tick: 1,
             input_signal_updated: false,
         }
     }
@@ -118,28 +117,29 @@ impl AutomaticInput {
 impl LogicGate for AutomaticInput {
     fn connect_output_to_next_gate(
         &mut self,
-        current_gate_output_index: usize,
-        next_gate_input_index: usize,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
             Some(&self.values_to_be_output),
             &mut self.output_states,
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        //TODO: This needs to handle oscillation properly and return a formatted count tick.
-        // self.members.update_input_signal(input)
+        //This doesn't ever actually 'change' input. So there is no reason to update oscillation.
+        // New inputs are simply pushed into the back of the vector.
         self.values_to_be_output.push(input.signal);
 
+        //Want to return 1 here because run_circuit expects it.
         InputSignalReturn {
-            changed_count_this_tick: 0,
-            input_signal_updated: false,
+            changed_count_this_tick: 1,
+            input_signal_updated: true,
         }
     }
 
@@ -208,16 +208,16 @@ impl SimpleInput {
 impl LogicGate for SimpleInput {
     fn connect_output_to_next_gate(
         &mut self,
-        current_gate_output_index: usize,
-        next_gate_input_index: usize,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
         GateLogic::connect_output_to_next_gate(
             self.members.gate_type,
             Some(&self.members.input_signals),
             &mut self.members.output_states,
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }

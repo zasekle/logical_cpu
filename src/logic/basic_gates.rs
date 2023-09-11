@@ -1,17 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::logic::foundations::{
-    GateInput,
-    GateOutputState,
-    LogicGate,
-    UniqueID,
-    GateLogicError,
-    GateType,
-    GateLogic,
-    BasicGateMembers,
-    InputSignalReturn
-};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn};
 
 pub struct Or {
     members: BasicGateMembers,
@@ -36,10 +26,11 @@ impl Or {
 }
 
 impl LogicGate for Or {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+
         self.members.connect_output_to_next_gate(
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }
@@ -88,10 +79,10 @@ impl And {
 }
 
 impl LogicGate for And {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         self.members.connect_output_to_next_gate(
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }
@@ -140,10 +131,10 @@ impl Not {
 }
 
 impl LogicGate for Not {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         self.members.connect_output_to_next_gate(
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }
@@ -192,10 +183,10 @@ impl Nor {
 }
 
 impl LogicGate for Nor {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         self.members.connect_output_to_next_gate(
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }
@@ -244,10 +235,10 @@ impl Nand {
 }
 
 impl LogicGate for Nand {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_index: usize, next_gate_input_index: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         self.members.connect_output_to_next_gate(
-            current_gate_output_index,
-            next_gate_input_index,
+            current_gate_output_key,
+            next_gate_input_key,
             next_gate,
         );
     }
@@ -275,7 +266,6 @@ impl LogicGate for Nand {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use crate::logic::foundations::Signal;
     use crate::logic::foundations::Signal::{HIGH, LOW};
     use crate::logic::input_gates::AutomaticInput;
@@ -293,11 +283,11 @@ mod tests {
         let first_pin_input = AutomaticInput::new(vec![first_input], 1, "");
         let output_gate = SimpleOutput::new("");
 
-        let mut input_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGate>>> = HashMap::new();
-        let mut output_gates: HashMap<UniqueID, Rc<RefCell<dyn LogicGateAndOutputGate>>> = HashMap::new();
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-        input_gates.insert(first_pin_input.borrow_mut().get_unique_id(), first_pin_input.clone());
-        output_gates.insert(output_gate.borrow_mut().get_unique_id(), output_gate.clone());
+        input_gates.push(first_pin_input.clone());
+        output_gates.push(output_gate.clone());
 
         first_pin_input.borrow_mut().connect_output_to_next_gate(
             0,
@@ -314,7 +304,7 @@ mod tests {
                 gate.clone(),
             );
 
-            input_gates.insert(second_pin_input.borrow_mut().get_unique_id(), second_pin_input.clone());
+            input_gates.push(second_pin_input.clone());
         }
 
         gate.borrow_mut().connect_output_to_next_gate(
@@ -326,8 +316,8 @@ mod tests {
         start_clock(
             &input_gates,
             &output_gates,
-            &mut |_clock_tick_inputs, output_gates| {
-                check_for_single_element_signal(output_gates, output.clone());
+            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                check_for_single_element_signal(&output_gates, output.clone());
             },
         );
     }
