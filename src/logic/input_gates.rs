@@ -19,7 +19,7 @@ impl Clock {
             output_states: Vec::with_capacity(output_num),
             unique_id: UniqueID::generate(),
             should_print_output: false,
-            gate_type: GateType::Clock,
+            gate_type: GateType::ClockType,
             tag: String::from(tag),
         };
 
@@ -101,7 +101,7 @@ impl AutomaticInput {
             output_states: Vec::with_capacity(output_num),
             unique_id: UniqueID::generate(),
             should_print_output: false,
-            gate_type: GateType::AutomaticInput,
+            gate_type: GateType::AutomaticInputType,
             tag: String::from(tag),
         };
 
@@ -188,14 +188,16 @@ pub struct SimpleInput {
 
 #[allow(dead_code)]
 impl SimpleInput {
-    pub fn new(tag: &str) -> Rc<RefCell<Self>> {
+    pub fn new(output_num: usize, tag: &str) -> Rc<RefCell<Self>> {
+        assert_ne!(output_num, 0);
+
         Rc::new(
             RefCell::new(
                 SimpleInput {
                     members: BasicGateMembers::new(
                         1,
-                        1,
-                        GateType::SimpleInput,
+                        output_num,
+                        GateType::SimpleInputType,
                         Some(LOW),
                     ),
                     tag: String::from(tag),

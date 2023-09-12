@@ -16,7 +16,7 @@ impl Or {
                     members: BasicGateMembers::new(
                         input_num,
                         output_num,
-                        GateType::Or,
+                        GateType::OrType,
                         None,
                     )
                 }
@@ -69,7 +69,7 @@ impl And {
                     members: BasicGateMembers::new(
                         input_num,
                         output_num,
-                        GateType::And,
+                        GateType::AndType,
                         None,
                     )
                 }
@@ -121,7 +121,7 @@ impl Not {
                     members: BasicGateMembers::new(
                         1,
                         output_num,
-                        GateType::Not,
+                        GateType::NotType,
                         None,
                     )
                 }
@@ -173,7 +173,7 @@ impl Nor {
                     members: BasicGateMembers::new(
                         input_num,
                         output_num,
-                        GateType::Nor,
+                        GateType::NorType,
                         None,
                     )
                 }
@@ -225,7 +225,7 @@ impl Nand {
                     members: BasicGateMembers::new(
                         input_num,
                         output_num,
-                        GateType::Nand,
+                        GateType::NandType,
                         None,
                     )
                 }

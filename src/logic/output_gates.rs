@@ -30,7 +30,7 @@ impl SimpleOutput {
                     unique_id: UniqueID::generate(),
                     oscillation_detection: OscillationDetection::new(),
                     should_print_output: false,
-                    gate_type: GateType::SimpleOutput,
+                    gate_type: GateType::SimpleOutputType,
                     tag: String::from(tag),
                 }
             )

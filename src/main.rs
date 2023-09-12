@@ -15,6 +15,7 @@ use crate::build_circuit::InputAndOutputGates;
 use crate::run_circuit::start_clock;
 
 fn main() {
+
     println!("Building circuit!");
 
     let InputAndOutputGates{input_gates, output_gates} =

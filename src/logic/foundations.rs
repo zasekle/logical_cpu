@@ -166,31 +166,35 @@ impl OscillationDetection {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum GateType {
-    Not,
-    Or,
-    And,
-    Nor,
-    Nand,
-    Clock,
-    AutomaticInput,
-    SimpleOutput,
-    SimpleInput,
-    SRLatch,
+    NotType,
+    OrType,
+    AndType,
+    NorType,
+    NandType,
+    ClockType,
+    AutomaticInputType,
+    SimpleOutputType,
+    SimpleInputType,
+    SRLatchType,
+    ActiveLowSRLatchType,
+    OneBitMemoryCellType,
 }
 
 impl fmt::Display for GateType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let printable = match *self {
-            GateType::Not => "NOT",
-            GateType::Or => "OR",
-            GateType::And => "AND",
-            GateType::Nor => "NOR",
-            GateType::Nand => "NAND",
-            GateType::Clock => "CLOCK",
-            GateType::AutomaticInput => "AUTOMATIC_INPUT",
-            GateType::SimpleOutput => "SIMPLE_OUTPUT",
-            GateType::SimpleInput => "SIMPLE_INPUT",
-            GateType::SRLatch => "SR_LATCH",
+            GateType::NotType => "NOT",
+            GateType::OrType => "OR",
+            GateType::AndType => "AND",
+            GateType::NorType => "NOR",
+            GateType::NandType => "NAND",
+            GateType::ClockType => "CLOCK",
+            GateType::AutomaticInputType => "AUTOMATIC_INPUT",
+            GateType::SimpleOutputType => "SIMPLE_OUTPUT",
+            GateType::SimpleInputType => "SIMPLE_INPUT",
+            GateType::SRLatchType => "SR_LATCH",
+            GateType::ActiveLowSRLatchType => "ACTIVE_LOW_SR_LATCH",
+            GateType::OneBitMemoryCellType => "ONE_BIT_MEMORY_CELL"
         };
         write!(f, "{}", printable)
     }
@@ -384,6 +388,59 @@ impl ComplexGateMembers {
             Some(index) => index.clone()
         }
     }
+
+    pub fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+        //Do not need to run calculate_output_from_inputs() here. It is run in simple gates for the
+        // sake of getting the output. However, in complex gates it can be time consuming.
+
+        let signal = match &self.simple_gate.output_states[current_gate_output_key] {
+            GateOutputState::NotConnected(signal) => {
+                signal.clone()
+            }
+            GateOutputState::Connected(connected_output) => {
+                connected_output.throughput.signal.clone()
+            }
+        };
+
+        self.simple_gate.output_states[current_gate_output_key] =
+            GateOutputState::Connected(
+                ConnectedOutput {
+                    throughput: GateInput::new(next_gate_input_key, signal),
+                    gate: next_gate,
+                }
+            );
+    }
+
+    pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        //Updating the inner 'input_signals' vector for consistency.
+        self.simple_gate.update_input_signal(input.clone());
+
+        let mut simple_input_gate = self.input_gates[input.input_index].borrow_mut();
+
+        simple_input_gate.update_input_signal(
+            GateInput {
+                input_index: 0,
+                signal: input.signal,
+            }
+        )
+    }
+
+    pub fn fetch_output_signals(&mut self, tag: &String) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.calculate_output_from_inputs(false);
+
+        let output_clone = self.simple_gate.output_states.clone();
+
+        if self.simple_gate.should_print_output {
+            GateLogic::print_gate_output(
+                &self.simple_gate.gate_type,
+                &self.simple_gate.unique_id,
+                tag,
+                &output_clone,
+            );
+        }
+
+        Ok(output_clone)
+    }
 }
 
 pub struct GateLogic;
@@ -518,16 +575,18 @@ impl GateLogic {
         input_signals: Option<&Vec<Signal>>,
     ) -> Signal {
         match gate_type {
-            GateType::Not => GateLogic::calculate_output_for_not(input_signals.unwrap()),
-            GateType::Or => GateLogic::calculate_output_for_or(input_signals.unwrap()),
-            GateType::And => GateLogic::calculate_output_for_and(input_signals.unwrap()),
-            GateType::Nor => GateLogic::calculate_output_for_nor(input_signals.unwrap()),
-            GateType::Nand => GateLogic::calculate_output_for_nand(input_signals.unwrap()),
-            GateType::Clock => GateLogic::calculate_output_for_clock(),
-            GateType::AutomaticInput => GateLogic::calculate_output_for_automatic_input(input_signals.unwrap()),
-            GateType::SimpleOutput => panic!(),
-            GateType::SimpleInput => GateLogic::calculate_output_for_simple_input(input_signals.unwrap()),
-            GateType::SRLatch => panic!(),
+            GateType::NotType => GateLogic::calculate_output_for_not(input_signals.unwrap()),
+            GateType::OrType => GateLogic::calculate_output_for_or(input_signals.unwrap()),
+            GateType::AndType => GateLogic::calculate_output_for_and(input_signals.unwrap()),
+            GateType::NorType => GateLogic::calculate_output_for_nor(input_signals.unwrap()),
+            GateType::NandType => GateLogic::calculate_output_for_nand(input_signals.unwrap()),
+            GateType::ClockType => GateLogic::calculate_output_for_clock(),
+            GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(input_signals.unwrap()),
+            GateType::SimpleOutputType => panic!(),
+            GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(input_signals.unwrap()),
+            GateType::SRLatchType => panic!(),
+            GateType::ActiveLowSRLatchType => panic!(),
+            GateType::OneBitMemoryCellType => panic!(),
         }
     }
 
