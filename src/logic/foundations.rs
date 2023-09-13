@@ -178,6 +178,9 @@ pub enum GateType {
     SRLatchType,
     ActiveLowSRLatchType,
     OneBitMemoryCellType,
+    VariableBitMemoryCellType,
+    VariableCPUEnableType,
+    VariableBitRegisterType,
 }
 
 impl fmt::Display for GateType {
@@ -194,7 +197,10 @@ impl fmt::Display for GateType {
             GateType::SimpleInputType => "SIMPLE_INPUT",
             GateType::SRLatchType => "SR_LATCH",
             GateType::ActiveLowSRLatchType => "ACTIVE_LOW_SR_LATCH",
-            GateType::OneBitMemoryCellType => "ONE_BIT_MEMORY_CELL"
+            GateType::OneBitMemoryCellType => "ONE_BIT_MEMORY_CELL",
+            GateType::VariableBitMemoryCellType => "VARIABLE_BIT_MEMORY_CELL",
+            GateType::VariableCPUEnableType => "VARIABLE_CPU_ENABLE",
+            GateType::VariableBitRegisterType => "VARIABLE_BIT_REGISTER",
         };
         write!(f, "{}", printable)
     }
@@ -345,6 +351,12 @@ impl ComplexGateMembers {
                 );
             },
         );
+
+        // println!("calculate_output_from_inputs outputs");
+        // for out in self.output_gates.iter() {
+        //     let output = out.borrow_mut().fetch_output_signals();
+        //     print!("output: {:#?}", output.unwrap());
+        // }
 
         self.convert_output_gates_to_output_states();
     }
@@ -587,6 +599,9 @@ impl GateLogic {
             GateType::SRLatchType => panic!(),
             GateType::ActiveLowSRLatchType => panic!(),
             GateType::OneBitMemoryCellType => panic!(),
+            GateType::VariableBitMemoryCellType => panic!(),
+            GateType::VariableCPUEnableType => panic!(),
+            GateType::VariableBitRegisterType => panic!(),
         }
     }
 

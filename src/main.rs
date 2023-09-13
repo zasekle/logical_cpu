@@ -1,4 +1,5 @@
 extern crate core;
+extern crate rand;
 
 mod logic;
 mod run_circuit;
@@ -15,6 +16,13 @@ use crate::build_circuit::InputAndOutputGates;
 use crate::run_circuit::start_clock;
 
 fn main() {
+    //TODO: Should I make a way to pass a 'bus' in to things? I think I should build the register
+    // first, then I should see what would be a convenient way to pass information. Maybe I can just
+    // make a global function or something that takes different types and this will solve my
+    // problem.
+    //TODO: For some reason the CPU_ENABLE is running twice inside the register. Figure out why.
+    // cargo test -- logic::processor_components::tests::processor_register_simple_test --nocapture
+    //TODO: Do more tests for the register.
 
     println!("Building circuit!");
 

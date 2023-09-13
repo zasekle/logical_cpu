@@ -342,10 +342,10 @@ impl OneBitMemoryCell {
                 2, 1,
             ),
             sr_top_nand_gate: Nand::new(
-                2, 2
+                2, 2,
             ),
             sr_bottom_nand_gate: Nand::new(
-                2, 2
+                2, 2,
             ),
         };
 
@@ -353,7 +353,7 @@ impl OneBitMemoryCell {
         enable_input_gate.borrow_mut().update_input_signal(
             GateInput {
                 input_index: 0,
-                signal: HIGH
+                signal: HIGH,
             }
         );
 
@@ -362,7 +362,7 @@ impl OneBitMemoryCell {
         enable_input_gate.borrow_mut().update_input_signal(
             GateInput {
                 input_index: 0,
-                signal: LOW
+                signal: LOW,
             }
         );
 
@@ -488,14 +488,140 @@ impl LogicGate for OneBitMemoryCell {
     }
 }
 
+pub struct VariableBitMemoryCell {
+    complex_gate: ComplexGateMembers,
+    one_bit_memory_cells: Vec<Rc<RefCell<OneBitMemoryCell>>>,
+}
+
+#[allow(dead_code)]
+impl VariableBitMemoryCell {
+    pub fn new(number_bits: usize) -> Rc<RefCell<Self>> {
+        assert_ne!(number_bits, 0);
+
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut one_bit_memory_cells: Vec<Rc<RefCell<OneBitMemoryCell>>> = Vec::new();
+
+        for i in 0..number_bits {
+            let input_tag = format!("i_{}", i);
+            input_gates.push(SimpleInput::new(1, input_tag.as_str()));
+
+            let output_tag = format!("o_{}", i);
+            let output_gate = SimpleOutput::new(output_tag.as_str());
+            output_gates.push(output_gate.clone());
+            output_gates_logic.push(output_gate);
+
+            one_bit_memory_cells.push(
+                OneBitMemoryCell::new()
+            );
+        }
+
+        let set_input_gate = SimpleInput::new(number_bits, "S");
+
+        //Order of input gates is important here to force the circuit into a deterministic state.
+        input_gates.push(set_input_gate.clone());
+
+        let mut one_bit_memory_cell = VariableBitMemoryCell {
+            complex_gate: ComplexGateMembers::new(
+                number_bits + 1,
+                number_bits,
+                GateType::VariableBitMemoryCellType,
+                input_gates,
+                output_gates,
+            ),
+            one_bit_memory_cells,
+        };
+
+        one_bit_memory_cell.build_and_prime_circuit(number_bits, output_gates_logic);
+
+        Rc::new(RefCell::new(one_bit_memory_cell))
+    }
+
+    fn build_and_prime_circuit(
+        &mut self,
+        number_bits: usize,
+        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+    ) {
+        let s_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("S")].clone();
+        let mut s_input_gate = s_input_gate.borrow_mut();
+
+        for i in 0..number_bits {
+            let mut input_gate = self.complex_gate.input_gates[i].borrow_mut();
+            let mut mem_gate = self.one_bit_memory_cells[i].borrow_mut();
+
+            let enable_gate_index = mem_gate.get_index_from_tag("E");
+            let set_gate_index = mem_gate.get_index_from_tag("S");
+
+            input_gate.connect_output_to_next_gate(
+                0,
+                set_gate_index,
+                self.one_bit_memory_cells[i].clone(),
+            );
+
+            s_input_gate.connect_output_to_next_gate(
+                i,
+                enable_gate_index,
+                self.one_bit_memory_cells[i].clone(),
+            );
+
+            mem_gate.connect_output_to_next_gate(
+                0,
+                0,
+                output_gates[i].clone(),
+            );
+        }
+
+        drop(s_input_gate);
+
+        //Prime gates
+        self.complex_gate.calculate_output_from_inputs(true);
+    }
+}
+
+impl LogicGate for VariableBitMemoryCell {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+        self.complex_gate.connect_output_to_next_gate(current_gate_output_key, next_gate_input_key, next_gate);
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        //ActiveLowSRLatch has an `invalid` state of LOW LOW. However, this is not being enforced by
+        // assertions because it may be an intermediate state.
+        self.complex_gate.update_input_signal(input)
+    }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals(&self.get_tag())
+    }
+
+    fn get_gate_type(&self) -> GateType {
+        self.complex_gate.simple_gate.gate_type
+    }
+
+    fn get_unique_id(&self) -> UniqueID {
+        self.complex_gate.simple_gate.unique_id
+    }
+
+    fn toggle_output_printing(&mut self, print_output: bool) {
+        self.complex_gate.simple_gate.should_print_output = print_output;
+    }
+
+    fn get_index_from_tag(&self, tag: &str) -> usize {
+        self.complex_gate.get_index_from_tag(tag)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use crate::globals::CLOCK_TICK_NUMBER;
     use crate::logic::foundations::Signal;
     use crate::logic::foundations::Signal::{HIGH, LOW};
     use crate::logic::input_gates::AutomaticInput;
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
     use crate::run_circuit::run_circuit;
+    use rand::Rng;
+    use crate::test_stuff::run_multi_input_output_logic_gate;
     use super::*;
 
     fn run_sr_latch(
@@ -669,7 +795,7 @@ mod tests {
                     match q_output {
                         GateOutputState::NotConnected(signal) => {
                             collected_output.push(signal.clone());
-                        },
+                        }
                         GateOutputState::Connected(_) => panic!("Final output gate should not be connected"),
                     }
                 },
@@ -930,6 +1056,78 @@ mod tests {
             vec![HIGH, HIGH],
             vec![LOW, HIGH],
             vec![LOW, HIGH],
+        );
+    }
+
+    #[test]
+    fn variable_bit_mem_initialization() {
+        let num_bits = rand::thread_rng().gen_range(2..=16);
+        let variable_bit_memory_cell = VariableBitMemoryCell::new(num_bits);
+
+        let output = variable_bit_memory_cell.borrow_mut().fetch_output_signals().unwrap();
+
+        assert_eq!(output.len(), num_bits);
+        for out in output {
+            match out {
+                GateOutputState::NotConnected(signal) => {
+                    assert_eq!(signal, LOW);
+                }
+                GateOutputState::Connected(_) => panic!("Final output gate should never be connected.")
+            }
+        }
+    }
+
+    #[test]
+    fn variable_bit_signal_high() {
+        run_multi_input_output_logic_gate(
+            vec![
+                vec![HIGH, LOW, HIGH],
+            ],
+            vec![
+                vec![HIGH, LOW, HIGH],
+            ],
+            HashMap::from(
+                [("S",vec![HIGH])]
+            ),
+            VariableBitMemoryCell::new(3),
+        );
+    }
+
+    #[test]
+    fn variable_bit_signal_low() {
+        run_multi_input_output_logic_gate(
+            vec![
+                vec![HIGH, LOW],
+            ],
+            vec![
+                vec![LOW, LOW],
+            ],
+            HashMap::from(
+                [("S",vec![LOW])]
+            ),
+            VariableBitMemoryCell::new(2),
+        );
+    }
+
+    #[test]
+    fn variable_bit_saved_states() {
+        run_multi_input_output_logic_gate(
+            vec![
+                vec![HIGH, HIGH, LOW],
+                vec![HIGH, HIGH, LOW],
+                vec![HIGH, HIGH, LOW],
+                vec![LOW, LOW, HIGH],
+            ],
+            vec![
+                vec![LOW, LOW, LOW],
+                vec![HIGH, HIGH, LOW],
+                vec![HIGH, HIGH, LOW],
+                vec![LOW, LOW, HIGH],
+            ],
+            HashMap::from(
+                [("S",vec![LOW, HIGH, LOW, HIGH])]
+            ),
+            VariableBitMemoryCell::new(3),
         );
     }
 }
