@@ -744,7 +744,6 @@ mod tests {
         output_gates.push(q_output_gate.clone());
 
         let one_bit_memory_cell = OneBitMemoryCell::new();
-        one_bit_memory_cell.borrow_mut().toggle_output_printing(true);
 
         e_input_gate.borrow_mut().connect_output_to_next_gate(
             0,

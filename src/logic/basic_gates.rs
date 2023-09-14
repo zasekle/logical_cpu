@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn};
+use crate::logic::foundations::Signal::{HIGH, LOW};
 
 pub struct Or {
     members: BasicGateMembers,
@@ -264,6 +265,73 @@ impl LogicGate for Nand {
     }
 }
 
+pub struct ControlledBuffer {
+    members: BasicGateMembers,
+}
+
+#[allow(dead_code)]
+impl ControlledBuffer {
+    pub fn new(input_output_num: usize) -> Rc<RefCell<Self>> {
+        Rc::new(
+            RefCell::new(
+                ControlledBuffer {
+                    members: BasicGateMembers::new(
+                        input_output_num + 1,
+                        input_output_num,
+                        GateType::ControlledBufferType,
+                        None,
+                    )
+                }
+            )
+        )
+    }
+}
+
+impl LogicGate for ControlledBuffer {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+        self.members.connect_output_to_next_gate(
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+        );
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        self.members.update_input_signal(input)
+    }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        //When input index 0 is HIGH, allow the signal through, otherwise return NotConnected.
+        let enable_index = self.get_index_from_tag("E");
+        if self.members.input_signals[enable_index] == HIGH {
+            GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+        } else {
+            let output_states = vec![GateOutputState::NotConnected(LOW); self.members.output_states.len()];
+            Ok(output_states)
+        }
+    }
+
+    fn get_gate_type(&self) -> GateType {
+        self.members.gate_type
+    }
+
+    fn get_unique_id(&self) -> UniqueID {
+        self.members.unique_id
+    }
+
+    fn toggle_output_printing(&mut self, print_output: bool) {
+        self.members.should_print_output = print_output;
+    }
+
+    fn get_index_from_tag(&self, tag: &str) -> usize {
+        if tag == "E" {
+            self.members.input_signals.len() - 1
+        } else {
+            panic!("Gate {} using tag {} id {} did not exist.", self.get_tag(), tag, self.get_unique_id().id())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::logic::foundations::Signal;
@@ -322,6 +390,48 @@ mod tests {
         );
     }
 
+    fn test_controlled_buffer(
+        signal: Signal
+    ) {
+        let output_gate = SimpleOutput::new("OUT");
+        let controlled_buffer = ControlledBuffer::new(1);
+        let mut mut_controlled_buffer = controlled_buffer.borrow_mut();
+
+        mut_controlled_buffer.connect_output_to_next_gate(
+            0,
+            0,
+            output_gate.clone(),
+        );
+
+        mut_controlled_buffer.update_input_signal(
+            GateInput {
+                input_index: 0,
+                signal: signal.clone(),
+            }
+        );
+
+        let enable_index = mut_controlled_buffer.get_index_from_tag("E");
+        mut_controlled_buffer.update_input_signal(
+            GateInput {
+                input_index: enable_index,
+                signal: HIGH,
+            }
+        );
+
+        let output = mut_controlled_buffer.fetch_output_signals().unwrap();
+
+        for gate_output_state in output {
+            match gate_output_state {
+                GateOutputState::NotConnected(_) => panic!("Output should be connected when pin is low."),
+                GateOutputState::Connected(connected_output) => {
+                    assert_eq!(connected_output.throughput.signal, signal);
+                    let connected_id = connected_output.gate.borrow_mut().get_unique_id().id();
+                    let output_id = output_gate.borrow_mut().get_unique_id().id();
+                    assert_eq!(connected_id, output_id);
+                }
+            }
+        }
+    }
     #[test]
     fn test_or_gate_low_low() {
         let or_gate = Or::new(2, 1);
@@ -538,4 +648,41 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_controlled_buffer_initialization() {
+        let output_gate = SimpleOutput::new("OUT");
+        let controlled_buffer = ControlledBuffer::new(1);
+        let mut mut_controlled_buffer = controlled_buffer.borrow_mut();
+        mut_controlled_buffer.connect_output_to_next_gate(
+            0,
+            0,
+            output_gate.clone(),
+        );
+
+        mut_controlled_buffer.update_input_signal(
+            GateInput {
+                input_index: 0,
+                signal: HIGH,
+            }
+        );
+
+        let output = mut_controlled_buffer.fetch_output_signals().unwrap();
+
+        for gate_output_state in output {
+            match gate_output_state {
+                GateOutputState::NotConnected(signal) => assert_eq!(signal, LOW),
+                GateOutputState::Connected(_) => panic!("Output should not be connected when pin is low.")
+            }
+        }
+    }
+
+    #[test]
+    fn test_controlled_buffer_high() {
+        test_controlled_buffer(HIGH);
+    }
+
+    #[test]
+    fn test_controlled_buffer_low() {
+        test_controlled_buffer(LOW);
+    }
 }

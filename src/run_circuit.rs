@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
-use crate::globals::CLOCK_TICK_NUMBER;
+use std::sync::atomic::Ordering;
+use crate::globals::{CLOCK_TICK_NUMBER, RUN_CIRCUIT_IS_HIGH_LEVEL};
 use crate::logic::foundations::{GateLogicError, GateOutputState, InputSignalReturn, LogicGate};
 use crate::logic::output_gates::LogicGateAndOutputGate;
 
@@ -35,6 +36,7 @@ pub fn start_clock<F>(
     }
 }
 
+
 //Returns true if the circuit has input remaining, false if it does not.
 //Note that elements must be ordered so that some of the undetermined gates such as SR latches can
 // have a defined starting state. Therefore, vectors are used even though they must be iterated
@@ -47,12 +49,24 @@ pub fn run_circuit<F>(
 ) -> bool where
     F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>)
 {
+    let print_output =
+        if RUN_CIRCUIT_IS_HIGH_LEVEL.load(Ordering::SeqCst) {
+            RUN_CIRCUIT_IS_HIGH_LEVEL.store(false, Ordering::SeqCst);
+            true
+        } else {
+            false
+        };
+
     let mut clock_tick_inputs = Vec::new();
     let mut next_gates: Vec<Rc<RefCell<dyn LogicGate>>> = input_gates.clone();
-    let mut final_output = Vec::new();
 
+    if print_output {
+        println!("run_circuit");
+    }
     while !next_gates.is_empty() {
-        // println!("next_gates.len() = {}", next_gates.len());
+        if print_output {
+            println!("next_gates.len() = {}", next_gates.len());
+        }
         let gates = next_gates;
         next_gates = Vec::new();
         let mut next_gates_set = HashSet::new();
@@ -76,14 +90,22 @@ pub fn run_circuit<F>(
                     (gate.get_tag(), gate_output.clone())
                 );
             }
+            if print_output {
+                println!("gate_output.len(): {:?}", gate_output.len());
+            }
 
             drop(gate);
             for output in gate_output {
                 match output {
                     GateOutputState::NotConnected(signal) => {
-                        final_output.push(signal);
+                        if print_output {
+                            println!("NotConnected(gate_output): {:?}", signal);
+                        }
                     }
                     GateOutputState::Connected(next_gate_info) => {
+                        if print_output {
+                            println!("Connected(gate_output): {:?}", next_gate_info);
+                        }
                         let next_gate = Rc::clone(&next_gate_info.gate);
                         let mut mutable_next_gate = next_gate.borrow_mut();
 

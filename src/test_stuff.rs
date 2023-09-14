@@ -70,10 +70,9 @@ pub fn run_multi_input_output_logic_gate(
     assert!(!input_signals.is_empty());
     assert_eq!(input_signals.len(), output_signal.len());
 
-    let num_bits = input_signals[0].len();
+    let num_outputs = output_signal[0].len();
     for i in 0..input_signals.len() {
-        assert_eq!(input_signals[i].len(), num_bits);
-        assert_eq!(output_signal[i].len(), num_bits);
+        assert_eq!(input_signals[i].len(), input_signals[0].len());
     }
 
     for (_tag, signals) in tagged_input_signal.iter() {
@@ -81,12 +80,6 @@ pub fn run_multi_input_output_logic_gate(
     }
 
     let mut mut_gate = gate.borrow_mut();
-
-    {
-        let output_size = mut_gate.fetch_output_signals().unwrap();
-
-        assert_eq!(output_size.len(), input_signals[0].len());
-    }
 
     let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
     let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
@@ -126,7 +119,7 @@ pub fn run_multi_input_output_logic_gate(
         );
     }
 
-    for i in 0..num_bits {
+    for i in 0..num_outputs {
         let output_gate = SimpleOutput::new("End");
 
         mut_gate.connect_output_to_next_gate(
@@ -154,7 +147,7 @@ pub fn run_multi_input_output_logic_gate(
             &output_gates,
             propagate_signal_through_circuit,
             &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
-                assert_eq!(output_gates.len(), num_bits);
+                assert_eq!(output_gates.len(), num_outputs);
 
                 let mut single_collected_output = Vec::new();
                 for output in output_gates.iter() {

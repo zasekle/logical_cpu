@@ -1,5 +1,6 @@
 extern crate core;
 extern crate rand;
+extern crate backtrace;
 
 mod logic;
 mod run_circuit;
@@ -16,13 +17,20 @@ use crate::build_circuit::InputAndOutputGates;
 use crate::run_circuit::start_clock;
 
 fn main() {
-    //TODO: Should I make a way to pass a 'bus' in to things? I think I should build the register
-    // first, then I should see what would be a convenient way to pass information. Maybe I can just
-    // make a global function or something that takes different types and this will solve my
-    // problem.
-    //TODO: For some reason the CPU_ENABLE is running twice inside the register. Figure out why.
-    // cargo test -- logic::processor_components::tests::processor_register_simple_test --nocapture
-    //TODO: Do more tests for the register.
+
+    //TODO: There is a problem right now, the controlled buffer will essentially 'break' the
+    // connection by returning 'not connected'. However, when 'fetch_output' is called, it will
+    // still collect the most recent output that it can. Maybe I need to return or store an error
+    // in some way saying 'no signal' inside the output. How would this propagate though? I could
+    // feed in a few different signals, then when comparing the signals in output or something
+    // check them? But realistically, having two wires going into the same element (well for output
+    // this can't happen) and one saying no signal? Errors, Signal Enum is there more?
+
+    //TODO: Might want to add some output to the memory inside the register to debug? How would I
+    // display this?
+    //TODO: Need to add a controlled buffer to the register.
+    //TODO: Build a little RAM cell.
+    //TODO: Build a large RAM cell.
 
     println!("Building circuit!");
 

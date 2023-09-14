@@ -171,6 +171,7 @@ pub enum GateType {
     AndType,
     NorType,
     NandType,
+    ControlledBufferType,
     ClockType,
     AutomaticInputType,
     SimpleOutputType,
@@ -181,6 +182,7 @@ pub enum GateType {
     VariableBitMemoryCellType,
     VariableCPUEnableType,
     VariableBitRegisterType,
+    VariableDecoderType,
 }
 
 impl fmt::Display for GateType {
@@ -191,6 +193,7 @@ impl fmt::Display for GateType {
             GateType::AndType => "AND",
             GateType::NorType => "NOR",
             GateType::NandType => "NAND",
+            GateType::ControlledBufferType => "CONTROLLED_BUFFER",
             GateType::ClockType => "CLOCK",
             GateType::AutomaticInputType => "AUTOMATIC_INPUT",
             GateType::SimpleOutputType => "SIMPLE_OUTPUT",
@@ -201,6 +204,7 @@ impl fmt::Display for GateType {
             GateType::VariableBitMemoryCellType => "VARIABLE_BIT_MEMORY_CELL",
             GateType::VariableCPUEnableType => "VARIABLE_CPU_ENABLE",
             GateType::VariableBitRegisterType => "VARIABLE_BIT_REGISTER",
+            GateType::VariableDecoderType => "VARIABLE_DECODER",
         };
         write!(f, "{}", printable)
     }
@@ -352,12 +356,6 @@ impl ComplexGateMembers {
             },
         );
 
-        // println!("calculate_output_from_inputs outputs");
-        // for out in self.output_gates.iter() {
-        //     let output = out.borrow_mut().fetch_output_signals();
-        //     print!("output: {:#?}", output.unwrap());
-        // }
-
         self.convert_output_gates_to_output_states();
     }
 
@@ -501,6 +499,10 @@ impl GateLogic {
         GateLogic::calculate_output_for_not(&and_signal)
     }
 
+    pub fn calculate_output_for_controlled_buffer(input_signals: &Vec<Signal>) -> Signal {
+        input_signals.first().unwrap().clone()
+    }
+
     pub fn calculate_output_for_clock() -> Signal {
         HIGH
     }
@@ -592,6 +594,7 @@ impl GateLogic {
             GateType::AndType => GateLogic::calculate_output_for_and(input_signals.unwrap()),
             GateType::NorType => GateLogic::calculate_output_for_nor(input_signals.unwrap()),
             GateType::NandType => GateLogic::calculate_output_for_nand(input_signals.unwrap()),
+            GateType::ControlledBufferType => GateLogic::calculate_output_for_controlled_buffer(input_signals.unwrap()),
             GateType::ClockType => GateLogic::calculate_output_for_clock(),
             GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(input_signals.unwrap()),
             GateType::SimpleOutputType => panic!(),
@@ -602,6 +605,7 @@ impl GateLogic {
             GateType::VariableBitMemoryCellType => panic!(),
             GateType::VariableCPUEnableType => panic!(),
             GateType::VariableBitRegisterType => panic!(),
+            GateType::VariableDecoderType => panic!(),
         }
     }
 
