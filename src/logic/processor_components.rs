@@ -69,7 +69,6 @@ impl VariableBitRegister {
         let mut enable_gate = self.enable.borrow_mut();
         let mut controlled_buffer_gate = self.controlled_buffer.borrow_mut();
 
-        controlled_buffer_gate.toggle_output_printing(true);
         for i in 0..number_bits {
             let mut input_gate = self.complex_gate.input_gates[i].borrow_mut();
 
@@ -310,7 +309,7 @@ impl LogicGate for VariableDecoder {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use crate::logic::foundations::Signal::{HIGH, LOW};
+    use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
     use rand::Rng;
     use crate::test_stuff::run_multi_input_output_logic_gate;
     use super::*;
@@ -326,7 +325,7 @@ mod tests {
         for out in output {
             match out {
                 GateOutputState::NotConnected(signal) => {
-                    assert_eq!(signal, LOW);
+                    assert_eq!(signal, NONE);
                 }
                 GateOutputState::Connected(_) => panic!("Final output gate should never be connected.")
             }
@@ -382,7 +381,7 @@ mod tests {
             ],
             vec![
                 vec![HIGH, LOW, HIGH, HIGH],
-                vec![LOW, LOW, LOW, LOW],
+                vec![NONE, NONE, NONE, NONE],
             ],
             HashMap::from(
                 [

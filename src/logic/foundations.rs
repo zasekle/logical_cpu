@@ -6,12 +6,13 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use crate::globals::{get_clock_tick_number, MAX_INPUT_CHANGES, NEXT_UNIQUE_ID};
-use crate::logic::foundations::Signal::{HIGH, LOW};
+use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
 use crate::logic::output_gates::LogicGateAndOutputGate;
 use crate::run_circuit::run_circuit;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Signal {
+    NONE,
     LOW,
     HIGH,
 }
@@ -25,6 +26,7 @@ pub enum GateLogicError {
 pub struct GateInput {
     pub input_index: usize,
     pub signal: Signal,
+    pub sending_id: UniqueID,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -61,10 +63,15 @@ impl Hash for UniqueID {
 }
 
 impl GateInput {
-    pub fn new(input_index: usize, signal: Signal) -> Self {
+    pub fn new(
+        input_index: usize,
+        signal: Signal,
+        sending_id: UniqueID,
+    ) -> Self {
         GateInput {
             input_index,
             signal,
+            sending_id,
         }
     }
 }
@@ -211,12 +218,13 @@ impl fmt::Display for GateType {
 }
 
 pub struct BasicGateMembers {
-    pub input_signals: Vec<Signal>,
+    pub input_signals: Vec<HashMap<UniqueID, Signal>>,
     pub output_states: Vec<GateOutputState>,
     pub unique_id: UniqueID,
     pub oscillation_detection: OscillationDetection,
     pub should_print_output: bool,
     pub gate_type: GateType,
+    pub tag: String,
 }
 
 impl BasicGateMembers {
@@ -225,13 +233,15 @@ impl BasicGateMembers {
         //Must have at least one input.
         assert_ne!(input_num, 0);
 
+        let unique_id = UniqueID::generate();
         let mut result = BasicGateMembers {
-            input_signals: vec![LOW; input_num],
+            input_signals: vec![HashMap::from([(unique_id, LOW)]); input_num],
             output_states: Vec::with_capacity(output_num),
-            unique_id: UniqueID::generate(),
+            unique_id,
             oscillation_detection: OscillationDetection::new(),
             should_print_output: false,
             gate_type,
+            tag: String::new(),
         };
 
         let output_signal = if let Some(signal) = output_signal {
@@ -254,10 +264,30 @@ impl BasicGateMembers {
     pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
 
-        let input_signal_updated = if self.input_signals[input.input_index] == input.signal {
+        //TODO: The problem is, how do I keep the initialization LOW?
+        //TODO: Probably do something along the lines of give some initialization ID (maybe my own ID)
+        // then when updating the input signal, if my own ID is present, remove it. OR maybe just
+        // ignore it? Probably remove it so it can be handled when the circuit is set up and will
+        // minimize overhead.
+        // So in summary, when connect_output_to_next_gate is run, I need to remove my own UniqueID
+        //  from the map and add or update the other users.
+        //TODO: When the input signal is updated, it will need to update the signal for that specific element?
+        //TODO: Should this go when the input signal is updated or when the output is connected to the gate? Or both?
+        //TODO: Remember that inputs are a special case, so if the current gates id is sent in, don't clear it from
+        // the map.
+        let input_signal_updated = if self.input_signals[input.input_index][&input.sending_id] == input.signal {
             false
+        } else if input.signal == NONE {
+            if changed_count_this_tick == 1 {
+                self.input_signals[input.input_index].insert(input.sending_id, input.signal);
+                true
+            } else {
+                //This means that during this clock tick, the signal was updated by a different
+                // connection. NONE should never take priority.
+                false
+            }
         } else {
-            self.input_signals[input.input_index] = input.signal.clone();
+            self.input_signals[input.input_index].insert(input.sending_id, input.signal);
             true
         };
 
@@ -275,7 +305,7 @@ impl BasicGateMembers {
     ) {
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
-            Some(&self.input_signals),
+            Some(&mut self.input_signals),
             &mut self.output_states,
             current_gate_output_index,
             next_gate_input_index,
@@ -399,7 +429,12 @@ impl ComplexGateMembers {
         }
     }
 
-    pub fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    pub fn connect_output_to_next_gate(
+        &mut self,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
+        next_gate: Rc<RefCell<dyn LogicGate>>,
+    ) {
         //Do not need to run calculate_output_from_inputs() here. It is run in simple gates for the
         // sake of getting the output. However, in complex gates it can be time consuming.
 
@@ -412,10 +447,15 @@ impl ComplexGateMembers {
             }
         };
 
+        let next_gate_unique_id = next_gate.borrow_mut().get_unique_id();
         self.simple_gate.output_states[current_gate_output_key] =
             GateOutputState::Connected(
                 ConnectedOutput {
-                    throughput: GateInput::new(next_gate_input_key, signal),
+                    throughput: GateInput::new(
+                        next_gate_input_key,
+                        signal,
+                        next_gate_unique_id,
+                    ),
                     gate: next_gate,
                 }
             );
@@ -428,10 +468,11 @@ impl ComplexGateMembers {
         let mut simple_input_gate = self.input_gates[input.input_index].borrow_mut();
 
         simple_input_gate.update_input_signal(
-            GateInput {
-                input_index: 0,
-                signal: input.signal,
-            }
+            GateInput::new(
+                0,
+                input.signal,
+                input.sending_id,
+            )
         )
     }
 
@@ -529,7 +570,7 @@ impl GateLogic {
 
     pub fn fetch_output_signals(
         gate_type: &GateType,
-        input_signals: Option<&Vec<Signal>>,
+        input_signals: Option<&Vec<HashMap<UniqueID, Signal>>>,
         output_states: &mut Vec<GateOutputState>,
         unique_id: UniqueID,
         should_print_output: bool,
@@ -564,21 +605,37 @@ impl GateLogic {
 
     pub fn connect_output_to_next_gate(
         gate_type: GateType,
-        input_signals: Option<&Vec<Signal>>,
+        input_signals: Option<&mut Vec<HashMap<UniqueID, Signal>>>,
         output_states: &mut Vec<GateOutputState>,
         current_gate_output_index: usize,
         next_gate_input_index: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
+        //TODO: Need to check the next_gate_unique_id and see if this gate is
+        // 1) The current gate, in which case just update the map.
+        // 2) A different gate AND the current gate is the only gate that exists inside the
+        // map
+        //TODO: How do I handle the case of say an OR gate looping back into itself? I don't want
+        // something to happen such as connecting the OR gate up, then when I connect the next gate
+        // as input, it removes the HashMap element or something. I need a way to mark it as 'set'
+        // and when I do this I will need to go back over the places where I passed the gates personal
+        // ids in (such as the input gates, inside GateInput::new() in test_stuff.rs and inside some
+        // of the new functions).
+        //TODO: This and the one at 432 are the only two of these that actually need to be updated.
         let output_signal = GateLogic::calculate_output_from_inputs(
             &gate_type,
-            input_signals,
+            input_signals.map(|x| &*x),
         );
 
+        let next_gate_unique_id = next_gate.borrow_mut().get_unique_id();
         output_states[current_gate_output_index] =
             GateOutputState::Connected(
                 ConnectedOutput {
-                    throughput: GateInput::new(next_gate_input_index, output_signal),
+                    throughput: GateInput::new(
+                        next_gate_input_index,
+                        output_signal,
+                        next_gate_unique_id,
+                    ),
                     gate: next_gate,
                 }
             );
@@ -586,19 +643,25 @@ impl GateLogic {
 
     pub fn calculate_output_from_inputs(
         gate_type: &GateType,
-        input_signals: Option<&Vec<Signal>>,
+        input_signals: Option<&Vec<HashMap<UniqueID, Signal>>>,
     ) -> Signal {
+        let input_signals = match input_signals {
+            None => None,
+            Some(input_signals) => {
+                Some(calculate_input_signals_from_all_inputs(input_signals))
+            }
+        };
         match gate_type {
-            GateType::NotType => GateLogic::calculate_output_for_not(input_signals.unwrap()),
-            GateType::OrType => GateLogic::calculate_output_for_or(input_signals.unwrap()),
-            GateType::AndType => GateLogic::calculate_output_for_and(input_signals.unwrap()),
-            GateType::NorType => GateLogic::calculate_output_for_nor(input_signals.unwrap()),
-            GateType::NandType => GateLogic::calculate_output_for_nand(input_signals.unwrap()),
-            GateType::ControlledBufferType => GateLogic::calculate_output_for_controlled_buffer(input_signals.unwrap()),
+            GateType::NotType => GateLogic::calculate_output_for_not(&input_signals.unwrap()),
+            GateType::OrType => GateLogic::calculate_output_for_or(&input_signals.unwrap()),
+            GateType::AndType => GateLogic::calculate_output_for_and(&input_signals.unwrap()),
+            GateType::NorType => GateLogic::calculate_output_for_nor(&input_signals.unwrap()),
+            GateType::NandType => GateLogic::calculate_output_for_nand(&input_signals.unwrap()),
+            GateType::ControlledBufferType => GateLogic::calculate_output_for_controlled_buffer(&input_signals.unwrap()),
             GateType::ClockType => GateLogic::calculate_output_for_clock(),
-            GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(input_signals.unwrap()),
+            GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(&input_signals.unwrap()),
             GateType::SimpleOutputType => panic!(),
-            GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(input_signals.unwrap()),
+            GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(&input_signals.unwrap()),
             GateType::SRLatchType => panic!(),
             GateType::ActiveLowSRLatchType => panic!(),
             GateType::OneBitMemoryCellType => panic!(),
@@ -641,7 +704,6 @@ pub fn pretty_print_output(
     input_string: &str,
     output_string: &str,
 ) {
-
     if should_print_output {
         println!("{}", input_string);
         for (tag, gate_input_state) in clock_tick_inputs.iter() {
@@ -674,4 +736,28 @@ pub fn pretty_print_output(
             }
         }
     }
+}
+
+pub fn calculate_input_signals_from_all_inputs(
+    input_signals: &Vec<HashMap<UniqueID, Signal>>,
+) -> Vec<Signal> {
+    let mut final_signals = Vec::new();
+    for input in input_signals {
+        final_signals.push(calculate_input_signal_from_single_inputs(input));
+    }
+    final_signals
+}
+
+pub fn calculate_input_signal_from_single_inputs(
+    input_signal: &HashMap<UniqueID, Signal>,
+) -> Signal {
+    let mut final_signal = NONE;
+    for (_id, signal) in input_signal {
+        if final_signal == NONE {
+            final_signal = signal.clone();
+        } else if *signal != NONE {
+            panic!("Two different signals for the same index were set to non-NONE values. {:#?}", input_signal)
+        }
+    }
+    final_signal
 }

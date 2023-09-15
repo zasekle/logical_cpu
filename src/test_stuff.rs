@@ -98,11 +98,14 @@ pub fn run_multi_input_output_logic_gate(
 
                 input_gates.push(input_gate);
             } else {
-                input_gates[j].borrow_mut().update_input_signal(
-                    GateInput {
-                        input_index: cell_index,
-                        signal: signal.clone(),
-                    }
+                let mut input_gate = input_gates[j].borrow_mut();
+                let input_gate_id = input_gate.get_unique_id();
+                input_gate.update_input_signal(
+                    GateInput::new(
+                        cell_index,
+                        signal.clone(),
+                        input_gate_id,
+                    )
                 );
             }
         }

@@ -191,17 +191,19 @@ impl ActiveLowSRLatch {
 
         //An active low SR latch starts in the HIGH HIGH position.
         sr_latch.update_input_signal(
-            GateInput {
-                input_index: sr_latch.get_index_from_tag("R"),
-                signal: HIGH,
-            }
+            GateInput::new(
+                sr_latch.get_index_from_tag("R"),
+                HIGH,
+                sr_latch.get_unique_id(),
+            )
         );
 
         sr_latch.update_input_signal(
-            GateInput {
-                input_index: sr_latch.get_index_from_tag("S"),
-                signal: HIGH,
-            }
+            GateInput::new(
+                sr_latch.get_index_from_tag("S"),
+                HIGH,
+                sr_latch.get_unique_id(),
+            )
         );
 
         sr_latch.build_and_prime_circuit(output_gates_clone);
@@ -349,21 +351,24 @@ impl OneBitMemoryCell {
             ),
         };
 
+        let enable_input_id = enable_input_gate.borrow_mut().get_unique_id();
         //This will allow the circuit to be primed to the LOW output state.
         enable_input_gate.borrow_mut().update_input_signal(
-            GateInput {
-                input_index: 0,
-                signal: HIGH,
-            }
+            GateInput::new(
+                0,
+                HIGH,
+                enable_input_id,
+            )
         );
 
         one_bit_memory_cell.build_and_prime_circuit(q_output_gate);
 
         enable_input_gate.borrow_mut().update_input_signal(
-            GateInput {
-                input_index: 0,
-                signal: LOW,
-            }
+            GateInput::new(
+                0,
+                LOW,
+                enable_input_id,
+            )
         );
 
         Rc::new(RefCell::new(one_bit_memory_cell))

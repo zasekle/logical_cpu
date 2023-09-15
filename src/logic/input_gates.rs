@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, InputSignalReturn, BasicGateMembers};
@@ -112,6 +113,17 @@ impl AutomaticInput {
 
         Rc::new(RefCell::new(automatic_input))
     }
+
+    fn get_formatted_input(&self) -> Vec<HashMap<UniqueID, Signal>> {
+        self.values_to_be_output
+            .iter()
+            .map(|val| {
+                let mut map = HashMap::new();
+                map.insert(self.unique_id, val.clone());
+                map
+            })
+            .collect()
+    }
 }
 
 impl LogicGate for AutomaticInput {
@@ -121,9 +133,10 @@ impl LogicGate for AutomaticInput {
         next_gate_input_key: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
+        let mut values_to_be_output = self.get_formatted_input();
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
-            Some(&self.values_to_be_output),
+            Some(&mut values_to_be_output),
             &mut self.output_states,
             current_gate_output_key,
             next_gate_input_key,
@@ -145,9 +158,11 @@ impl LogicGate for AutomaticInput {
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         if let Some(_) = self.values_to_be_output.get(0) {
+            let values_to_be_output = self.get_formatted_input();
+
             let result = GateLogic::fetch_output_signals(
                 &self.gate_type,
-                Some(&self.values_to_be_output),
+                Some(&values_to_be_output),
                 &mut self.output_states,
                 self.unique_id,
                 self.should_print_output,
@@ -216,7 +231,7 @@ impl LogicGate for SimpleInput {
     ) {
         GateLogic::connect_output_to_next_gate(
             self.members.gate_type,
-            Some(&self.members.input_signals),
+            Some(&mut self.members.input_signals),
             &mut self.members.output_states,
             current_gate_output_key,
             next_gate_input_key,

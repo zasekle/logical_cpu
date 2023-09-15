@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn};
+use crate::logic::foundations::Signal::NONE;
 
 pub trait OutputGate {
     fn get_output_tag(&self) -> String;
@@ -59,6 +60,15 @@ impl LogicGate for SimpleOutput {
 
         let input_signal_updated = if self.output_state == input.signal {
             false
+        } else if input.signal == NONE {
+            if changed_count_this_tick == 1 {
+                self.output_state = input.signal.clone();
+                true
+            } else {
+                //This means that during this clock tick, the signal was updated by a different
+                // connection. NONE should never take priority.
+                false
+            }
         } else {
             self.output_state = input.signal.clone();
             true
