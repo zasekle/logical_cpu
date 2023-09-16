@@ -15,7 +15,8 @@ pub fn get_clock_tick_number() -> usize {
 pub(crate) static MAX_INPUT_CHANGES: usize = 5000;
 
 /// This will allow each gate to have a unique indexing number.
-pub(crate) static NEXT_UNIQUE_ID: AtomicUsize = AtomicUsize::new(0);
+/// ID 0 is reserved and used with the input for gates representing no input.
+pub(crate) static NEXT_UNIQUE_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// This is just used for testing purposes. Can enable it so a single run_circuit function prints
 /// output.

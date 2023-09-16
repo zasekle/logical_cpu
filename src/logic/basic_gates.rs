@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn, ConnectedOutput, calculate_input_signals_from_all_inputs};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn, ConnectedOutput, calculate_input_signals_from_all_inputs, Signal};
 use crate::logic::foundations::Signal::{HIGH, NONE};
 
 pub struct Or {
@@ -53,6 +53,10 @@ impl LogicGate for Or {
 
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.members.should_print_output = print_output;
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
 
@@ -106,6 +110,10 @@ impl LogicGate for And {
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.members.should_print_output = print_output;
     }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
 }
 
 pub struct Not {
@@ -157,6 +165,10 @@ impl LogicGate for Not {
 
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.members.should_print_output = print_output;
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
 
@@ -210,6 +222,10 @@ impl LogicGate for Nor {
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.members.should_print_output = print_output;
     }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
 }
 
 pub struct Nand {
@@ -262,6 +278,10 @@ impl LogicGate for Nand {
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.members.should_print_output = print_output;
     }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
 }
 
 pub struct ControlledBuffer {
@@ -297,26 +317,7 @@ impl LogicGate for ControlledBuffer {
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         // println!("ControlledBuffer input: {:#?}", input);
-        //TODO: What is happening right now is that on round one, the controlled_buffer is being updated
-        // to HIGH. Then it is updated to HIGH again on the next round and so it doesn't propagate b/c
-        // this returns false. So only the second controlled_buffer propagates and the output ends up
-        // as NONE b/c only NONE was passed (and it was one the first clock tick).
-        // The question is, will this be a problem elsewhere or just on the controlled buffer that
-        // initiates the problem? So lets take a similar situation and say that RAM_1 has the
-        // output of HIGH and RAM_2 has the output of NONE. Next round RAM_1 doesn't change, only one
-        // RAM can be active at a time, so this will work just fine.
-        // So lets say two different signals go into an AND gate input. The is HIGH
-
-        //TODO: Maybe another solution is that I could set up the gates to take a variety of inputs
-        // maybe congregate them somehow at the same index, or at a different index and then iterate
-        // through them and if I get a bunch of NONE and a single input I can use it, if I get more
-        // than one HIGH or LOW I can panic.
-
-        //TODO: Probably undo this input signal stuff here.
-        InputSignalReturn {
-            changed_count_this_tick: self.members.update_input_signal(input).changed_count_this_tick,
-            input_signal_updated: true
-        }
+        self.members.update_input_signal(input)
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
@@ -395,6 +396,10 @@ impl LogicGate for ControlledBuffer {
         } else {
             panic!("Gate {} using tag {} id {} did not exist.", self.get_tag(), tag, self.get_unique_id().id())
         }
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
 
@@ -765,7 +770,6 @@ mod tests {
         let throughput_gate_index = 1;
 
         let output_gate = SimpleOutput::new("OUT");
-        output_gate.borrow_mut().toggle_output_printing(true); //TODO: delete me
 
         let single_enable_input_gate = AutomaticInput::new(vec![HIGH, HIGH], 1, "Single_Enable");
         //If this value goes high, the value will be unpredictable.

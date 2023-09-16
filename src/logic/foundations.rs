@@ -10,6 +10,13 @@ use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
 use crate::logic::output_gates::LogicGateAndOutputGate;
 use crate::run_circuit::run_circuit;
 
+//NONE includes some complications. For example when two connections are made to the same
+// input, NONE must not ever override another signal. However, a single input can have
+// multiple NONE values connected and a single other signal type. In order to fix this, all
+// inputs for the round are saved inside input_signals in BasicGateMembers (or something
+// similar) and the inputs are checked whenever fetch_output() is called. When
+// connect_output_to_next_gate() is called, it will add the value to input_signals. Then it
+// will update the value when update_input_signal() is called.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Signal {
     NONE,
@@ -41,6 +48,10 @@ impl UniqueID {
             Ordering::SeqCst,
         );
         Self { id }
+    }
+
+    pub fn zero_id() -> Self {
+        Self { id: 0 }
     }
 
     pub fn id(&self) -> usize {
@@ -106,6 +117,8 @@ pub trait LogicGate {
     fn get_index_from_tag(&self, tag: &str) -> usize {
         panic!("Gate {} using tag {} id {} did not implement get_index_from_tag()", self.get_tag(), tag, self.get_unique_id().id)
     }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal);
 }
 
 #[derive(Debug, Clone)]
@@ -233,11 +246,10 @@ impl BasicGateMembers {
         //Must have at least one input.
         assert_ne!(input_num, 0);
 
-        let unique_id = UniqueID::generate();
         let mut result = BasicGateMembers {
-            input_signals: vec![HashMap::from([(unique_id, LOW)]); input_num],
+            input_signals: vec![HashMap::from([(UniqueID::zero_id(), LOW)]); input_num],
             output_states: Vec::with_capacity(output_num),
-            unique_id,
+            unique_id: UniqueID::generate(),
             oscillation_detection: OscillationDetection::new(),
             should_print_output: false,
             gate_type,
@@ -264,17 +276,6 @@ impl BasicGateMembers {
     pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
 
-        //TODO: The problem is, how do I keep the initialization LOW?
-        //TODO: Probably do something along the lines of give some initialization ID (maybe my own ID)
-        // then when updating the input signal, if my own ID is present, remove it. OR maybe just
-        // ignore it? Probably remove it so it can be handled when the circuit is set up and will
-        // minimize overhead.
-        // So in summary, when connect_output_to_next_gate is run, I need to remove my own UniqueID
-        //  from the map and add or update the other users.
-        //TODO: When the input signal is updated, it will need to update the signal for that specific element?
-        //TODO: Should this go when the input signal is updated or when the output is connected to the gate? Or both?
-        //TODO: Remember that inputs are a special case, so if the current gates id is sent in, don't clear it from
-        // the map.
         let input_signal_updated = if self.input_signals[input.input_index][&input.sending_id] == input.signal {
             false
         } else if input.signal == NONE {
@@ -311,6 +312,20 @@ impl BasicGateMembers {
             next_gate_input_index,
             next_gate,
         );
+    }
+
+    pub fn internal_update_index_to_id(
+        &mut self,
+        sending_id: UniqueID,
+        gate_input_index: usize,
+        signal: Signal,
+    ) {
+        //Whenever an input is updated, remove the zero index. Even adding the zero index it will
+        // simply be inserted immediately afterwards.
+        self.input_signals[gate_input_index].remove(&UniqueID::zero_id());
+
+        //This is a temporary signal. When the input is updated afterwards, it will add it.
+        self.input_signals[gate_input_index].insert(sending_id, signal);
     }
 }
 
@@ -448,6 +463,13 @@ impl ComplexGateMembers {
         };
 
         let next_gate_unique_id = next_gate.borrow_mut().get_unique_id();
+
+        next_gate.borrow_mut().internal_update_index_to_id(
+            next_gate_unique_id,
+            next_gate_input_key,
+            signal.clone(),
+        );
+
         self.simple_gate.output_states[current_gate_output_key] =
             GateOutputState::Connected(
                 ConnectedOutput {
@@ -491,6 +513,15 @@ impl ComplexGateMembers {
         }
 
         Ok(output_clone)
+    }
+
+    pub fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.input_gates[gate_input_index].borrow_mut().internal_update_index_to_id(
+            sending_id,
+            0,
+            signal.clone(),
+        );
+        self.simple_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
 
@@ -611,23 +642,19 @@ impl GateLogic {
         next_gate_input_index: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
-        //TODO: Need to check the next_gate_unique_id and see if this gate is
-        // 1) The current gate, in which case just update the map.
-        // 2) A different gate AND the current gate is the only gate that exists inside the
-        // map
-        //TODO: How do I handle the case of say an OR gate looping back into itself? I don't want
-        // something to happen such as connecting the OR gate up, then when I connect the next gate
-        // as input, it removes the HashMap element or something. I need a way to mark it as 'set'
-        // and when I do this I will need to go back over the places where I passed the gates personal
-        // ids in (such as the input gates, inside GateInput::new() in test_stuff.rs and inside some
-        // of the new functions).
-        //TODO: This and the one at 432 are the only two of these that actually need to be updated.
         let output_signal = GateLogic::calculate_output_from_inputs(
             &gate_type,
             input_signals.map(|x| &*x),
         );
 
         let next_gate_unique_id = next_gate.borrow_mut().get_unique_id();
+
+        next_gate.borrow_mut().internal_update_index_to_id(
+            next_gate_unique_id,
+            next_gate_input_index,
+            output_signal.clone(),
+        );
+
         output_states[current_gate_output_index] =
             GateOutputState::Connected(
                 ConnectedOutput {

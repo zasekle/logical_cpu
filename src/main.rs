@@ -20,9 +20,6 @@ fn main() {
 
     //TODO: It might be helpful to give gates an ability to set their tag (added tag member to SimpleGate).
 
-    //TODO: Make sure run_circuit handles NONE when it is returned by an output (it doesn't pass it
-    // on, or does it? Do I need to propagate NONE down the line? Probably.).
-
     //TODO: Might want to add some output to the memory inside the register to debug? How would I
     // display this?
     //TODO: Need to add a controlled buffer to the register.

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::logic::basic_gates::{Nand, Nor};
-use crate::logic::foundations::{ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, UniqueID};
+use crate::logic::foundations::{ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
@@ -146,6 +146,10 @@ impl LogicGate for SRLatch {
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
     }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
 }
 
 pub struct ActiveLowSRLatch {
@@ -194,7 +198,7 @@ impl ActiveLowSRLatch {
             GateInput::new(
                 sr_latch.get_index_from_tag("R"),
                 HIGH,
-                sr_latch.get_unique_id(),
+                UniqueID::zero_id(),
             )
         );
 
@@ -202,7 +206,7 @@ impl ActiveLowSRLatch {
             GateInput::new(
                 sr_latch.get_index_from_tag("S"),
                 HIGH,
-                sr_latch.get_unique_id(),
+                UniqueID::zero_id(),
             )
         );
 
@@ -303,6 +307,10 @@ impl LogicGate for ActiveLowSRLatch {
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
     }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
 }
 
 pub struct OneBitMemoryCell {
@@ -351,13 +359,12 @@ impl OneBitMemoryCell {
             ),
         };
 
-        let enable_input_id = enable_input_gate.borrow_mut().get_unique_id();
         //This will allow the circuit to be primed to the LOW output state.
         enable_input_gate.borrow_mut().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
-                enable_input_id,
+                UniqueID::zero_id(),
             )
         );
 
@@ -367,7 +374,7 @@ impl OneBitMemoryCell {
             GateInput::new(
                 0,
                 LOW,
-                enable_input_id,
+                UniqueID::zero_id(),
             )
         );
 
@@ -379,82 +386,68 @@ impl OneBitMemoryCell {
         q_output_gate: Rc<RefCell<SimpleOutput>>,
     ) {
         let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
-        let mut e_input_gate = e_input_gate.borrow_mut();
 
         let s_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("S")].clone();
-        let mut s_input_gate = s_input_gate.borrow_mut();
 
-        let mut set_enable_nand_gate = self.set_enable_nand_gate.borrow_mut();
-        let mut enable_nand_gate = self.enable_nand_gate.borrow_mut();
-        let mut sr_top_nand_gate = self.sr_top_nand_gate.borrow_mut();
-        let mut sr_bottom_nand_gate = self.sr_bottom_nand_gate.borrow_mut();
-
-        s_input_gate.connect_output_to_next_gate(
+        s_input_gate.borrow_mut().connect_output_to_next_gate(
             0,
             0,
             self.set_enable_nand_gate.clone(),
         );
 
-        e_input_gate.connect_output_to_next_gate(
+        e_input_gate.borrow_mut().connect_output_to_next_gate(
             0,
             1,
             self.set_enable_nand_gate.clone(),
         );
 
-        e_input_gate.connect_output_to_next_gate(
+        e_input_gate.borrow_mut().connect_output_to_next_gate(
             1,
             1,
             self.enable_nand_gate.clone(),
         );
 
-        set_enable_nand_gate.connect_output_to_next_gate(
+        self.set_enable_nand_gate.borrow_mut().connect_output_to_next_gate(
             0,
             0,
             self.sr_top_nand_gate.clone(),
         );
 
-        set_enable_nand_gate.connect_output_to_next_gate(
+        self.set_enable_nand_gate.borrow_mut().connect_output_to_next_gate(
             1,
             0,
             self.enable_nand_gate.clone(),
         );
 
-        enable_nand_gate.connect_output_to_next_gate(
+        self.enable_nand_gate.borrow_mut().connect_output_to_next_gate(
             0,
             1,
             self.sr_bottom_nand_gate.clone(),
         );
 
-        sr_top_nand_gate.connect_output_to_next_gate(
+        self.sr_top_nand_gate.borrow_mut().connect_output_to_next_gate(
             0,
             1,
             self.sr_bottom_nand_gate.clone(),
         );
 
-        sr_top_nand_gate.connect_output_to_next_gate(
+        self.sr_top_nand_gate.borrow_mut().connect_output_to_next_gate(
             0,
             0,
             q_output_gate.clone(),
         );
 
-        sr_top_nand_gate.connect_output_to_next_gate(
+        self.sr_top_nand_gate.borrow_mut().connect_output_to_next_gate(
             1,
             0,
             self.sr_bottom_nand_gate.clone(),
         );
 
-        sr_bottom_nand_gate.connect_output_to_next_gate(
+        self.sr_bottom_nand_gate.borrow_mut().connect_output_to_next_gate(
             0,
             1,
             self.sr_top_nand_gate.clone(),
         );
-
-        drop(e_input_gate);
-        drop(s_input_gate);
-        drop(set_enable_nand_gate);
-        drop(enable_nand_gate);
-        drop(sr_top_nand_gate);
-        drop(sr_bottom_nand_gate);
 
         //Prime gates
         self.complex_gate.calculate_output_from_inputs(true);
@@ -490,6 +483,10 @@ impl LogicGate for OneBitMemoryCell {
 
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
 
@@ -613,6 +610,10 @@ impl LogicGate for VariableBitMemoryCell {
 
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
 

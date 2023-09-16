@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not};
 use crate::logic::complex_logic::VariableBitCPUEnable;
-use crate::logic::foundations::{ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, UniqueID};
+use crate::logic::foundations::{ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
@@ -159,6 +159,10 @@ impl LogicGate for VariableBitRegister {
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
     }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
 }
 
 pub struct VariableDecoder {
@@ -303,6 +307,10 @@ impl LogicGate for VariableDecoder {
 
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
 

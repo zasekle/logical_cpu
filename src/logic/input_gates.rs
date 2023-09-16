@@ -83,6 +83,8 @@ impl LogicGate for Clock {
     fn is_input_gate(&self) -> bool {
         true
     }
+
+    fn internal_update_index_to_id(&mut self, _sending_id: UniqueID, _gate_input_index: usize, _signal: Signal) {}
 }
 
 pub struct AutomaticInput {
@@ -194,6 +196,8 @@ impl LogicGate for AutomaticInput {
     fn is_input_gate(&self) -> bool {
         true
     }
+
+    fn internal_update_index_to_id(&mut self, _sending_id: UniqueID, _gate_input_index: usize, _signal: Signal) {}
 }
 
 pub struct SimpleInput {
@@ -271,5 +275,9 @@ impl LogicGate for SimpleInput {
 
     fn is_input_gate(&self) -> bool {
         true
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }

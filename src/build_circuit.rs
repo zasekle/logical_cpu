@@ -45,23 +45,25 @@ pub fn build_simple_circuit() -> InputAndOutputGates {
     output_gates.push(first_output_gate.clone());
 
     let sr_latch = OneBitMemoryCell::new();
-    let mut mut_sr_latch = sr_latch.borrow_mut();
+    // let mut mut_sr_latch = sr_latch.borrow_mut();
     // mut_sr_latch.toggle_output_printing(true);
 
+    let e_index = sr_latch.borrow_mut().get_index_from_tag("E");
     first_input.borrow_mut().connect_output_to_next_gate(
         0,
-        mut_sr_latch.get_index_from_tag("E"),
+        e_index,
         sr_latch.clone()
     );
 
+    let s_index = sr_latch.borrow_mut().get_index_from_tag("S");
     second_input.borrow_mut().connect_output_to_next_gate(
         0,
-        mut_sr_latch.get_index_from_tag("S"),
+        s_index,
         sr_latch.clone()
     );
 
-    let q_output_idx = mut_sr_latch.get_index_from_tag("Q");
-    mut_sr_latch.connect_output_to_next_gate(
+    let q_output_idx = sr_latch.borrow_mut().get_index_from_tag("Q");
+    sr_latch.borrow_mut().connect_output_to_next_gate(
         q_output_idx,
         0,
         first_output_gate.clone()

@@ -1,7 +1,8 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn, calculate_input_signal_from_single_inputs};
 use crate::logic::foundations::Signal::NONE;
 
 pub trait OutputGate {
@@ -13,7 +14,7 @@ pub trait LogicGateAndOutputGate: LogicGate + OutputGate {}
 impl<T: LogicGate + OutputGate> LogicGateAndOutputGate for T {}
 
 pub struct SimpleOutput {
-    output_state: Signal,
+    output_state: HashMap<UniqueID, Signal>,
     unique_id: UniqueID,
     oscillation_detection: OscillationDetection,
     should_print_output: bool,
@@ -27,7 +28,7 @@ impl SimpleOutput {
         Rc::new(
             RefCell::new(
                 SimpleOutput {
-                    output_state: Signal::LOW,
+                    output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW)]),
                     unique_id: UniqueID::generate(),
                     oscillation_detection: OscillationDetection::new(),
                     should_print_output: false,
@@ -58,11 +59,11 @@ impl LogicGate for SimpleOutput {
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
 
-        let input_signal_updated = if self.output_state == input.signal {
+        let input_signal_updated = if self.output_state[&input.sending_id] == input.signal {
             false
         } else if input.signal == NONE {
             if changed_count_this_tick == 1 {
-                self.output_state = input.signal.clone();
+                self.output_state.insert(input.sending_id, input.signal.clone());
                 true
             } else {
                 //This means that during this clock tick, the signal was updated by a different
@@ -70,7 +71,7 @@ impl LogicGate for SimpleOutput {
                 false
             }
         } else {
-            self.output_state = input.signal.clone();
+            self.output_state.insert(input.sending_id, input.signal.clone());
             true
         };
 
@@ -81,7 +82,7 @@ impl LogicGate for SimpleOutput {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        let output_clone = self.output_state.clone();
+        let output_clone = calculate_input_signal_from_single_inputs(&self.output_state);
 
         if self.should_print_output {
             GateLogic::print_gate_output(
@@ -109,5 +110,14 @@ impl LogicGate for SimpleOutput {
 
     fn get_tag(&self) -> String {
         self.tag.to_string()
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, _gate_input_index: usize, signal: Signal) {
+        //Whenever an input is updated, remove the zero index. Even adding the zero index it will
+        // simply be inserted immediately afterwards.
+        self.output_state.remove(&UniqueID::zero_id());
+
+        //This is a temporary signal. When the input is updated afterwards, it will add it.
+        self.output_state.insert(sending_id, signal);
     }
 }

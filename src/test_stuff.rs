@@ -5,7 +5,7 @@ use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use crate::globals::CLOCK_TICK_NUMBER;
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, Signal};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, Signal, UniqueID};
 use crate::logic::input_gates::AutomaticInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::run_circuit;
@@ -99,12 +99,11 @@ pub fn run_multi_input_output_logic_gate(
                 input_gates.push(input_gate);
             } else {
                 let mut input_gate = input_gates[j].borrow_mut();
-                let input_gate_id = input_gate.get_unique_id();
                 input_gate.update_input_signal(
                     GateInput::new(
                         cell_index,
                         signal.clone(),
-                        input_gate_id,
+                        UniqueID::zero_id(),
                     )
                 );
             }
