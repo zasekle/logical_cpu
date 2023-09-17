@@ -7,7 +7,8 @@ use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use crate::globals::{get_clock_tick_number, MAX_INPUT_CHANGES, NEXT_UNIQUE_ID};
 use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
-use crate::logic::output_gates::LogicGateAndOutputGate;
+use crate::logic::input_gates::SimpleInput;
+use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::run_circuit;
 
 //NONE includes some complications. For example when two connections are made to the same
@@ -106,9 +107,9 @@ pub trait LogicGate {
     fn toggle_output_printing(&mut self, print_output: bool);
 
     ///Currently only used with input gates.
-    fn get_tag(&self) -> String {
-        String::new()
-    }
+    fn get_tag(&self) -> String;
+
+    fn set_tag(&mut self, tag: &str);
 
     fn is_input_gate(&self) -> bool {
         false
@@ -136,14 +137,22 @@ pub struct ConnectedOutput {
 impl fmt::Debug for ConnectedOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut_gate = self.gate.borrow_mut();
-        let tag = mut_gate.get_gate_type();
+        let gate_type = mut_gate.get_gate_type();
+        let tag = mut_gate.get_tag();
         let id = mut_gate.get_unique_id();
 
         drop(mut_gate);
 
+        let output_str =
+            if tag.is_empty() {
+                format!("{} gate with id {}", gate_type, id.id)
+            } else {
+                format!("{} gate with tag {}; id {}", gate_type, tag, id.id)
+            };
+
         f.debug_struct("OutputNode")
             .field("input", &self.throughput)
-            .field("gate", &format!("{} gate with id {}", tag, id.id))
+            .field("gate", &output_str)
             .finish()
     }
 }
@@ -186,11 +195,15 @@ impl OscillationDetection {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum GateType {
+    #[allow(dead_code)]
+    UnknownType,
+    //Used in testing.
     NotType,
     OrType,
     AndType,
     NorType,
     NandType,
+    SplitterType,
     ControlledBufferType,
     ClockType,
     AutomaticInputType,
@@ -203,16 +216,19 @@ pub enum GateType {
     VariableCPUEnableType,
     VariableBitRegisterType,
     VariableDecoderType,
+    VariableSingleRAMCellType,
 }
 
 impl fmt::Display for GateType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let printable = match *self {
+            GateType::UnknownType => "UNKNOWN_TYPE",
             GateType::NotType => "NOT",
             GateType::OrType => "OR",
             GateType::AndType => "AND",
             GateType::NorType => "NOR",
             GateType::NandType => "NAND",
+            GateType::SplitterType => "SPLITTER",
             GateType::ControlledBufferType => "CONTROLLED_BUFFER",
             GateType::ClockType => "CLOCK",
             GateType::AutomaticInputType => "AUTOMATIC_INPUT",
@@ -225,6 +241,7 @@ impl fmt::Display for GateType {
             GateType::VariableCPUEnableType => "VARIABLE_CPU_ENABLE",
             GateType::VariableBitRegisterType => "VARIABLE_BIT_REGISTER",
             GateType::VariableDecoderType => "VARIABLE_DECODER",
+            GateType::VariableSingleRAMCellType => "VARIABLE_SINGLE_RAM_CELL_TYPE",
         };
         write!(f, "{}", printable)
     }
@@ -306,6 +323,7 @@ impl BasicGateMembers {
     ) {
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
+            self.unique_id,
             Some(&mut self.input_signals),
             &mut self.output_states,
             current_gate_output_index,
@@ -446,6 +464,7 @@ impl ComplexGateMembers {
 
     pub fn connect_output_to_next_gate(
         &mut self,
+        current_gate_id: UniqueID,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
@@ -462,10 +481,8 @@ impl ComplexGateMembers {
             }
         };
 
-        let next_gate_unique_id = next_gate.borrow_mut().get_unique_id();
-
         next_gate.borrow_mut().internal_update_index_to_id(
-            next_gate_unique_id,
+            current_gate_id,
             next_gate_input_key,
             signal.clone(),
         );
@@ -476,7 +493,7 @@ impl ComplexGateMembers {
                     throughput: GateInput::new(
                         next_gate_input_key,
                         signal,
-                        next_gate_unique_id,
+                        current_gate_id,
                     ),
                     gate: next_gate,
                 }
@@ -571,10 +588,6 @@ impl GateLogic {
         GateLogic::calculate_output_for_not(&and_signal)
     }
 
-    pub fn calculate_output_for_controlled_buffer(input_signals: &Vec<Signal>) -> Signal {
-        input_signals.first().unwrap().clone()
-    }
-
     pub fn calculate_output_for_clock() -> Signal {
         HIGH
     }
@@ -588,7 +601,7 @@ impl GateLogic {
     }
 
     pub fn fetch_output_signals_basic_gate(
-        basic_gate: &mut BasicGateMembers
+        basic_gate: &mut BasicGateMembers,
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
         Self::fetch_output_signals(
             &basic_gate.gate_type,
@@ -596,6 +609,7 @@ impl GateLogic {
             &mut basic_gate.output_states,
             basic_gate.unique_id,
             basic_gate.should_print_output,
+            basic_gate.tag.as_str(),
         )
     }
 
@@ -605,6 +619,7 @@ impl GateLogic {
         output_states: &mut Vec<GateOutputState>,
         unique_id: UniqueID,
         should_print_output: bool,
+        tag: &str,
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
         let output_signal = GateLogic::calculate_output_from_inputs(gate_type, input_signals);
 
@@ -626,7 +641,7 @@ impl GateLogic {
             GateLogic::print_gate_output(
                 gate_type,
                 &unique_id,
-                &String::from(""),
+                tag,
                 &output_clone,
             );
         }
@@ -636,6 +651,7 @@ impl GateLogic {
 
     pub fn connect_output_to_next_gate(
         gate_type: GateType,
+        current_gate_id: UniqueID,
         input_signals: Option<&mut Vec<HashMap<UniqueID, Signal>>>,
         output_states: &mut Vec<GateOutputState>,
         current_gate_output_index: usize,
@@ -647,10 +663,36 @@ impl GateLogic {
             input_signals.map(|x| &*x),
         );
 
-        let next_gate_unique_id = next_gate.borrow_mut().get_unique_id();
+        GateLogic::connect_output_to_next_gate_no_calculate(
+            current_gate_id,
+            output_states,
+            current_gate_output_index,
+            next_gate_input_index,
+            next_gate,
+            output_signal,
+        );
+    }
 
-        next_gate.borrow_mut().internal_update_index_to_id(
-            next_gate_unique_id,
+    pub fn connect_output_to_next_gate_no_calculate(
+        current_gate_id: UniqueID,
+        output_states: &mut Vec<GateOutputState>,
+        current_gate_output_index: usize,
+        next_gate_input_index: usize,
+        next_gate: Rc<RefCell<dyn LogicGate>>,
+        output_signal: Signal,
+    ) {
+        //This unsafe block must be done for two reasons.
+        // 1) In order to allow a gate to connect to itself, it must already have a mutable reference
+        //  outstanding.
+        // 2) If this way of doing it is not done, then no mutable references will be able to be
+        //  outstanding when connect_output_to_next_gate methods are called.
+        //This will limit the ability
+        let next_gate_mut_ref = unsafe {
+            &mut *next_gate.as_ptr()
+        };
+
+        next_gate_mut_ref.internal_update_index_to_id(
+            current_gate_id,
             next_gate_input_index,
             output_signal.clone(),
         );
@@ -661,7 +703,7 @@ impl GateLogic {
                     throughput: GateInput::new(
                         next_gate_input_index,
                         output_signal,
-                        next_gate_unique_id,
+                        current_gate_id,
                     ),
                     gate: next_gate,
                 }
@@ -679,12 +721,14 @@ impl GateLogic {
             }
         };
         match gate_type {
+            GateType::UnknownType => panic!(),
             GateType::NotType => GateLogic::calculate_output_for_not(&input_signals.unwrap()),
             GateType::OrType => GateLogic::calculate_output_for_or(&input_signals.unwrap()),
             GateType::AndType => GateLogic::calculate_output_for_and(&input_signals.unwrap()),
             GateType::NorType => GateLogic::calculate_output_for_nor(&input_signals.unwrap()),
             GateType::NandType => GateLogic::calculate_output_for_nand(&input_signals.unwrap()),
-            GateType::ControlledBufferType => GateLogic::calculate_output_for_controlled_buffer(&input_signals.unwrap()),
+            GateType::SplitterType => panic!(),
+            GateType::ControlledBufferType => panic!(),
             GateType::ClockType => GateLogic::calculate_output_for_clock(),
             GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(&input_signals.unwrap()),
             GateType::SimpleOutputType => panic!(),
@@ -696,13 +740,14 @@ impl GateLogic {
             GateType::VariableCPUEnableType => panic!(),
             GateType::VariableBitRegisterType => panic!(),
             GateType::VariableDecoderType => panic!(),
+            GateType::VariableSingleRAMCellType => panic!(),
         }
     }
 
     pub fn print_gate_output<T: fmt::Debug>(
         gate_type: &GateType,
         unique_id: &UniqueID,
-        tag: &String,
+        tag: &str,
         output: &T,
     ) {
         if tag.is_empty() {
@@ -783,8 +828,39 @@ pub fn calculate_input_signal_from_single_inputs(
         if final_signal == NONE {
             final_signal = signal.clone();
         } else if *signal != NONE {
-            panic!("Two different signals for the same index were set to non-NONE values. {:#?}", input_signal)
+            panic!("Two different signals for the same index were set to non-NONE values.\n{:#?}", input_signal)
         }
     }
     final_signal
+}
+
+pub fn build_simple_inputs_and_outputs(
+    number_inputs_outputs: usize,
+    input_gates: &mut Vec<Rc<RefCell<dyn LogicGate>>>,
+    output_gates: &mut Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    output_gates_logic: &mut Vec<Rc<RefCell<dyn LogicGate>>>,
+) {
+    for i in 0..number_inputs_outputs {
+        let input_tag = format!("i_{}", i);
+        input_gates.push(SimpleInput::new(1, input_tag.as_str()));
+
+        let output_tag = format!("o_{}", i);
+        let output_gate = SimpleOutput::new(output_tag.as_str());
+        output_gates.push(output_gate.clone());
+        output_gates_logic.push(output_gate);
+    }
+}
+
+pub fn push_reg_outputs_to_output_gates(
+    number_inputs_outputs: usize,
+    output_gates: &mut Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    output_gates_logic: &mut Vec<Rc<RefCell<dyn LogicGate>>>,
+) {
+    //These must be pushed to the array AFTER all the output gates are.
+    for i in 0..number_inputs_outputs {
+        let reg_output_tag = format!("reg_{}", i);
+        let reg_output_gate = SimpleOutput::new(reg_output_tag.as_str());
+        output_gates.push(reg_output_gate.clone());
+        output_gates_logic.push(reg_output_gate);
+    }
 }

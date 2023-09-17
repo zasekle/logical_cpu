@@ -12,7 +12,7 @@ pub fn get_clock_tick_number() -> usize {
 
 /// This is the maximum number of times an input can change in a single clock tick. After this,
 /// oscillation will be assumed and the program will panic.
-pub(crate) static MAX_INPUT_CHANGES: usize = 5000;
+pub(crate) static MAX_INPUT_CHANGES: usize = 25000;
 
 /// This will allow each gate to have a unique indexing number.
 /// ID 0 is reserved and used with the input for gates representing no input.

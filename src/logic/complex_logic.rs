@@ -64,32 +64,26 @@ impl VariableBitCPUEnable {
         output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
     ) {
         let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
-        let mut e_input_gate = e_input_gate.borrow_mut();
 
         for i in 0..number_bits {
-            let mut input_gate = self.complex_gate.input_gates[i].borrow_mut();
-            let mut mem_gate = self.and_gates[i].borrow_mut();
-
-            input_gate.connect_output_to_next_gate(
+            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
                 0,
                 0,
                 self.and_gates[i].clone(),
             );
 
-            e_input_gate.connect_output_to_next_gate(
+            e_input_gate.borrow_mut().connect_output_to_next_gate(
                 i,
                 1,
                 self.and_gates[i].clone(),
             );
 
-            mem_gate.connect_output_to_next_gate(
+            self.and_gates[i].borrow_mut().connect_output_to_next_gate(
                 0,
                 0,
                 output_gates[i].clone(),
             );
         }
-
-        drop(e_input_gate);
 
         //Prime gates
         self.complex_gate.calculate_output_from_inputs(true);
@@ -98,7 +92,12 @@ impl VariableBitCPUEnable {
 
 impl LogicGate for VariableBitCPUEnable {
     fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(current_gate_output_key, next_gate_input_key, next_gate);
+        self.complex_gate.connect_output_to_next_gate(
+            self.get_unique_id(),
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate
+        );
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -121,6 +120,14 @@ impl LogicGate for VariableBitCPUEnable {
 
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.complex_gate.simple_gate.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.complex_gate.simple_gate.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.complex_gate.simple_gate.tag = tag.to_string();
     }
 
     fn get_index_from_tag(&self, tag: &str) -> usize {

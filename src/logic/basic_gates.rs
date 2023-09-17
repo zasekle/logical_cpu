@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn, ConnectedOutput, calculate_input_signals_from_all_inputs, Signal};
-use crate::logic::foundations::Signal::{HIGH, NONE};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn, ConnectedOutput, calculate_input_signals_from_all_inputs, Signal, calculate_input_signal_from_single_inputs};
+use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
 
 pub struct Or {
     members: BasicGateMembers,
@@ -53,6 +53,14 @@ impl LogicGate for Or {
 
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.members.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
@@ -111,6 +119,14 @@ impl LogicGate for And {
         self.members.should_print_output = print_output;
     }
 
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
+    }
+
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
@@ -165,6 +181,14 @@ impl LogicGate for Not {
 
     fn toggle_output_printing(&mut self, print_output: bool) {
         self.members.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
@@ -223,6 +247,14 @@ impl LogicGate for Nor {
         self.members.should_print_output = print_output;
     }
 
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
+    }
+
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
@@ -279,6 +311,119 @@ impl LogicGate for Nand {
         self.members.should_print_output = print_output;
     }
 
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+}
+
+pub struct Splitter {
+    members: BasicGateMembers,
+    outputs_per_input: usize,
+}
+
+#[allow(dead_code)]
+impl Splitter {
+    pub fn new(input_num: usize, outputs_per_input: usize) -> Rc<RefCell<Self>> {
+        Rc::new(
+            RefCell::new(
+                Splitter {
+                    members: BasicGateMembers::new(
+                        input_num,
+                        input_num * outputs_per_input,
+                        GateType::SplitterType,
+                        Some(LOW),
+                    ),
+                    outputs_per_input,
+                }
+            )
+        )
+    }
+
+    pub fn get_index_for_output(&self, current_gate_output_index: usize, index_of_output: usize) -> usize {
+        current_gate_output_index * self.outputs_per_input + index_of_output
+    }
+}
+
+impl LogicGate for Splitter {
+    //current_gate_output_key is meant to be extracted from Splitter::get_index_for_output()
+    fn connect_output_to_next_gate(
+        &mut self,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
+        next_gate: Rc<RefCell<dyn LogicGate>>,
+    ) {
+        let output_signal = calculate_input_signal_from_single_inputs(
+            &self.members.input_signals[current_gate_output_key/self.outputs_per_input]
+        );
+
+        GateLogic::connect_output_to_next_gate_no_calculate(
+            self.get_unique_id(),
+            &mut self.members.output_states,
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+            output_signal,
+        );
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        self.members.update_input_signal(input)
+    }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        //output_states is outputs_per_input*num_inputs length and input_states is num_inputs length.
+        let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals);
+        for (i, output) in self.members.output_states.iter_mut().enumerate() {
+            match output {
+                GateOutputState::NotConnected(signal) => {
+                    *signal = input_signals[i / self.outputs_per_input].clone()
+                }
+                GateOutputState::Connected(connected_output) => {
+                    connected_output.throughput.signal = input_signals[i / self.outputs_per_input].clone()
+                }
+            }
+        }
+
+        if self.members.should_print_output {
+            GateLogic::print_gate_output(
+                &self.members.gate_type,
+                &self.members.unique_id,
+                &String::from(""),
+                &self.members.output_states,
+            );
+        }
+
+        Ok(self.members.output_states.clone())
+    }
+
+    fn get_gate_type(&self) -> GateType {
+        self.members.gate_type
+    }
+
+    fn get_unique_id(&self) -> UniqueID {
+        self.members.unique_id
+    }
+
+    fn toggle_output_printing(&mut self, print_output: bool) {
+        self.members.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
+    }
+
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
@@ -298,7 +443,7 @@ impl ControlledBuffer {
                         input_output_num + 1,
                         input_output_num,
                         GateType::ControlledBufferType,
-                        None,
+                        Some(NONE),
                     )
                 }
             )
@@ -307,16 +452,31 @@ impl ControlledBuffer {
 }
 
 impl LogicGate for ControlledBuffer {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.members.connect_output_to_next_gate(
+    fn connect_output_to_next_gate(
+        &mut self,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
+        next_gate: Rc<RefCell<dyn LogicGate>>,
+    ) {
+        let enable_index = self.get_index_from_tag("E");
+        let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals);
+        let output_signal = if input_signals[enable_index] == HIGH {
+            input_signals[current_gate_output_key].clone()
+        } else {
+            NONE
+        };
+
+        GateLogic::connect_output_to_next_gate_no_calculate(
+            self.get_unique_id(),
+            &mut self.members.output_states,
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
+            output_signal,
         );
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        // println!("ControlledBuffer input: {:#?}", input);
         self.members.update_input_signal(input)
     }
 
@@ -337,9 +497,7 @@ impl LogicGate for ControlledBuffer {
                 }
             }
 
-            let output_clone = self.members.output_states.clone();
-
-            output_clone
+            self.members.output_states.clone()
         } else {
             let mut output_states = Vec::new();
             for output_state in self.members.output_states.iter() {
@@ -390,6 +548,14 @@ impl LogicGate for ControlledBuffer {
         self.members.should_print_output = print_output;
     }
 
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
+    }
+
     fn get_index_from_tag(&self, tag: &str) -> usize {
         if tag == "E" {
             self.members.input_signals.len() - 1
@@ -405,13 +571,14 @@ impl LogicGate for ControlledBuffer {
 
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
     use crate::globals::CLOCK_TICK_NUMBER;
-    use crate::logic::foundations::Signal;
+    use crate::logic::foundations::{ComplexGateMembers, Signal};
     use crate::logic::foundations::Signal::{HIGH, LOW};
-    use crate::logic::input_gates::AutomaticInput;
+    use crate::logic::input_gates::{AutomaticInput, SimpleInput};
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
     use crate::run_circuit::{run_circuit, start_clock};
-    use crate::test_stuff::check_for_single_element_signal;
+    use crate::test_stuff::{check_for_single_element_signal, collect_outputs_from_output_gates};
     use super::*;
 
     fn test_simple_gate(
@@ -467,30 +634,31 @@ mod tests {
     ) {
         let output_gate = SimpleOutput::new("OUT");
         let controlled_buffer = ControlledBuffer::new(1);
-        let mut mut_controlled_buffer = controlled_buffer.borrow_mut();
 
-        mut_controlled_buffer.connect_output_to_next_gate(
+        controlled_buffer.borrow_mut().connect_output_to_next_gate(
             0,
             0,
             output_gate.clone(),
         );
 
-        mut_controlled_buffer.update_input_signal(
-            GateInput {
-                input_index: 0,
-                signal: signal.clone(),
-            }
+        controlled_buffer.borrow_mut().update_input_signal(
+            GateInput::new(
+                0,
+                signal.clone(),
+                UniqueID::zero_id(),
+            )
         );
 
-        let enable_index = mut_controlled_buffer.get_index_from_tag("E");
-        mut_controlled_buffer.update_input_signal(
-            GateInput {
-                input_index: enable_index,
-                signal: HIGH,
-            }
+        let enable_index = controlled_buffer.borrow_mut().get_index_from_tag("E");
+        controlled_buffer.borrow_mut().update_input_signal(
+            GateInput::new(
+                enable_index,
+                HIGH,
+                UniqueID::zero_id(),
+            )
         );
 
-        let output = mut_controlled_buffer.fetch_output_signals().unwrap();
+        let output = controlled_buffer.borrow_mut().fetch_output_signals().unwrap();
 
         for gate_output_state in output {
             match gate_output_state {
@@ -503,6 +671,15 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn collect_output_for_run_circuit(collected_output: &mut Vec<Vec<Signal>>, output_gates: &&Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>) {
+        assert_eq!(output_gates.len(), 1);
+
+        let mut single_collected_output = Vec::new();
+        collect_outputs_from_output_gates(&output_gates, &mut single_collected_output);
+
+        collected_output.push(single_collected_output);
     }
 
     #[test]
@@ -733,10 +910,11 @@ mod tests {
         );
 
         mut_controlled_buffer.update_input_signal(
-            GateInput {
-                input_index: 0,
-                signal: HIGH,
-            }
+            GateInput::new(
+                0,
+                HIGH,
+                UniqueID::zero_id(),
+            )
         );
 
         let output = mut_controlled_buffer.fetch_output_signals().unwrap();
@@ -766,49 +944,43 @@ mod tests {
         let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
         let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-        let num_gates = 2;
-        let throughput_gate_index = 1;
+        let num_gates = rand::thread_rng().gen_range(2..=16);
+        let throughput_gate_index = rand::thread_rng().gen_range(0..num_gates);
 
         let output_gate = SimpleOutput::new("OUT");
 
-        let single_enable_input_gate = AutomaticInput::new(vec![HIGH, HIGH], 1, "Single_Enable");
-        //If this value goes high, the value will be unpredictable.
-        let other_enable_input_gates = AutomaticInput::new(vec![LOW; 2], num_gates - 1, "Other_Enable");
-        // let single_enable_input_gate = AutomaticInput::new(vec![LOW, LOW, LOW, LOW, HIGH, HIGH, HIGH, HIGH], 1, "Single_Enable");
-        // //If this value goes high, the value will be unpredictable.
-        // let other_enable_input_gates = AutomaticInput::new(vec![LOW; 8], num_gates - 1, "Other_Enable");
+        let single_enable_input_gate = AutomaticInput::new(vec![LOW, LOW, LOW, LOW, HIGH, HIGH, HIGH, HIGH], 1, "Single_Enable");
+        // If this value goes high, the value will be unpredictable.
+        let other_enable_input_gates = AutomaticInput::new(vec![LOW; 8], num_gates - 1, "Other_Enable");
 
-        let output_signal = vec![[HIGH], [HIGH]]; //TODO
-        // let output_signal = vec![[NONE], [NONE], [NONE], [NONE], [HIGH], [HIGH], [LOW], [LOW]]; //TODO
+        let output_signal = vec![[NONE], [NONE], [NONE], [NONE], [HIGH], [HIGH], [LOW], [LOW]];
 
         for i in 0..num_gates {
             let input_gate =
                 if i == throughput_gate_index {
-                    AutomaticInput::new(vec![HIGH, HIGH], 1, "Start_Throughput")
-                    // AutomaticInput::new(vec![HIGH, HIGH, LOW, LOW, HIGH, HIGH, LOW, LOW], 1, "Start_Throughput")
+                    AutomaticInput::new(vec![HIGH, HIGH, LOW, LOW, HIGH, HIGH, LOW, LOW], 1, "Start_Throughput")
                 } else {
-                    AutomaticInput::new(vec![HIGH, LOW], 1, "Start_Normal")
-                    // AutomaticInput::new(vec![HIGH, LOW, HIGH, LOW, HIGH, LOW, HIGH, LOW], 1, "Start_Normal")
+                    AutomaticInput::new(vec![HIGH, LOW, HIGH, LOW, HIGH, LOW, HIGH, LOW], 1, "Start_Normal")
                 };
 
-            let controlled_buffer = ControlledBuffer::new(1);
+            println!("AutomaticInput input id {} created", input_gate.borrow_mut().get_unique_id().id());
 
-            let mut mut_controlled_buffer = controlled_buffer.borrow_mut();
+            let controlled_buffer = ControlledBuffer::new(1);
+            println!("ControlledBuffer id {} created", controlled_buffer.borrow_mut().get_unique_id().id());
+
             input_gate.borrow_mut().connect_output_to_next_gate(
                 0,
                 0,
                 controlled_buffer.clone(),
             );
 
-            mut_controlled_buffer.connect_output_to_next_gate(
+            controlled_buffer.borrow_mut().connect_output_to_next_gate(
                 0,
                 0,
                 output_gate.clone(),
             );
 
-            mut_controlled_buffer.toggle_output_printing(true); //TODO
-
-            let enable_index = mut_controlled_buffer.get_index_from_tag("E");
+            let enable_index = controlled_buffer.borrow_mut().get_index_from_tag("E");
             if i == throughput_gate_index {
                 single_enable_input_gate.borrow_mut().connect_output_to_next_gate(
                     0,
@@ -850,27 +1022,7 @@ mod tests {
                 &output_gates,
                 propagate_signal_through_circuit,
                 &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
-                    assert_eq!(output_gates.len(), 1);
-
-                    let mut single_collected_output = Vec::new();
-                    for output in output_gates.iter() {
-                        let mut output = output.borrow_mut();
-
-                        let output = output.fetch_output_signals().unwrap();
-
-                        assert_eq!(output.len(), 1);
-
-                        let output = output.first().unwrap();
-
-                        match output {
-                            GateOutputState::NotConnected(signal) => {
-                                single_collected_output.push(signal.clone());
-                            }
-                            GateOutputState::Connected(_) => panic!("Final output gate should not be connected"),
-                        }
-                    }
-
-                    collected_output.push(single_collected_output);
+                    collect_output_for_run_circuit(&mut collected_output, &output_gates);
                 },
             );
 
@@ -880,5 +1032,279 @@ mod tests {
         assert_eq!(collected_output, output_signal);
     }
 
-    //TODO: need to make sure that the NONE type won't work if two connected (might want to make this a controlled buffer test)
+    #[test]
+    #[should_panic]
+    fn test_controlled_buffer_multiple_inputs() {
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+
+        let enable_input_gate = AutomaticInput::new(vec![HIGH], 2, "Enable_Inputs");
+        let input_gate = AutomaticInput::new(vec![HIGH], 2, "Inputs");
+        let output_gate = SimpleOutput::new("OUT");
+
+        let controlled_buffers: [Rc<RefCell<ControlledBuffer>>; 2] = [ControlledBuffer::new(1), ControlledBuffer::new(1)];
+
+        let output_signal: Vec<Vec<Signal>> = Vec::new();
+
+        for i in 0..2 {
+            input_gate.borrow_mut().connect_output_to_next_gate(
+                i,
+                0,
+                controlled_buffers[i].clone(),
+            );
+
+            let enable_index = controlled_buffers[i].borrow_mut().get_index_from_tag("E");
+            enable_input_gate.borrow_mut().connect_output_to_next_gate(
+                i,
+                enable_index,
+                controlled_buffers[i].clone(),
+            );
+
+            controlled_buffers[i].borrow_mut().connect_output_to_next_gate(
+                0,
+                0,
+                output_gate.clone(),
+            );
+        }
+
+        input_gates.push(enable_input_gate);
+        input_gates.push(input_gate);
+        output_gates.push(output_gate);
+
+        let mut collected_output: Vec<Vec<Signal>> = Vec::new();
+
+        run_circuit(
+            &input_gates,
+            &output_gates,
+            false,
+            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                collect_output_for_run_circuit(&mut collected_output, &output_gates);
+            },
+        );
+
+        assert_eq!(collected_output, output_signal);
+    }
+
+    #[test]
+    fn test_controlled_buffer_nested_in_complex_gate() {
+        struct ControlledBufferWrapper {
+            complex_gate: ComplexGateMembers,
+            controlled_buffer: Rc<RefCell<ControlledBuffer>>,
+        }
+
+        impl ControlledBufferWrapper {
+            pub fn new() -> Rc<RefCell<Self>> {
+                let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+                let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+                let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+
+                let output_gate = SimpleOutput::new("Output");
+
+                input_gates.push(SimpleInput::new(1, "Input"));
+                output_gates.push(output_gate.clone());
+                output_gates_logic.push(output_gate);
+
+                let mut gate = ControlledBufferWrapper {
+                    complex_gate: ComplexGateMembers::new(
+                        1,
+                        1,
+                        GateType::UnknownType,
+                        input_gates,
+                        output_gates,
+                    ),
+                    controlled_buffer: ControlledBuffer::new(1),
+                };
+
+                gate.build_and_prime_circuit(output_gates_logic);
+
+                Rc::new(RefCell::new(gate))
+            }
+
+            fn build_and_prime_circuit(
+                &mut self,
+                output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+            ) {
+                self.complex_gate.input_gates[self.get_index_from_tag("Input")]
+                    .borrow_mut()
+                    .connect_output_to_next_gate(
+                        0,
+                        0,
+                        self.controlled_buffer.clone(),
+                    );
+
+                self.controlled_buffer.borrow_mut().connect_output_to_next_gate(
+                    0,
+                    0,
+                    output_gates[0].clone(),
+                );
+
+                //Force the enable to low so that NONE is always returned.
+                let enable_index = self.controlled_buffer.borrow_mut().get_index_from_tag("E");
+                self.controlled_buffer.borrow_mut().update_input_signal(
+                    GateInput::new(
+                        enable_index,
+                        LOW,
+                        UniqueID::zero_id(),
+                    )
+                );
+
+                //Prime gates
+                self.complex_gate.calculate_output_from_inputs(true);
+            }
+        }
+
+        impl LogicGate for ControlledBufferWrapper {
+            fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+                self.complex_gate.connect_output_to_next_gate(
+                    self.get_unique_id(),
+                    current_gate_output_key,
+                    next_gate_input_key,
+                    next_gate,
+                );
+            }
+
+            fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+                self.complex_gate.update_input_signal(input)
+            }
+
+            fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+                self.complex_gate.fetch_output_signals(&self.get_tag())
+            }
+
+            fn get_gate_type(&self) -> GateType {
+                self.complex_gate.simple_gate.gate_type
+            }
+
+            fn get_unique_id(&self) -> UniqueID {
+                self.complex_gate.simple_gate.unique_id
+            }
+
+            fn toggle_output_printing(&mut self, print_output: bool) {
+                self.complex_gate.simple_gate.should_print_output = print_output;
+            }
+
+            fn get_tag(&self) -> String {
+                self.complex_gate.simple_gate.tag.clone()
+            }
+
+            fn set_tag(&mut self, tag: &str) {
+                self.complex_gate.simple_gate.tag = tag.to_string()
+            }
+
+            fn get_index_from_tag(&self, tag: &str) -> usize {
+                self.complex_gate.get_index_from_tag(tag)
+            }
+
+            fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+                self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+            }
+        }
+
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+
+        let input_gate = AutomaticInput::new(vec![HIGH], 2, "Inputs");
+        let output_gate = SimpleOutput::new("OUT");
+
+        let wrapper = ControlledBufferWrapper::new();
+
+        let output_signal = vec![[NONE]];
+
+        input_gate.borrow_mut().connect_output_to_next_gate(
+            0,
+            0,
+            wrapper.clone(),
+        );
+
+        wrapper.borrow_mut().connect_output_to_next_gate(
+            0,
+            0,
+            output_gate.clone(),
+        );
+
+        input_gates.push(input_gate);
+        output_gates.push(output_gate);
+
+        let mut collected_output: Vec<Vec<Signal>> = Vec::new();
+
+        run_circuit(
+            &input_gates,
+            &output_gates,
+            false,
+            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                collect_output_for_run_circuit(&mut collected_output, &output_gates);
+            },
+        );
+
+        assert_eq!(collected_output, output_signal);
+    }
+
+    #[test]
+    fn splitter_properly_splits() {
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+
+        let input_num = rand::thread_rng().gen_range(1..=16);
+        let outputs_per_input = rand::thread_rng().gen_range(2..=16);
+
+        let splitter = Splitter::new(input_num, outputs_per_input);
+
+        let mut output_signal = Vec::new();
+        let mut single_turn_output = Vec::new();
+        for i in 0..input_num {
+            let signal_num = rand::thread_rng().gen_range(0..=2);
+            let signal = match signal_num {
+                0 => LOW,
+                1 => HIGH,
+                _ => NONE,
+            };
+            let input_tag = format!("IN_{}", i);
+            let input_gate = AutomaticInput::new(vec![signal.clone()], 1, input_tag.as_str());
+
+            for _ in 0..outputs_per_input {
+                single_turn_output.push(signal.clone());
+            }
+
+            input_gate.borrow_mut().connect_output_to_next_gate(
+                0,
+                i,
+                splitter.clone(),
+            );
+
+            input_gates.push(input_gate);
+        }
+
+        output_signal.push(single_turn_output);
+
+        for i in 0..(input_num * outputs_per_input) {
+            let output_tag = format!("OUT_{}", i);
+            let output_gate = SimpleOutput::new(output_tag.as_str());
+
+            splitter.borrow_mut().connect_output_to_next_gate(
+                i,
+                0,
+                output_gate.clone(),
+            );
+
+            output_gates.push(output_gate);
+        }
+
+        let mut collected_output: Vec<Vec<Signal>> = Vec::new();
+
+        run_circuit(
+            &input_gates,
+            &output_gates,
+            false,
+            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                assert_eq!(output_gates.len(), input_num * outputs_per_input);
+
+                let mut single_collected_output = Vec::new();
+                collect_outputs_from_output_gates(&output_gates, &mut single_collected_output);
+
+                collected_output.push(single_collected_output);
+            },
+        );
+
+        assert_eq!(collected_output, output_signal);
+    }
 }

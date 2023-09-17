@@ -79,14 +79,12 @@ pub fn run_multi_input_output_logic_gate(
         assert_eq!(signals.len(), input_signals.len());
     }
 
-    let mut mut_gate = gate.borrow_mut();
-
     let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
     let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
     for (i, signals) in input_signals.into_iter().enumerate() {
         for (j, signal) in signals.into_iter().enumerate() {
-            let cell_index = mut_gate.get_index_from_tag(format!("i_{}", j).as_str());
+            let cell_index = gate.borrow_mut().get_index_from_tag(format!("i_{}", j).as_str());
             if i == 0 {
                 let input_gate = AutomaticInput::new(vec![signal], 1, "Start");
 
@@ -114,9 +112,10 @@ pub fn run_multi_input_output_logic_gate(
         let tagged_input_gate = AutomaticInput::new(signals, 1, format!("Start_{}", tag).as_str());
         input_gates.push(tagged_input_gate.clone());
 
+        let tag_index = gate.borrow_mut().get_index_from_tag(tag);
         tagged_input_gate.borrow_mut().connect_output_to_next_gate(
             0,
-            mut_gate.get_index_from_tag(tag),
+            tag_index,
             Rc::clone(&gate),
         );
     }
@@ -124,7 +123,7 @@ pub fn run_multi_input_output_logic_gate(
     for i in 0..num_outputs {
         let output_gate = SimpleOutput::new("End");
 
-        mut_gate.connect_output_to_next_gate(
+        gate.borrow_mut().connect_output_to_next_gate(
             i,
             0,
             output_gate.clone(),
@@ -132,8 +131,6 @@ pub fn run_multi_input_output_logic_gate(
 
         output_gates.push(output_gate);
     }
-
-    drop(mut_gate);
 
     let mut collected_output: Vec<Vec<Signal>> = Vec::new();
     let mut propagate_signal_through_circuit = true;
@@ -152,22 +149,7 @@ pub fn run_multi_input_output_logic_gate(
                 assert_eq!(output_gates.len(), num_outputs);
 
                 let mut single_collected_output = Vec::new();
-                for output in output_gates.iter() {
-                    let mut output = output.borrow_mut();
-
-                    let output = output.fetch_output_signals().unwrap();
-
-                    assert_eq!(output.len(), 1);
-
-                    let output = output.first().unwrap();
-
-                    match output {
-                        GateOutputState::NotConnected(signal) => {
-                            single_collected_output.push(signal.clone());
-                        }
-                        GateOutputState::Connected(_) => panic!("Final output gate should not be connected"),
-                    }
-                }
+                collect_outputs_from_output_gates(&output_gates, &mut single_collected_output);
 
                 collected_output.push(single_collected_output);
             },
@@ -177,4 +159,23 @@ pub fn run_multi_input_output_logic_gate(
     }
 
     assert_eq!(collected_output, output_signal);
+}
+
+pub fn collect_outputs_from_output_gates(output_gates: &&Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>, single_collected_output: &mut Vec<Signal>) {
+    for output in output_gates.iter() {
+        let mut output = output.borrow_mut();
+
+        let output = output.fetch_output_signals().unwrap();
+
+        assert_eq!(output.len(), 1);
+
+        let output = output.first().unwrap();
+
+        match output {
+            GateOutputState::NotConnected(signal) => {
+                single_collected_output.push(signal.clone());
+            }
+            GateOutputState::Connected(_) => panic!("Final output gate should not be connected"),
+        }
+    }
 }

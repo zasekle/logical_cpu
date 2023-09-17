@@ -37,6 +37,7 @@ impl LogicGate for Clock {
     fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
+            self.unique_id,
             None,
             &mut self.output_states,
             current_gate_output_key,
@@ -61,6 +62,7 @@ impl LogicGate for Clock {
             &mut self.output_states,
             self.unique_id,
             self.should_print_output,
+            self.tag.as_str(),
         )
     }
 
@@ -78,6 +80,10 @@ impl LogicGate for Clock {
 
     fn get_tag(&self) -> String {
         self.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.tag = tag.to_string()
     }
 
     fn is_input_gate(&self) -> bool {
@@ -138,6 +144,7 @@ impl LogicGate for AutomaticInput {
         let mut values_to_be_output = self.get_formatted_input();
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
+            self.unique_id,
             Some(&mut values_to_be_output),
             &mut self.output_states,
             current_gate_output_key,
@@ -168,7 +175,10 @@ impl LogicGate for AutomaticInput {
                 &mut self.output_states,
                 self.unique_id,
                 self.should_print_output,
+                self.tag.as_str(),
             );
+
+            // println!("AutomaticInput id {} fetch_output \n{:#?}", self.unique_id.id(), result);
 
             self.values_to_be_output.remove(0);
             result
@@ -191,6 +201,10 @@ impl LogicGate for AutomaticInput {
 
     fn get_tag(&self) -> String {
         self.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.tag = tag.to_string()
     }
 
     fn is_input_gate(&self) -> bool {
@@ -235,6 +249,7 @@ impl LogicGate for SimpleInput {
     ) {
         GateLogic::connect_output_to_next_gate(
             self.members.gate_type,
+            self.members.unique_id,
             Some(&mut self.members.input_signals),
             &mut self.members.output_states,
             current_gate_output_key,
@@ -248,13 +263,18 @@ impl LogicGate for SimpleInput {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals(
+        let result = GateLogic::fetch_output_signals(
             &self.members.gate_type,
             Some(&self.members.input_signals),
             &mut self.members.output_states,
             self.members.unique_id,
             self.members.should_print_output,
-        )
+            self.tag.as_str(),
+        );
+
+        // println!("SimpleInput id {} fetch_output \n{:#?}", self.members.unique_id.id(), result);
+
+        result
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -273,11 +293,19 @@ impl LogicGate for SimpleInput {
         self.tag.clone()
     }
 
+    fn set_tag(&mut self, tag: &str) {
+        self.tag = tag.to_string()
+    }
+
     fn is_input_gate(&self) -> bool {
         true
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        //TODO d
+        if self.get_unique_id().id() == 11 {
+            println!("running internal_update_index_to_id() for id 11 sending_id: {}", sending_id.id());
+        }
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }

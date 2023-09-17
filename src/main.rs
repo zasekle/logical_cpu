@@ -18,13 +18,16 @@ use crate::run_circuit::start_clock;
 
 fn main() {
 
-    //TODO: It might be helpful to give gates an ability to set their tag (added tag member to SimpleGate).
-
     //TODO: Might want to add some output to the memory inside the register to debug? How would I
-    // display this?
-    //TODO: Need to add a controlled buffer to the register.
-    //TODO: Build a little RAM cell.
-    //TODO: Build a large RAM cell.
+    // display this? THIS IS PROBABLY IMPORTANT TO PROPAGATE IT UP REGARDLESS OF IF PRINT IS ON.
+
+    //TODO: Build a large RAM cell including the decoder and stuff. Make sure that all the numbers
+    // add up for inputs outputs etc...
+
+    //Remember that when running stuff in the registers, there is always the possibility that
+    // multiple clock ticks are needed. The first will do something like enable the `Set` bit. The
+    // second will keep the `Set` bit high and change the input values. The third will bring the
+    // `Set` bit low without changing the inputs.
 
     println!("Building circuit!");
 

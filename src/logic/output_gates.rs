@@ -83,6 +83,7 @@ impl LogicGate for SimpleOutput {
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         let output_clone = calculate_input_signal_from_single_inputs(&self.output_state);
+        // println!("SimpleOutput id {} output_clone: {:#?}", self.unique_id.id() ,output_clone);
 
         if self.should_print_output {
             GateLogic::print_gate_output(
@@ -110,6 +111,10 @@ impl LogicGate for SimpleOutput {
 
     fn get_tag(&self) -> String {
         self.tag.to_string()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.tag = tag.to_string()
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, _gate_input_index: usize, signal: Signal) {
