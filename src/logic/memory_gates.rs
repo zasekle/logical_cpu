@@ -1181,7 +1181,7 @@ mod tests {
                 vec![HIGH, LOW, HIGH, HIGH, LOW, HIGH],
             ],
             HashMap::from(
-                [("S", vec![HIGH])]
+                [("S", vec![vec![HIGH]])]
             ),
             VariableBitMemoryCell::new(3),
         );
@@ -1197,7 +1197,7 @@ mod tests {
                 vec![LOW, LOW, LOW, LOW],
             ],
             HashMap::from(
-                [("S", vec![LOW])]
+                [("S", vec![vec![LOW]])]
             ),
             VariableBitMemoryCell::new(2),
         );
@@ -1219,7 +1219,7 @@ mod tests {
                 vec![LOW, LOW, HIGH, LOW, LOW, HIGH],
             ],
             HashMap::from(
-                [("S", vec![LOW, HIGH, LOW, HIGH])]
+                [("S", vec![vec![LOW], vec![HIGH], vec![LOW], vec![HIGH]])]
             ),
             VariableBitMemoryCell::new(3),
         );

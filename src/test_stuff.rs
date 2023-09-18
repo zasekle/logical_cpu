@@ -1,11 +1,13 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::format;
 use std::rc::Rc;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use crate::globals::CLOCK_TICK_NUMBER;
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::Signal::NONE;
 use crate::logic::input_gates::AutomaticInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::run_circuit;
@@ -36,7 +38,7 @@ pub fn check_for_single_element_signal(
 #[allow(dead_code)]
 pub fn run_test_with_timeout<F: Send + 'static>(
     timeout_duration: Duration,
-    test: F
+    test: F,
 ) where F: FnOnce()
 {
     let (tx, rx) = channel();
@@ -64,7 +66,7 @@ pub fn run_test_with_timeout<F: Send + 'static>(
 pub fn run_multi_input_output_logic_gate(
     input_signals: Vec<Vec<Signal>>,
     output_signal: Vec<Vec<Signal>>,
-    tagged_input_signal: HashMap<&str, Vec<Signal>>,
+    tagged_input_signal: HashMap<&str, Vec<Vec<Signal>>>,
     gate: Rc<RefCell<dyn LogicGate>>,
 ) {
     assert!(!input_signals.is_empty());
@@ -108,17 +110,67 @@ pub fn run_multi_input_output_logic_gate(
         }
     }
 
-    for (tag, signals) in tagged_input_signal {
-        let tagged_input_gate = AutomaticInput::new(signals, 1, format!("Start_{}", tag).as_str());
-        input_gates.push(tagged_input_gate.clone());
 
-        let tag_index = gate.borrow_mut().get_index_from_tag(tag);
-        tagged_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
-            tag_index,
-            Rc::clone(&gate),
-        );
+    for (tag, signals) in tagged_input_signal.into_iter() {
+        let starting_index = input_gates.len();
+        for (i, signals) in signals.into_iter().enumerate() {
+            let size = signals.len();
+            for (j, signal) in signals.into_iter().enumerate() {
+                let tag =
+                    if size == 1 {
+                        tag.to_string()
+                    } else {
+                        format!("{}_{}", tag, j)
+                    };
+
+                let tag_index = gate.borrow_mut().get_index_from_tag(tag.as_str());
+                if i == 0 {
+                    let input_gate = AutomaticInput::new(vec![signal], 1, "Start");
+
+                    input_gate.borrow_mut().connect_output_to_next_gate(
+                        0,
+                        tag_index,
+                        Rc::clone(&gate),
+                    );
+
+                    input_gates.push(input_gate);
+                } else {
+                    let mut input_gate = input_gates[starting_index + j].borrow_mut();
+                    input_gate.update_input_signal(
+                        GateInput::new(
+                            tag_index,
+                            signal.clone(),
+                            UniqueID::zero_id(),
+                        )
+                    );
+                }
+            }
+        }
     }
+
+    // let mut errors = vec![false; input_gates.len()];
+    // while errors.contains(&false) {
+    //     let mut gates = Vec::new();
+    //     for (i, inp) in input_gates.iter().enumerate() {
+    //         let out = inp.borrow_mut().fetch_output_signals();
+    //
+    //         if let Err(_) = out {
+    //             errors[i] = true;
+    //             gates.push(NONE);
+    //             continue;
+    //         }
+    //
+    //         match out.unwrap().first().unwrap() {
+    //             GateOutputState::NotConnected(signal) => {
+    //                 gates.push(signal.clone());
+    //             }
+    //             GateOutputState::Connected(out) => {
+    //                 gates.push(out.throughput.signal.clone());
+    //             }
+    //         }
+    //     }
+    //     println!("input_line: {:?}", gates);
+    // }
 
     for i in 0..num_outputs {
         let output_gate = SimpleOutput::new("End");

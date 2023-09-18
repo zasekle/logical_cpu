@@ -217,6 +217,7 @@ pub enum GateType {
     VariableBitRegisterType,
     VariableDecoderType,
     VariableSingleRAMCellType,
+    RAMUnitType,
 }
 
 impl fmt::Display for GateType {
@@ -241,7 +242,8 @@ impl fmt::Display for GateType {
             GateType::VariableCPUEnableType => "VARIABLE_CPU_ENABLE",
             GateType::VariableBitRegisterType => "VARIABLE_BIT_REGISTER",
             GateType::VariableDecoderType => "VARIABLE_DECODER",
-            GateType::VariableSingleRAMCellType => "VARIABLE_SINGLE_RAM_CELL_TYPE",
+            GateType::VariableSingleRAMCellType => "VARIABLE_SINGLE_RAM_CELL",
+            GateType::RAMUnitType => "RAM_UNIT",
         };
         write!(f, "{}", printable)
     }
@@ -329,6 +331,7 @@ impl BasicGateMembers {
             current_gate_output_index,
             next_gate_input_index,
             next_gate,
+            self.should_print_output,
         );
     }
 
@@ -481,11 +484,33 @@ impl ComplexGateMembers {
             }
         };
 
-        next_gate.borrow_mut().internal_update_index_to_id(
+        //This unsafe block must be done for two reasons.
+        // 1) In order to allow a gate to connect to itself, it must already have a mutable reference
+        //  outstanding.
+        // 2) If this way of doing it is not done, then no mutable references will be able to be
+        //  outstanding when connect_output_to_next_gate methods are called.
+        //This will limit the ability
+        let next_gate_mut_ref = unsafe {
+            &mut *next_gate.as_ptr()
+        };
+
+        next_gate_mut_ref.internal_update_index_to_id(
             current_gate_id,
             next_gate_input_key,
             signal.clone(),
         );
+
+        if self.simple_gate.should_print_output {
+            println!(
+                "Connection for\n   type {} id {} index {}\nTO\n   type {} id {} index {}",
+                self.simple_gate.gate_type,
+                self.simple_gate.unique_id.id,
+                current_gate_output_key,
+                next_gate_mut_ref.get_gate_type(),
+                next_gate_mut_ref.get_unique_id().id(),
+                next_gate_input_key
+            );
+        }
 
         self.simple_gate.output_states[current_gate_output_key] =
             GateOutputState::Connected(
@@ -657,6 +682,7 @@ impl GateLogic {
         current_gate_output_index: usize,
         next_gate_input_index: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
+        should_print_output: bool,
     ) {
         let output_signal = GateLogic::calculate_output_from_inputs(
             &gate_type,
@@ -670,6 +696,8 @@ impl GateLogic {
             next_gate_input_index,
             next_gate,
             output_signal,
+            gate_type,
+            should_print_output,
         );
     }
 
@@ -680,6 +708,8 @@ impl GateLogic {
         next_gate_input_index: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
         output_signal: Signal,
+        current_gate_type: GateType,
+        should_print_output: bool,
     ) {
         //This unsafe block must be done for two reasons.
         // 1) In order to allow a gate to connect to itself, it must already have a mutable reference
@@ -697,6 +727,17 @@ impl GateLogic {
             output_signal.clone(),
         );
 
+        if should_print_output {
+            println!(
+                "Connection for\n   type {} id {} index {}\nTO\n   type {} id {} index {}",
+                current_gate_type,
+                current_gate_id.id(),
+                current_gate_output_index,
+                next_gate_mut_ref.get_gate_type(),
+                next_gate_mut_ref.get_unique_id().id(),
+                next_gate_input_index,
+            );
+        }
         output_states[current_gate_output_index] =
             GateOutputState::Connected(
                 ConnectedOutput {
@@ -721,26 +762,15 @@ impl GateLogic {
             }
         };
         match gate_type {
-            GateType::UnknownType => panic!(),
             GateType::NotType => GateLogic::calculate_output_for_not(&input_signals.unwrap()),
             GateType::OrType => GateLogic::calculate_output_for_or(&input_signals.unwrap()),
             GateType::AndType => GateLogic::calculate_output_for_and(&input_signals.unwrap()),
             GateType::NorType => GateLogic::calculate_output_for_nor(&input_signals.unwrap()),
             GateType::NandType => GateLogic::calculate_output_for_nand(&input_signals.unwrap()),
-            GateType::SplitterType => panic!(),
-            GateType::ControlledBufferType => panic!(),
             GateType::ClockType => GateLogic::calculate_output_for_clock(),
             GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(&input_signals.unwrap()),
-            GateType::SimpleOutputType => panic!(),
             GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(&input_signals.unwrap()),
-            GateType::SRLatchType => panic!(),
-            GateType::ActiveLowSRLatchType => panic!(),
-            GateType::OneBitMemoryCellType => panic!(),
-            GateType::VariableBitMemoryCellType => panic!(),
-            GateType::VariableCPUEnableType => panic!(),
-            GateType::VariableBitRegisterType => panic!(),
-            GateType::VariableDecoderType => panic!(),
-            GateType::VariableSingleRAMCellType => panic!(),
+            _ => panic!("calculate_outputs_from_inputs called with invalid gate_type of {}", gate_type)
         }
     }
 

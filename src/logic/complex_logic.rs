@@ -179,7 +179,7 @@ mod tests {
                 vec![LOW, HIGH, LOW],
             ],
             HashMap::from(
-                [("E",vec![HIGH, LOW, HIGH])]
+                [("E",vec![vec![HIGH], vec![LOW], vec![HIGH]])]
             ),
             VariableBitCPUEnable::new(3),
         );

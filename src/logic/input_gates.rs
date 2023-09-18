@@ -43,6 +43,7 @@ impl LogicGate for Clock {
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
+            self.should_print_output,
         );
     }
 
@@ -150,6 +151,7 @@ impl LogicGate for AutomaticInput {
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
+            self.should_print_output,
         );
     }
 
@@ -255,6 +257,7 @@ impl LogicGate for SimpleInput {
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
+            self.members.should_print_output,
         );
     }
 

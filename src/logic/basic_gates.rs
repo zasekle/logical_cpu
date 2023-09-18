@@ -371,6 +371,8 @@ impl LogicGate for Splitter {
             next_gate_input_key,
             next_gate,
             output_signal,
+            self.members.gate_type,
+            self.members.should_print_output,
         );
     }
 
@@ -473,6 +475,8 @@ impl LogicGate for ControlledBuffer {
             next_gate_input_key,
             next_gate,
             output_signal,
+            self.members.gate_type,
+            self.members.should_print_output,
         );
     }
 
