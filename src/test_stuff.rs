@@ -1,13 +1,11 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::format;
 use std::rc::Rc;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use crate::globals::CLOCK_TICK_NUMBER;
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, Signal, UniqueID};
-use crate::logic::foundations::Signal::NONE;
 use crate::logic::input_gates::AutomaticInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::run_circuit;
@@ -205,6 +203,7 @@ pub fn run_multi_input_output_logic_gate(
 
                 collected_output.push(single_collected_output);
             },
+            None,
         );
 
         propagate_signal_through_circuit = false;

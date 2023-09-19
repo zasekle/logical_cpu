@@ -18,11 +18,28 @@ use crate::run_circuit::start_clock;
 
 fn main() {
 
-    //TODO: Might want to add some output to the memory inside the register to debug? How would I
-    // display this? THIS IS PROBABLY IMPORTANT TO PROPAGATE IT UP REGARDLESS OF IF PRINT IS ON.
+    //TODO: need
+    // XOR
+    // Half Adder
+    // Full Adder
+    // Variable Bit Adder
+    // Variable Bit Shift Left
+    // Variable Bit Shift Right
+    // Variable Bit Not, And, Or
+    // Less than equal
+    // Variable Bit Less than equal
+    // Z Gate
+    // Enable Gate
+    // Arithmetic Logic Unit (When it runs, it actually runs all function every time, then a decoder chooses,
+    //  for my purposes, it may be easier to make it somehow only connect to the one that is selected or something,
+    //  maybe not though for simulating sake. First build it. Actually maybe not, because the decoder can change
+    //  when the input does not change, so I need to take this into account).
 
-    //TODO: Build a large RAM cell including the decoder and stuff. Make sure that all the numbers
-    // add up for inputs outputs etc...
+    //TODO: There are other gates I can probably tie together although I don't know if it will
+    // matter. Any of the ones that have a Vec of gates inside them.
+
+    //TODO: With the way that I did run_circuit and grouping the gates before running them, it might
+    // be possible to run them in a multithreaded way.
 
     //Remember that when running stuff in the registers, there is always the possibility that
     // multiple clock ticks are needed. The first will do something like enable the `Set` bit. The

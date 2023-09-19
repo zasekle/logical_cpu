@@ -28,6 +28,7 @@ pub enum Signal {
 #[derive(PartialEq, Debug, Clone)]
 pub enum GateLogicError {
     NoMoreAutomaticInputsRemaining,
+    MultipleValidSignalsWhenCalculating,
 }
 
 #[derive(Debug, Clone)]
@@ -281,7 +282,7 @@ impl BasicGateMembers {
             GateLogic::calculate_output_from_inputs(
                 &gate_type,
                 Some(&result.input_signals),
-            )
+            ).unwrap()
         };
 
         result.output_states.resize_with(
@@ -297,15 +298,6 @@ impl BasicGateMembers {
 
         let input_signal_updated = if self.input_signals[input.input_index][&input.sending_id] == input.signal {
             false
-        } else if input.signal == NONE {
-            if changed_count_this_tick == 1 {
-                self.input_signals[input.input_index].insert(input.sending_id, input.signal);
-                true
-            } else {
-                //This means that during this clock tick, the signal was updated by a different
-                // connection. NONE should never take priority.
-                false
-            }
         } else {
             self.input_signals[input.input_index].insert(input.sending_id, input.signal);
             true
@@ -402,7 +394,11 @@ impl ComplexGateMembers {
         }
     }
 
-    pub fn calculate_output_from_inputs(&mut self, propagate_signal_through_circuit: bool) {
+    pub fn calculate_output_from_inputs(
+        &mut self,
+        propagate_signal_through_circuit: bool,
+        gate_type_to_run_together: Option<GateType>,
+    ) {
         run_circuit(
             &self.input_gates,
             &self.output_gates,
@@ -420,6 +416,7 @@ impl ComplexGateMembers {
                     output_string.as_str(),
                 );
             },
+            gate_type_to_run_together,
         );
 
         self.convert_output_gates_to_output_states();
@@ -540,8 +537,11 @@ impl ComplexGateMembers {
         )
     }
 
-    pub fn fetch_output_signals(&mut self, tag: &String) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.calculate_output_from_inputs(false);
+    pub fn fetch_output_signals(&mut self, tag: &String, gate_type_to_run_together: Option<GateType>) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.calculate_output_from_inputs(
+            false,
+            gate_type_to_run_together,
+        );
 
         let output_clone = self.simple_gate.output_states.clone();
 
@@ -646,7 +646,7 @@ impl GateLogic {
         should_print_output: bool,
         tag: &str,
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
-        let output_signal = GateLogic::calculate_output_from_inputs(gate_type, input_signals);
+        let output_signal = GateLogic::calculate_output_from_inputs(gate_type, input_signals)?;
 
         output_states.iter_mut().for_each(
             |f|
@@ -684,10 +684,12 @@ impl GateLogic {
         next_gate: Rc<RefCell<dyn LogicGate>>,
         should_print_output: bool,
     ) {
+        //When gates are being connected, there should be no issues with this error. So unwrapping
+        // it.
         let output_signal = GateLogic::calculate_output_from_inputs(
             &gate_type,
             input_signals.map(|x| &*x),
-        );
+        ).unwrap();
 
         GateLogic::connect_output_to_next_gate_no_calculate(
             current_gate_id,
@@ -754,14 +756,15 @@ impl GateLogic {
     pub fn calculate_output_from_inputs(
         gate_type: &GateType,
         input_signals: Option<&Vec<HashMap<UniqueID, Signal>>>,
-    ) -> Signal {
+    ) -> Result<Signal, GateLogicError> {
         let input_signals = match input_signals {
             None => None,
             Some(input_signals) => {
-                Some(calculate_input_signals_from_all_inputs(input_signals))
+                Some(calculate_input_signals_from_all_inputs(input_signals)?)
             }
         };
-        match gate_type {
+
+        let output_signal = match gate_type {
             GateType::NotType => GateLogic::calculate_output_for_not(&input_signals.unwrap()),
             GateType::OrType => GateLogic::calculate_output_for_or(&input_signals.unwrap()),
             GateType::AndType => GateLogic::calculate_output_for_and(&input_signals.unwrap()),
@@ -771,7 +774,9 @@ impl GateLogic {
             GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(&input_signals.unwrap()),
             GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(&input_signals.unwrap()),
             _ => panic!("calculate_outputs_from_inputs called with invalid gate_type of {}", gate_type)
-        }
+        };
+
+        Ok(output_signal)
     }
 
     pub fn print_gate_output<T: fmt::Debug>(
@@ -842,26 +847,35 @@ pub fn pretty_print_output(
 
 pub fn calculate_input_signals_from_all_inputs(
     input_signals: &Vec<HashMap<UniqueID, Signal>>,
-) -> Vec<Signal> {
+) -> Result<Vec<Signal>, GateLogicError> {
     let mut final_signals = Vec::new();
     for input in input_signals {
-        final_signals.push(calculate_input_signal_from_single_inputs(input));
+        final_signals.push(calculate_input_signal_from_single_inputs(input)?);
     }
-    final_signals
+    Ok(final_signals)
 }
 
 pub fn calculate_input_signal_from_single_inputs(
     input_signal: &HashMap<UniqueID, Signal>,
-) -> Signal {
+) -> Result<Signal, GateLogicError> {
     let mut final_signal = NONE;
     for (_id, signal) in input_signal {
         if final_signal == NONE {
             final_signal = signal.clone();
         } else if *signal != NONE {
-            panic!("Two different signals for the same index were set to non-NONE values.\n{:#?}", input_signal)
+            // There is a problem that can occur here when multiple signals are found going into
+            // the same input. This is an unknown state. However, that does not mean an error
+            // occurred
+            // As an example, say I have Gate A and Gate B that are connected to Output 1.
+            // Initially, Gate A is LOW and Gate B is NONE. Then next tick they are meant to switch
+            // so Gate A is NONE and Gate B is HIGH, if Gate B sends in its signal first, then
+            // Output 1 will have a LOW and a HIGH signal which is an unknown state.
+            // The way this is handled is inside the run_circuit() function. It will handle this
+            // error and delay continuing with the gate until the state can be determined.
+            return Err(GateLogicError::MultipleValidSignalsWhenCalculating);
         }
     }
-    final_signal
+    Ok(final_signal)
 }
 
 pub fn build_simple_inputs_and_outputs(

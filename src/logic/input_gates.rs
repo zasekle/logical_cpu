@@ -305,10 +305,6 @@ impl LogicGate for SimpleInput {
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        //TODO d
-        if self.get_unique_id().id() == 11 {
-            println!("running internal_update_index_to_id() for id 11 sending_id: {}", sending_id.id());
-        }
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }

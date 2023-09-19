@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn, calculate_input_signal_from_single_inputs};
-use crate::logic::foundations::Signal::NONE;
 
 pub trait OutputGate {
     fn get_output_tag(&self) -> String;
@@ -61,15 +60,6 @@ impl LogicGate for SimpleOutput {
 
         let input_signal_updated = if self.output_state[&input.sending_id] == input.signal {
             false
-        } else if input.signal == NONE {
-            if changed_count_this_tick == 1 {
-                self.output_state.insert(input.sending_id, input.signal.clone());
-                true
-            } else {
-                //This means that during this clock tick, the signal was updated by a different
-                // connection. NONE should never take priority.
-                false
-            }
         } else {
             self.output_state.insert(input.sending_id, input.signal.clone());
             true
@@ -82,7 +72,7 @@ impl LogicGate for SimpleOutput {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        let output_clone = calculate_input_signal_from_single_inputs(&self.output_state);
+        let output_clone = calculate_input_signal_from_single_inputs(&self.output_state)?;
         // println!("SimpleOutput id {} output_clone: {:#?}", self.unique_id.id() ,output_clone);
 
         if self.should_print_output {

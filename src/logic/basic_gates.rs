@@ -360,9 +360,10 @@ impl LogicGate for Splitter {
         next_gate_input_key: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
+        //When gates are being connected, there should be no issues with this error.
         let output_signal = calculate_input_signal_from_single_inputs(
             &self.members.input_signals[current_gate_output_key/self.outputs_per_input]
-        );
+        ).unwrap();
 
         GateLogic::connect_output_to_next_gate_no_calculate(
             self.get_unique_id(),
@@ -382,7 +383,7 @@ impl LogicGate for Splitter {
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         //output_states is outputs_per_input*num_inputs length and input_states is num_inputs length.
-        let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals);
+        let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
         for (i, output) in self.members.output_states.iter_mut().enumerate() {
             match output {
                 GateOutputState::NotConnected(signal) => {
@@ -461,7 +462,9 @@ impl LogicGate for ControlledBuffer {
         next_gate: Rc<RefCell<dyn LogicGate>>,
     ) {
         let enable_index = self.get_index_from_tag("E");
-        let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals);
+        //When gates are being connected, there should be no issues with this error.
+        let input_signals =
+            calculate_input_signals_from_all_inputs(&self.members.input_signals).unwrap();
         let output_signal = if input_signals[enable_index] == HIGH {
             input_signals[current_gate_output_key].clone()
         } else {
@@ -486,7 +489,7 @@ impl LogicGate for ControlledBuffer {
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         //When input index 0 is HIGH, allow the signal through, otherwise return NotConnected.
-        let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals);
+        let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
         let enable_index = self.get_index_from_tag("E");
         let output = if input_signals[enable_index] == HIGH {
             //input_signals and output_states are the same length.
@@ -967,10 +970,7 @@ mod tests {
                     AutomaticInput::new(vec![HIGH, LOW, HIGH, LOW, HIGH, LOW, HIGH, LOW], 1, "Start_Normal")
                 };
 
-            println!("AutomaticInput input id {} created", input_gate.borrow_mut().get_unique_id().id());
-
             let controlled_buffer = ControlledBuffer::new(1);
-            println!("ControlledBuffer id {} created", controlled_buffer.borrow_mut().get_unique_id().id());
 
             input_gate.borrow_mut().connect_output_to_next_gate(
                 0,
@@ -1028,6 +1028,7 @@ mod tests {
                 &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
                     collect_output_for_run_circuit(&mut collected_output, &output_gates);
                 },
+                None,
             );
 
             propagate_signal_through_circuit = false;
@@ -1084,6 +1085,7 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
+            None,
         );
 
         assert_eq!(collected_output, output_signal);
@@ -1153,7 +1155,10 @@ mod tests {
                 );
 
                 //Prime gates
-                self.complex_gate.calculate_output_from_inputs(true);
+                self.complex_gate.calculate_output_from_inputs(
+                    true,
+                    None,
+                );
             }
         }
 
@@ -1172,7 +1177,10 @@ mod tests {
             }
 
             fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-                self.complex_gate.fetch_output_signals(&self.get_tag())
+                self.complex_gate.fetch_output_signals(
+                    &self.get_tag(),
+                    None,
+                )
             }
 
             fn get_gate_type(&self) -> GateType {
@@ -1238,6 +1246,7 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
+            None
         );
 
         assert_eq!(collected_output, output_signal);
@@ -1307,6 +1316,7 @@ mod tests {
 
                 collected_output.push(single_collected_output);
             },
+            None,
         );
 
         assert_eq!(collected_output, output_signal);

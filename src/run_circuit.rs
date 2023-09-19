@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use crate::globals::{CLOCK_TICK_NUMBER, RUN_CIRCUIT_IS_HIGH_LEVEL};
-use crate::logic::foundations::{GateLogicError, GateOutputState, InputSignalReturn, LogicGate};
+use crate::logic::foundations::{GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate};
 use crate::logic::output_gates::LogicGateAndOutputGate;
 
 pub fn start_clock<F>(
@@ -30,6 +30,7 @@ pub fn start_clock<F>(
             output_gates,
             propagate_signal_through_circuit,
             &mut handle_output,
+            None,
         );
 
         propagate_signal_through_circuit = false;
@@ -46,6 +47,7 @@ pub fn run_circuit<F>(
     output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
     propagate_signal_through_circuit: bool,
     handle_output: &mut F,
+    gate_type_to_run_together: Option<GateType>,
 ) -> bool where
     F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>)
 {
@@ -60,6 +62,10 @@ pub fn run_circuit<F>(
     let mut clock_tick_inputs = Vec::new();
     let mut next_gates: Vec<Rc<RefCell<dyn LogicGate>>> = input_gates.clone();
 
+    let mut gathering_gates_to_run = true;
+    let mut gathered_gates_set = HashSet::new();
+    let mut gathered_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+
     if print_output {
         println!("run_circuit");
     }
@@ -70,15 +76,22 @@ pub fn run_circuit<F>(
         let gates = next_gates;
         next_gates = Vec::new();
         let mut next_gates_set = HashSet::new();
+        let mut num_invalid_gates: usize = 0;
 
-        for gate in gates.iter() {
-            let mut gate = gate.borrow_mut();
+        for gate_cell in gates.into_iter() {
+            let mut gate = gate_cell.borrow_mut();
             let gate_output = gate.fetch_output_signals();
 
             let gate_output = if let Err(err) = gate_output {
-                return match err {
+                match err {
                     GateLogicError::NoMoreAutomaticInputsRemaining => {
-                        false
+                        return false
+                    }
+                    GateLogicError::MultipleValidSignalsWhenCalculating => {
+                        num_invalid_gates += 1;
+                        drop(gate);
+                        next_gates.push(gate_cell);
+                        continue
                     }
                 };
             } else {
@@ -92,6 +105,17 @@ pub fn run_circuit<F>(
             }
             if print_output {
                 println!("gate_output.len(): {:?}", gate_output.len());
+            }
+
+            if let Some(gate_type) = gate_type_to_run_together {
+                if gate_type == gate.get_gate_type() && gathering_gates_to_run
+                {
+                    if gathered_gates_set.insert(gate.get_unique_id()) {
+                        drop(gate);
+                        gathered_gates.push(gate_cell);
+                    }
+                    continue
+                }
             }
 
             drop(gate);
@@ -136,6 +160,29 @@ pub fn run_circuit<F>(
                     }
                 }
             }
+        }
+
+        //This is set up to handle invalid states. If all gates are in an invalid state the app will
+        // panic. See calculate_input_signal_from_single_inputs() in foundations.rs for more
+        // details.
+        if num_invalid_gates > 0 && num_invalid_gates == next_gates.len() {
+            let mut gates = Vec::new();
+            for gate in next_gates {
+                let mut_gate = gate.borrow_mut();
+                gates.push(
+                    format!("Gate {} id {} with tag {}.", mut_gate.get_gate_type(), mut_gate.get_unique_id().id(), mut_gate.get_tag())
+                );
+
+            }
+            panic!("All gates inside the circuit have returned invalid input, aborting.\nInvalid Gate List\n{:#?}", gates);
+        }
+
+        //This will allow the function to group all the gates of the same type together and run
+        // them at the same time.
+        if !gathered_gates.is_empty() && next_gates.is_empty() {
+            gathering_gates_to_run = false;
+            next_gates = gathered_gates;
+            gathered_gates = Vec::new();
         }
     }
 
@@ -182,6 +229,7 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates| {
                 check_for_single_element_signal(output_gates, HIGH);
             },
+            None,
         );
     }
 
@@ -230,6 +278,7 @@ mod tests {
                         // not.
                         assert!(false);
                     },
+                    None,
                 );
             },
         );
@@ -276,6 +325,7 @@ mod tests {
                     &mut |_clock_tick_inputs, output_gates| {
                         check_for_single_element_signal(output_gates, HIGH);
                     },
+                    None,
                 );
             },
         );

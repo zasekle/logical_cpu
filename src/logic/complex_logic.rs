@@ -86,7 +86,10 @@ impl VariableBitCPUEnable {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -107,7 +110,10 @@ impl LogicGate for VariableBitCPUEnable {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {

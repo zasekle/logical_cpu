@@ -129,7 +129,10 @@ impl VariableBitRegister {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -150,7 +153,10 @@ impl LogicGate for VariableBitRegister {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -287,7 +293,10 @@ impl VariableDecoder {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -308,7 +317,10 @@ impl LogicGate for VariableDecoder {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -525,7 +537,10 @@ impl SingleRAMCell {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -546,7 +561,10 @@ impl LogicGate for SingleRAMCell {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -631,8 +649,6 @@ impl RAMUnit {
 
         for _ in 0..num_ram_cells {
             ram_cells.push(SingleRAMCell::new(bus_size_in_bits));
-            //TODO: d
-            ram_cells.last().unwrap().borrow_mut().toggle_output_printing(true);
         }
 
         let mut ram_cell = RAMUnit {
@@ -731,10 +747,10 @@ impl RAMUnit {
 
         for i in 0..num_ram_cells_in_row {
             for j in 0..num_ram_cells_in_row {
-                let ram_cell_idx = i*num_ram_cells_in_row + j;
+                let ram_cell_idx = i * num_ram_cells_in_row + j;
                 let ram_cell_horizontal_index = self.ram_cells[ram_cell_idx].borrow_mut().get_index_from_tag("H");
                 let decoder_idx = self.horizontal_decoder_splitter.borrow_mut().get_index_for_output(
-                     i, j
+                    i, j,
                 );
 
                 self.horizontal_decoder_splitter.borrow_mut().connect_output_to_next_gate(
@@ -743,10 +759,10 @@ impl RAMUnit {
                     self.ram_cells[ram_cell_idx].clone(),
                 );
 
-                let ram_cell_idx = j*num_ram_cells_in_row + i;
+                let ram_cell_idx = j * num_ram_cells_in_row + i;
                 let ram_cell_vertical_index = self.ram_cells[ram_cell_idx].borrow_mut().get_index_from_tag("V");
                 let decoder_idx = self.vertical_decoder_splitter.borrow_mut().get_index_for_output(
-                    i, j
+                    i, j,
                 );
 
                 self.vertical_decoder_splitter.borrow_mut().connect_output_to_next_gate(
@@ -787,12 +803,11 @@ impl RAMUnit {
                     self.ram_cells[i].clone(),
                 );
 
-                //TODO: undo comment
-                // self.ram_cells[i].borrow_mut().connect_output_to_next_gate(
-                //     j,
-                //     j,
-                //     self.controlled_buffer.clone(),
-                // );
+                self.ram_cells[i].borrow_mut().connect_output_to_next_gate(
+                    j,
+                    j,
+                    self.controlled_buffer.clone(),
+                );
             }
         }
 
@@ -812,7 +827,10 @@ impl RAMUnit {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            Some(GateType::VariableSingleRAMCellType),
+        );
     }
 }
 
@@ -833,7 +851,12 @@ impl LogicGate for RAMUnit {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        //The second gate_type parameter will guarantee that all Single RAM cells run on the same
+        // clock tick for efficiency.
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            Some(GateType::VariableSingleRAMCellType),
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -958,7 +981,7 @@ mod tests {
                     ("E", vec![
                         vec![HIGH],
                         vec![LOW],
-                        vec![LOW]
+                        vec![LOW],
                     ])
                 ],
             ),
@@ -973,7 +996,6 @@ mod tests {
 
         let output = register.borrow_mut().fetch_output_signals().unwrap();
 
-        println!("output_ {:#?}", output);
         assert_eq!(output.len(), usize::pow(2, num_bits as u32));
         for (i, out) in output.into_iter().enumerate() {
             match out {
@@ -1050,85 +1072,7 @@ mod tests {
 
     #[test]
     fn single_ram_cell_low_v() {
-        // single_ram_cell_low_v_h(LOW, HIGH);
-        //8 inputs total
-        run_multi_input_output_logic_gate(
-            vec![
-                vec![LOW],
-                vec![LOW],
-                vec![HIGH],
-                vec![HIGH],
-                vec![HIGH],
-                vec![HIGH],
-                vec![LOW],
-                vec![LOW],
-            ],
-            vec![
-                vec![NONE],
-                vec![NONE],
-                vec![NONE],
-                vec![NONE],
-                vec![NONE],
-                vec![NONE],
-                vec![HIGH],
-                vec![NONE],
-            ],
-            HashMap::from(
-                [
-                    ("R", vec![
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                    ]),
-                    ("H", vec![
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                    ]),
-                    ("V", vec![
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![LOW],
-                    ]),
-                    ("S", vec![
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![HIGH],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                    ]),
-                    ("E", vec![
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![HIGH],
-                        vec![HIGH],
-                    ]),
-                ]
-            ),
-            SingleRAMCell::new(1),
-        );
+        single_ram_cell_low_v_h(LOW, HIGH);
     }
 
     #[test]
@@ -1196,34 +1140,28 @@ mod tests {
         );
     }
 
-    //TODO: RAMUnit tests
     #[test]
     fn ram_unit_test() {
-        //TODO: The RAM cell id 57 is getting H==HIGH and V==LOW, but it is outputting the signal
-        // still. Maybe what I can do is go into the RAM_CELL itself and say if id==57, turn on
-        // printing to see what is happening (can give the gates in there tags too).
-        //TODO: how does this pass? The controlled buffer is not hooked up anymore but it is
-        // returning LOW as an output?
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH], // Change SA bit
-                vec![HIGH], // Update addr to RAM 3
-                vec![HIGH], // Change S bit
-                vec![HIGH], // Change S bit
-                vec![LOW], // Look at RAM 1
-                // vec![LOW], // Look at RAM 2
-                // vec![LOW], // Look at RAM 3
-                // vec![LOW], // Look at RAM 4
+                vec![HIGH, LOW, HIGH], // Change SA bit so address can be written
+                vec![HIGH, LOW, HIGH], // Update address to RAM 3.
+                vec![HIGH, LOW, HIGH], // Change S bit so input is saved to RAM address location.
+                vec![HIGH, LOW, HIGH], // Change S bit so input is no longer saved to RAM address location.
+                vec![LOW, LOW, LOW], // Get output at RAM 1
+                vec![LOW, HIGH, LOW], // Get output at RAM 2
+                vec![LOW, HIGH, HIGH], // Get output at RAM 3
+                vec![HIGH, HIGH, HIGH], // Get output at RAM 4
             ],
             vec![
-                vec![NONE],
-                vec![NONE],
-                vec![NONE],
-                vec![NONE],
-                vec![LOW],
-                // vec![LOW],
-                // vec![HIGH],
-                // vec![LOW],
+                vec![NONE, NONE, NONE],
+                vec![NONE, NONE, NONE],
+                vec![NONE, NONE, NONE],
+                vec![NONE, NONE, NONE],
+                vec![LOW, LOW, LOW],
+                vec![LOW, LOW, LOW],
+                vec![HIGH, LOW, HIGH],
+                vec![LOW, LOW, LOW],
             ],
             HashMap::from(
                 [
@@ -1233,53 +1171,26 @@ mod tests {
                         vec![HIGH, LOW], //0b10
                         vec![HIGH, LOW], //0b10
                         vec![LOW, LOW], //0b00
-                        // vec![LOW, HIGH], //0b01
-                        // vec![HIGH, LOW], //0b10
-                        // vec![HIGH, HIGH], //0b11
+                        vec![LOW, HIGH], //0b01
+                        vec![HIGH, LOW], //0b10
+                        vec![HIGH, HIGH], //0b11
                     ]),
-                    ("SA", vec![
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        vec![HIGH],
-                        // vec![HIGH],
-                        // vec![HIGH],
-                        // vec![HIGH],
-                    ]),
-                    ("R", vec![
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        // vec![LOW],
-                        // vec![LOW],
-                        // vec![LOW],
-                    ]),
+                    ("SA", vec![vec![HIGH]; 8]),
+                    ("R", vec![vec![LOW]; 8]),
                     ("S", vec![
                         vec![LOW],
                         vec![LOW],
                         vec![HIGH],
                         vec![LOW],
                         vec![LOW],
-                        // vec![LOW],
-                        // vec![LOW],
-                        // vec![LOW],
+                        vec![LOW],
+                        vec![LOW],
+                        vec![LOW],
                     ]),
-                    ("E", vec![
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![HIGH],
-                        // vec![HIGH],
-                        // vec![HIGH],
-                        // vec![HIGH],
-                    ]),
+                    ("E", vec_with_values(vec![LOW], 4, vec![HIGH], 4), )
                 ]
             ),
-            RAMUnit::new(1, 1),
+            RAMUnit::new(3, 1),
         );
     }
 }

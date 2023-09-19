@@ -120,7 +120,10 @@ impl SRLatch {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -141,7 +144,10 @@ impl LogicGate for SRLatch {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -283,7 +289,10 @@ impl ActiveLowSRLatch {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -304,7 +313,10 @@ impl LogicGate for ActiveLowSRLatch {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -490,7 +502,10 @@ impl OneBitMemoryCell {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -511,7 +526,10 @@ impl LogicGate for OneBitMemoryCell {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -575,7 +593,7 @@ impl VariableBitMemoryCell {
         push_reg_outputs_to_output_gates(
             number_bits,
             &mut output_gates,
-            &mut output_gates_logic
+            &mut output_gates_logic,
         );
 
         let set_input_gate = SimpleInput::new(number_bits, "S");
@@ -640,7 +658,10 @@ impl VariableBitMemoryCell {
         drop(s_input_gate);
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(true);
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
     }
 }
 
@@ -661,7 +682,10 @@ impl LogicGate for VariableBitMemoryCell {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(&self.get_tag())
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -797,6 +821,7 @@ mod tests {
                         GateOutputState::Connected(_) => panic!("Final output gate should not be connected")
                     }
                 },
+                None,
             );
 
             propagate_signal_through_circuit = false;
@@ -888,6 +913,7 @@ mod tests {
                         }
                     }
                 },
+                None,
             );
 
             propagate_signal_through_circuit = false;
@@ -1160,7 +1186,7 @@ mod tests {
 
         let output = variable_bit_memory_cell.borrow_mut().fetch_output_signals().unwrap();
 
-        assert_eq!(output.len(), 2*num_bits);
+        assert_eq!(output.len(), 2 * num_bits);
         for out in output {
             match out {
                 GateOutputState::NotConnected(signal) => {
