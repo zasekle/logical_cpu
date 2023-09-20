@@ -18,18 +18,13 @@ use crate::run_circuit::start_clock;
 
 fn main() {
 
+    //TODO: I see it, my shift operations are backwards and maybe more, I need to go through and fix them.
+    // variable_bit_shift_tests
+
     //TODO: need
-    // XOR
-    // Half Adder
-    // Full Adder
-    // Variable Bit Adder
-    // Variable Bit Shift Left
-    // Variable Bit Shift Right
-    // Variable Bit Not, And, Or
-    // Less than equal
-    // Variable Bit Less than equal
     // Z Gate
     // Enable Gate
+    // SignalGatekeeper (the personal gate to stop the signal propagation)
     // Arithmetic Logic Unit (When it runs, it actually runs all function every time, then a decoder chooses,
     //  for my purposes, it may be easier to make it somehow only connect to the one that is selected or something,
     //  maybe not though for simulating sake. First build it. Actually maybe not, because the decoder can change

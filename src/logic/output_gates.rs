@@ -80,6 +80,7 @@ impl LogicGate for SimpleOutput {
                 &self.gate_type,
                 &self.unique_id,
                 &self.get_tag(),
+                &None::<Signal>,
                 &output_clone,
             );
         }

@@ -324,6 +324,68 @@ impl LogicGate for Nand {
     }
 }
 
+pub struct XOr {
+    members: BasicGateMembers,
+}
+
+impl XOr {
+    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
+        Rc::new(
+            RefCell::new(
+                XOr {
+                    members: BasicGateMembers::new(
+                        input_num,
+                        output_num,
+                        GateType::XOrType,
+                        None,
+                    )
+                }
+            )
+        )
+    }
+}
+
+impl LogicGate for XOr {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+        self.members.connect_output_to_next_gate(
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+        );
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        self.members.update_input_signal(input)
+    }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    }
+
+    fn get_gate_type(&self) -> GateType {
+        self.members.gate_type
+    }
+
+    fn get_unique_id(&self) -> UniqueID {
+        self.members.unique_id
+    }
+
+    fn toggle_output_printing(&mut self, print_output: bool) {
+        self.members.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.members.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+}
 pub struct Splitter {
     members: BasicGateMembers,
     outputs_per_input: usize,
@@ -400,6 +462,7 @@ impl LogicGate for Splitter {
                 &self.members.gate_type,
                 &self.members.unique_id,
                 &String::from(""),
+                &self.members.input_signals,
                 &self.members.output_states,
             );
         }
@@ -536,6 +599,7 @@ impl LogicGate for ControlledBuffer {
                 &self.members.gate_type,
                 &self.members.unique_id,
                 &String::from(""),
+                &self.members.input_signals,
                 &output,
             );
         }
@@ -584,57 +648,9 @@ mod tests {
     use crate::logic::foundations::Signal::{HIGH, LOW};
     use crate::logic::input_gates::{AutomaticInput, SimpleInput};
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
-    use crate::run_circuit::{run_circuit, start_clock};
-    use crate::test_stuff::{check_for_single_element_signal, collect_outputs_from_output_gates};
+    use crate::run_circuit::run_circuit;
+    use crate::test_stuff::{collect_outputs_from_output_gates, test_simple_gate};
     use super::*;
-
-    fn test_simple_gate(
-        gate: Rc<RefCell<dyn LogicGate>>,
-        first_input: Signal,
-        second_input: Option<Signal>,
-        output: Signal,
-    ) {
-        let first_pin_input = AutomaticInput::new(vec![first_input], 1, "");
-        let output_gate = SimpleOutput::new("");
-
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-
-        input_gates.push(first_pin_input.clone());
-        output_gates.push(output_gate.clone());
-
-        first_pin_input.borrow_mut().connect_output_to_next_gate(
-            0,
-            0,
-            gate.clone(),
-        );
-
-        if let Some(second_input) = second_input {
-            let second_pin_input = AutomaticInput::new(vec![second_input], 1, "");
-
-            second_pin_input.borrow_mut().connect_output_to_next_gate(
-                0,
-                1,
-                gate.clone(),
-            );
-
-            input_gates.push(second_pin_input.clone());
-        }
-
-        gate.borrow_mut().connect_output_to_next_gate(
-            0,
-            0,
-            output_gate.clone(),
-        );
-
-        start_clock(
-            &input_gates,
-            &output_gates,
-            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
-                check_for_single_element_signal(&output_gates, output.clone());
-            },
-        );
-    }
 
     fn test_controlled_buffer(
         signal: Signal
@@ -899,6 +915,54 @@ mod tests {
 
         test_simple_gate(
             nand_gate,
+            HIGH,
+            Some(HIGH),
+            LOW,
+        );
+    }
+
+    #[test]
+    fn test_xor_gate_low_low() {
+        let xor_gate = XOr::new(2, 1);
+
+        test_simple_gate(
+            xor_gate,
+            LOW,
+            Some(LOW),
+            LOW,
+        );
+    }
+
+    #[test]
+    fn test_xor_gate_low_high() {
+        let xor_gate = XOr::new(2, 1);
+
+        test_simple_gate(
+            xor_gate,
+            LOW,
+            Some(HIGH),
+            HIGH,
+        );
+    }
+
+    #[test]
+    fn test_xor_gate_high_low() {
+        let xor_gate = XOr::new(2, 1);
+
+        test_simple_gate(
+            xor_gate,
+            HIGH,
+            Some(LOW),
+            HIGH,
+        );
+    }
+
+    #[test]
+    fn test_xor_gate_high_high() {
+        let xor_gate = XOr::new(2, 1);
+
+        test_simple_gate(
+            xor_gate,
             HIGH,
             Some(HIGH),
             LOW,

@@ -204,6 +204,7 @@ pub enum GateType {
     AndType,
     NorType,
     NandType,
+    XOrType,
     SplitterType,
     ControlledBufferType,
     ClockType,
@@ -219,6 +220,15 @@ pub enum GateType {
     VariableDecoderType,
     VariableSingleRAMCellType,
     RAMUnitType,
+    HalfAdderType,
+    FullAdderType,
+    VariableBitAdderType,
+    VariableBitShiftLeftType,
+    VariableBitNotType,
+    VariableBitAndType,
+    VariableBitOrType,
+    XOrLEType,
+    VariableBitXOrLEType,
 }
 
 impl fmt::Display for GateType {
@@ -230,6 +240,7 @@ impl fmt::Display for GateType {
             GateType::AndType => "AND",
             GateType::NorType => "NOR",
             GateType::NandType => "NAND",
+            GateType::XOrType => "XOR",
             GateType::SplitterType => "SPLITTER",
             GateType::ControlledBufferType => "CONTROLLED_BUFFER",
             GateType::ClockType => "CLOCK",
@@ -245,6 +256,15 @@ impl fmt::Display for GateType {
             GateType::VariableDecoderType => "VARIABLE_DECODER",
             GateType::VariableSingleRAMCellType => "VARIABLE_SINGLE_RAM_CELL",
             GateType::RAMUnitType => "RAM_UNIT",
+            GateType::HalfAdderType => "HALF_ADDER",
+            GateType::FullAdderType => "FULL_ADDER",
+            GateType::VariableBitAdderType => "VARIABLE_BIT_ADDER",
+            GateType::VariableBitShiftLeftType => "VARIABLE_BIT_SHIFT_LEFT",
+            GateType::VariableBitNotType => "VARIABLE_BIT_NOT",
+            GateType::VariableBitAndType => "VARIABLE_BIT_AND",
+            GateType::VariableBitOrType => "VARIABLE_BIT_OR",
+            GateType::XOrLEType => "XOR_LE",
+            GateType::VariableBitXOrLEType => "VARIABLE_BIT_XOR_LE",
         };
         write!(f, "{}", printable)
     }
@@ -550,6 +570,7 @@ impl ComplexGateMembers {
                 &self.simple_gate.gate_type,
                 &self.simple_gate.unique_id,
                 tag,
+                &self.simple_gate.input_signals,
                 &output_clone,
             );
         }
@@ -613,6 +634,32 @@ impl GateLogic {
         GateLogic::calculate_output_for_not(&and_signal)
     }
 
+    pub fn calculate_output_for_xor(input_signals: &Vec<Signal>) -> Signal {
+        let mut high_signal_exists = false;
+        let mut low_signal_exists = false;
+        for input in input_signals.iter() {
+            match *input {
+                NONE => {}
+                LOW => {
+                    low_signal_exists = true;
+                }
+                HIGH => {
+                    high_signal_exists = true;
+                }
+            }
+
+            if high_signal_exists && low_signal_exists {
+                return HIGH
+            }
+        }
+
+        if !high_signal_exists && !low_signal_exists {
+            NONE
+        } else {
+            LOW
+        }
+    }
+
     pub fn calculate_output_for_clock() -> Signal {
         HIGH
     }
@@ -667,6 +714,7 @@ impl GateLogic {
                 gate_type,
                 &unique_id,
                 tag,
+                &input_signals,
                 &output_clone,
             );
         }
@@ -770,6 +818,7 @@ impl GateLogic {
             GateType::AndType => GateLogic::calculate_output_for_and(&input_signals.unwrap()),
             GateType::NorType => GateLogic::calculate_output_for_nor(&input_signals.unwrap()),
             GateType::NandType => GateLogic::calculate_output_for_nand(&input_signals.unwrap()),
+            GateType::XOrType => GateLogic::calculate_output_for_xor(&input_signals.unwrap()),
             GateType::ClockType => GateLogic::calculate_output_for_clock(),
             GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(&input_signals.unwrap()),
             GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(&input_signals.unwrap()),
@@ -779,25 +828,28 @@ impl GateLogic {
         Ok(output_signal)
     }
 
-    pub fn print_gate_output<T: fmt::Debug>(
+    pub fn print_gate_output<T: fmt::Debug, U: fmt::Debug>(
         gate_type: &GateType,
         unique_id: &UniqueID,
         tag: &str,
-        output: &T,
+        input: &T,
+        output: &U,
     ) {
         if tag.is_empty() {
             println!(
-                "{} gate id {} output is\n{:#?}",
+                "{} gate id {}\ninput is {:#?}\noutput is {:#?}",
                 gate_type,
                 unique_id.id(),
+                input,
                 output,
             );
         } else {
             println!(
-                "{} gate; tag {}; id {}; output is\n{:#?}",
+                "{} gate tag {} id {}\ninput is {:#?}\noutput is {:#?}",
                 gate_type,
                 tag,
                 unique_id.id(),
+                input,
                 output,
             );
         }
