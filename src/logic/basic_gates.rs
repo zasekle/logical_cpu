@@ -440,10 +440,16 @@ impl LogicGate for Splitter {
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        if self.get_unique_id().id() == 27
+            || self.get_unique_id().id() == 87
+        {
+            println!("Splitter update_input_signal id {}\ninput {:#?}", self.members.unique_id.id(), input);
+        }
         self.members.update_input_signal(input)
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+
         //output_states is outputs_per_input*num_inputs length and input_states is num_inputs length.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
         for (i, output) in self.members.output_states.iter_mut().enumerate() {

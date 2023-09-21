@@ -6,6 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use crate::globals::{get_clock_tick_number, MAX_INPUT_CHANGES, NEXT_UNIQUE_ID};
+use crate::logic::basic_gates::And;
 use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
@@ -207,6 +208,7 @@ pub enum GateType {
     XOrType,
     SplitterType,
     ControlledBufferType,
+    SignalGatekeeperType,
     ClockType,
     AutomaticInputType,
     SimpleOutputType,
@@ -229,6 +231,9 @@ pub enum GateType {
     VariableBitOrType,
     XOrLEType,
     VariableBitXOrLEType,
+    VariableBitZType,
+    VariableBitEnableType,
+    ArithmeticLogicUnitType,
 }
 
 impl fmt::Display for GateType {
@@ -243,6 +248,7 @@ impl fmt::Display for GateType {
             GateType::XOrType => "XOR",
             GateType::SplitterType => "SPLITTER",
             GateType::ControlledBufferType => "CONTROLLED_BUFFER",
+            GateType::SignalGatekeeperType => "SIGNAL_GATEKEEPER",
             GateType::ClockType => "CLOCK",
             GateType::AutomaticInputType => "AUTOMATIC_INPUT",
             GateType::SimpleOutputType => "SIMPLE_OUTPUT",
@@ -265,6 +271,9 @@ impl fmt::Display for GateType {
             GateType::VariableBitOrType => "VARIABLE_BIT_OR",
             GateType::XOrLEType => "XOR_LE",
             GateType::VariableBitXOrLEType => "VARIABLE_BIT_XOR_LE",
+            GateType::VariableBitZType => "VARIABLE_BIT_Z",
+            GateType::VariableBitEnableType => "VARIABLE_BIT_ENABLE",
+            GateType::ArithmeticLogicUnitType => "ARITHMETIC_LOGIC_UNIT",
         };
         write!(f, "{}", printable)
     }
@@ -519,11 +528,13 @@ impl ComplexGateMembers {
 
         if self.simple_gate.should_print_output {
             println!(
-                "Connection for\n   type {} id {} index {}\nTO\n   type {} id {} index {}",
+                "Connection for\n   type {} tag {} id {} index {}\nTO\n   type {} tag {} id {} index {}",
                 self.simple_gate.gate_type,
+                self.simple_gate.tag,
                 self.simple_gate.unique_id.id,
                 current_gate_output_key,
                 next_gate_mut_ref.get_gate_type(),
+                next_gate_mut_ref.get_tag(),
                 next_gate_mut_ref.get_unique_id().id(),
                 next_gate_input_key
             );
@@ -944,6 +955,28 @@ pub fn build_simple_inputs_and_outputs(
         let output_gate = SimpleOutput::new(output_tag.as_str());
         output_gates.push(output_gate.clone());
         output_gates_logic.push(output_gate);
+    }
+}
+
+pub fn build_simple_inputs_and_outputs_with_and(
+    number_inputs_outputs: usize,
+    input_gates: &mut Vec<Rc<RefCell<dyn LogicGate>>>,
+    output_gates: &mut Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    output_gates_logic: &mut Vec<Rc<RefCell<dyn LogicGate>>>,
+    and_gates: &mut Vec<Rc<RefCell<And>>>,
+) {
+    for i in 0..number_inputs_outputs {
+        let input_tag = format!("i_{}", i);
+        input_gates.push(SimpleInput::new(1, input_tag.as_str()));
+
+        let output_tag = format!("o_{}", i);
+        let output_gate = SimpleOutput::new(output_tag.as_str());
+        output_gates.push(output_gate.clone());
+        output_gates_logic.push(output_gate);
+
+        and_gates.push(
+            And::new(2, 1)
+        );
     }
 }
 
