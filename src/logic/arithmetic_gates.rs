@@ -1607,7 +1607,6 @@ impl LogicGate for VariableBitZ {
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        println!("VariableBitZ id {}\ninput {:#?}", self.get_unique_id().id(), input);
         self.complex_gate.update_input_signal(input)
     }
 
@@ -1772,6 +1771,47 @@ impl LogicGate for VariableBitEnable {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+}
+
+enum AluOperations {
+    None,
+    XOrLe,
+    Or,
+    And,
+    Not,
+    Shl,
+    Shr,
+    Adder,
+}
+
+struct AluReturns {
+    a: Vec<Signal>,
+    b: Vec<Signal>,
+    c: Vec<Signal>,
+}
+
+impl AluReturns {
+    fn new(a: Signal, b: Signal, c: Signal) -> Self {
+        AluReturns { a: vec![a], b: vec![b], c: vec![c] }
+    }
+}
+
+//Rules for the ALU input/output.
+// idx 0 is the least significant bit
+// idx 7 is the most significant bit
+impl AluOperations {
+    fn get_vectors(alu_operation: AluOperations) -> AluReturns {
+        match alu_operation {
+            AluOperations::None => AluReturns::new(HIGH, HIGH, HIGH),
+            AluOperations::XOrLe => AluReturns::new(HIGH, HIGH, LOW),
+            AluOperations::Or => AluReturns::new(HIGH, LOW, HIGH),
+            AluOperations::And => AluReturns::new(HIGH, LOW, LOW),
+            AluOperations::Not => AluReturns::new(LOW, HIGH, HIGH),
+            AluOperations::Shl => AluReturns::new(LOW, HIGH, LOW),
+            AluOperations::Shr => AluReturns::new(LOW, LOW, HIGH),
+            AluOperations::Adder => AluReturns::new(LOW, LOW, LOW),
+        }
     }
 }
 
@@ -2683,18 +2723,81 @@ mod tests {
         }
     }
 
-    struct XorLeReturns {
+    #[derive(Debug)]
+    struct GenerateRandomReturns {
         a_input: usize,
         b_input: usize,
         result_num: usize,
         a_input_signals: Vec<Signal>,
         b_input_signals: Vec<Signal>,
         output: Vec<Signal>,
+        carry_out: Signal,
+    }
+
+    impl GenerateRandomReturns {
+        fn new(
+            a_input: usize,
+            b_input: usize,
+            result_num: usize,
+            a_input_signals: Vec<Signal>,
+            b_input_signals: Vec<Signal>,
+            output: Vec<Signal>,
+            carry_out: Signal,
+        ) -> Self {
+            GenerateRandomReturns {
+                a_input,
+                b_input,
+                result_num,
+                a_input_signals,
+                b_input_signals,
+                output,
+                carry_out,
+            }
+        }
+    }
+
+    fn run_alu(
+        num_bits: usize,
+        opt: AluOperations,
+        mut gen_randoms_result: GenerateRandomReturns,
+    ) {
+        println!("result_num: {:#?}", gen_randoms_result);
+        gen_randoms_result.output.push(
+            convert_bool_to_signal(gen_randoms_result.a_input > gen_randoms_result.b_input)
+        );  //A Larger  (A_L)
+        gen_randoms_result.output.push(
+            convert_bool_to_signal(gen_randoms_result.a_input == gen_randoms_result.b_input)
+        ); //Equal     (EQ)
+        gen_randoms_result.output.push(
+            convert_bool_to_signal(gen_randoms_result.result_num == 0)
+        ); //Zero      (Z)
+        gen_randoms_result.output.push(gen_randoms_result.carry_out); //Carry Out (C_OUT)
+
+        let alu = ArithmeticLogicUnit::new(num_bits);
+        let alu_operation = AluOperations::get_vectors(opt);
+
+        run_multi_input_output_logic_gate(
+            vec![],
+            vec![
+                gen_randoms_result.output //A_L, EQ, Z, C_OUT;
+            ],
+            HashMap::from(
+                [
+                    ("a", vec![gen_randoms_result.a_input_signals]),
+                    ("b", vec![gen_randoms_result.b_input_signals]),
+                    ("A", vec![alu_operation.a]),
+                    ("B", vec![alu_operation.b]),
+                    ("C", vec![alu_operation.c]),
+                    ("C_IN", vec![vec![LOW]]),
+                ]
+            ),
+            alu,
+        );
     }
 
     fn generate_random_xor_le_inputs_outputs(
         num_bits: usize
-    ) -> XorLeReturns {
+    ) -> GenerateRandomReturns {
         let high_number_range = usize::pow(2, num_bits as u32);
         let a_input = rand::thread_rng().gen_range(0..high_number_range);
         let b_input = rand::thread_rng().gen_range(0..high_number_range);
@@ -2712,16 +2815,187 @@ mod tests {
 
         let a_input_signals = convert_binary_to_vec(&a_binary);
         let b_input_signals = convert_binary_to_vec(&b_binary);
-        let mut output = convert_binary_to_vec(&result_binary);
+        let output = convert_binary_to_vec(&result_binary);
 
-        XorLeReturns {
+        GenerateRandomReturns::new(
             a_input,
             b_input,
-            result_num: result,
+            result,
             a_input_signals,
             b_input_signals,
             output,
+            NONE,
+        )
+    }
+
+    fn generate_random_and_or_inputs_outputs(
+        and_gate: bool,
+        num_bits: usize,
+    ) -> GenerateRandomReturns {
+        let high_number_range = usize::pow(2, num_bits as u32);
+        let a_input = rand::thread_rng().gen_range(0..high_number_range);
+        let b_input = rand::thread_rng().gen_range(0..high_number_range);
+
+        let result =
+            if and_gate {
+                a_input & b_input
+            } else {
+                a_input | b_input
+            };
+
+        let a_binary = format!("{:0width$b}", a_input, width = num_bits);
+        let b_binary = format!("{:0width$b}", b_input, width = num_bits);
+        let result_binary = format!("{:0width$b}", result, width = num_bits);
+
+        //Leave these here in case it fails the number will be reproducible.
+        println!("num_bits: {}", num_bits);
+        println!("{}", a_input);
+        println!("{}", b_input);
+        println!("{}", result_binary);
+
+        let a_input_signals = convert_binary_to_vec(&a_binary);
+        let b_input_signals = convert_binary_to_vec(&b_binary);
+        let output = convert_binary_to_vec(&result_binary);
+
+        GenerateRandomReturns::new(
+            a_input,
+            b_input,
+            result,
+            a_input_signals,
+            b_input_signals,
+            output,
+            NONE,
+        )
+    }
+
+    fn generate_random_not_inputs_outputs(num_bits: usize) -> GenerateRandomReturns {
+        let high_number_range = usize::pow(2, num_bits as u32);
+        let num: u32 =  rand::thread_rng().gen_range(0..high_number_range) as u32;
+
+        let first_binary = format!("{:0width$b}", num, width = num_bits);
+
+        //This method is used because using the `!` operator will result in flipping all 32 bits of
+        // the number, not just the relevant bits. This will leave a majority of the bits in the `1`
+        // position.
+        let mut result_binary = String::new();
+        for c in first_binary.chars() {
+            result_binary.push(
+                if c == '0' {
+                    '1'
+                } else {
+                    '0'
+                }
+            )
         }
+        let result: u32 = u32::from_str_radix(result_binary.as_str(), 2).unwrap();
+
+        //Leave these here in case it fails the number will be reproducible.
+        println!("num_bits: {}", num_bits);
+        println!("{}", first_binary);
+        println!("{}", result_binary);
+
+        let input = convert_binary_to_vec(&first_binary);
+        let output = convert_binary_to_vec(&result_binary);
+
+        GenerateRandomReturns::new(
+            num as usize,
+            0,
+            result as usize,
+            input,
+            vec![LOW; num_bits],
+            output,
+            NONE,
+        )
+    }
+
+    fn generate_randoms_shl_shr_inputs_outputs(
+        num_bits: usize,
+        left_shift: bool
+    ) -> GenerateRandomReturns {
+        let high_number_range = usize::pow(2, num_bits as u32);
+        let first_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let result =
+            if left_shift {
+                first_num << 1
+            } else {
+                first_num >> 1
+            };
+
+        let first_binary = format!("{:0width$b}", first_num, width = num_bits);
+        let mut result_binary = format!("{:0width$b}", result, width = num_bits);
+
+        if result_binary.len() > num_bits {
+            result_binary = result_binary[result_binary.len() - num_bits..].to_string();
+        }
+        let result = usize::from_str_radix(result_binary.as_str(), 2).unwrap();
+
+        //Leave these here in case it fails the number will be reproducible.
+        println!("num_bits: {}", num_bits);
+        println!("left_shift: {}", left_shift);
+        println!("{}", first_binary);
+        println!("{}", result_binary);
+
+        let a_input = convert_binary_to_vec(&first_binary);
+        let result_output = convert_binary_to_vec(&result_binary);
+
+        let shift_char =
+            if left_shift {
+                first_binary.chars().next().unwrap()
+            } else {
+                first_binary.chars().last().unwrap()
+            };
+
+        let (shift_out, _) = convert_char_to_signal_and_num(shift_char);
+
+        GenerateRandomReturns::new(
+            first_num,
+            0,
+            result,
+            a_input,
+            vec![LOW; num_bits],
+            result_output,
+            shift_out,
+        )
+    }
+
+    fn generate_randoms_adder_inputs_outputs(num_bits: usize) -> GenerateRandomReturns {
+        let high_number_range = usize::pow(2, num_bits as u32);
+        let first_num = rand::thread_rng().gen_range(0..high_number_range);
+        let second_num = rand::thread_rng().gen_range(0..high_number_range);
+        let sum = first_num + second_num;
+
+        let first_binary = format!("{:0width$b}", first_num, width = num_bits);
+        let second_binary = format!("{:0width$b}", second_num, width = num_bits);
+        let mut sum_binary = format!("{:0width$b}", sum, width = num_bits + 1);
+
+        //Leave these here in case it fails the number will be reproducible.
+        println!("num_bits: {}", num_bits);
+        println!("{}", first_binary);
+        println!("{}", second_binary);
+        println!("{}", sum_binary);
+
+        let a_input = convert_binary_to_vec(&first_binary);
+        let b_input = convert_binary_to_vec(&second_binary);
+        let mut output = convert_binary_to_vec(&sum_binary);
+
+        let carry_out = output.last().unwrap().clone();
+        output.pop();
+
+        while sum_binary.len() > first_binary.len() {
+            sum_binary.remove(0);
+        }
+        let sum = usize::from_str_radix(sum_binary.as_str(), 2).unwrap();
+
+        GenerateRandomReturns::new(
+            first_num,
+            second_num,
+            sum,
+            a_input,
+            b_input,
+            output,
+            carry_out,
+        )
     }
 
     #[test]
@@ -2869,38 +3143,22 @@ mod tests {
     #[test]
     fn variable_bit_adder_tests() {
         for _ in 0..20 {
-            let num_bits = rand::thread_rng().gen_range(2..17);
+            let num_bits = rand::thread_rng().gen_range(2..16);
 
-            let high_number_range = usize::pow(2, num_bits as u32);
-            let first_num = rand::thread_rng().gen_range(0..high_number_range);
-            let second_num = rand::thread_rng().gen_range(0..high_number_range);
-            let sum = first_num + second_num;
-
+            let mut gen_randoms_result = generate_randoms_adder_inputs_outputs(num_bits);
             let variable_bit_adder = VariableBitAdder::new(num_bits);
 
-            let first_binary = format!("{:0width$b}", first_num, width = num_bits);
-            let second_binary = format!("{:0width$b}", second_num, width = num_bits);
-            let sum_binary = format!("{:0width$b}", sum, width = num_bits + 1);
-
-            //Leave these here in case it fails the number will be reproducible.
-            println!("num_bits: {}", num_bits);
-            println!("{}", first_binary);
-            println!("{}", second_binary);
-            println!("{}", sum_binary);
-
-            let a_input = convert_binary_to_vec(&first_binary);
-            let b_input = convert_binary_to_vec(&second_binary);
-            let output = convert_binary_to_vec(&sum_binary);
+            gen_randoms_result.output.push(gen_randoms_result.carry_out);
 
             run_multi_input_output_logic_gate(
                 vec![],
                 vec![
-                    output
+                    gen_randoms_result.output
                 ],
                 HashMap::from(
                     [
-                        ("a", vec![a_input]),
-                        ("b", vec![b_input]),
+                        ("a", vec![gen_randoms_result.a_input_signals]),
+                        ("b", vec![gen_randoms_result.b_input_signals]),
                         ("C_IN", vec![vec![LOW]]),
                     ]
                 ),
@@ -2914,15 +3172,7 @@ mod tests {
         for _ in 0..20 {
             let num_bits = rand::thread_rng().gen_range(1..16);
 
-            let high_number_range = usize::pow(2, num_bits as u32);
-            let first_num = rand::thread_rng().gen_range(0..high_number_range);
             let left_shift = rand::thread_rng().gen_bool(0.5);
-            let result =
-                if left_shift {
-                    first_num << 1
-                } else {
-                    first_num >> 1
-                };
 
             let variable_bit_left_shift: Rc<RefCell<dyn LogicGate>> =
                 if left_shift {
@@ -2931,38 +3181,19 @@ mod tests {
                     VariableBitShiftLeft::<false>::new(num_bits)
                 };
 
-            let first_binary = format!("{:0width$b}", first_num, width = num_bits);
-            let mut result_binary = format!("{:0width$b}", result, width = num_bits);
+            let mut gen_randoms_result = generate_randoms_shl_shr_inputs_outputs(
+                num_bits,
+                left_shift
+            );
 
-            if result_binary.len() > num_bits {
-                result_binary = result_binary[result_binary.len() - num_bits..].to_string();
-            }
-
-            //Leave these here in case it fails the number will be reproducible.
-            println!("num_bits: {}", num_bits);
-            println!("left_shift: {}", left_shift);
-            println!("{}", first_binary);
-            println!("{}", result_binary);
-
-            let a_input = convert_binary_to_vec(&first_binary);
-            let mut result_output = convert_binary_to_vec(&result_binary);
-
-            let shift_char =
-                if left_shift {
-                    first_binary.chars().next().unwrap()
-                } else {
-                    first_binary.chars().last().unwrap()
-                };
-
-            let (shift_out, _) = convert_char_to_signal_and_num(shift_char);
-            result_output.push(shift_out);
+            gen_randoms_result.output.push(gen_randoms_result.carry_out);
 
             run_multi_input_output_logic_gate(
                 vec![
-                    a_input
+                    gen_randoms_result.a_input_signals
                 ],
                 vec![
-                    result_output
+                    gen_randoms_result.output
                 ],
                 HashMap::from(
                     []
@@ -2977,30 +3208,15 @@ mod tests {
         for _ in 0..20 {
             let num_bits = rand::thread_rng().gen_range(1..16);
 
-            let high_number_range = usize::pow(2, num_bits as u32);
-            let num: u32 = rand::thread_rng().gen_range(0..high_number_range) as u32;
-            let result: u32 = !num;
-
+            let gen_randoms_result = generate_random_not_inputs_outputs(num_bits);
             let variable_bit_not = VariableBitNot::new(num_bits);
-
-            let first_binary = format!("{:0width$b}", num, width = num_bits);
-            let result_binary = format!("{:0width$b}", result, width = num_bits);
-            let result_binary = &result_binary[32 - num_bits..].to_string();
-
-            //Leave these here in case it fails the number will be reproducible.
-            println!("num_bits: {}", num_bits);
-            println!("{}", first_binary);
-            println!("{}", result_binary);
-
-            let input = convert_binary_to_vec(&first_binary);
-            let output = convert_binary_to_vec(result_binary);
 
             run_multi_input_output_logic_gate(
                 vec![
-                    input
+                    gen_randoms_result.a_input_signals
                 ],
                 vec![
-                    output
+                    gen_randoms_result.output
                 ],
                 HashMap::from(
                     []
@@ -3015,17 +3231,11 @@ mod tests {
         for _ in 0..20 {
             let num_bits = rand::thread_rng().gen_range(2..16);
 
-            let high_number_range = usize::pow(2, num_bits as u32);
-            let a_input = rand::thread_rng().gen_range(0..high_number_range);
-            let b_input = rand::thread_rng().gen_range(0..high_number_range);
-
             let and_gate = rand::thread_rng().gen_bool(0.5);
-            let result =
-                if and_gate {
-                    a_input & b_input
-                } else {
-                    a_input | b_input
-                };
+            let gen_randoms_result = generate_random_and_or_inputs_outputs(
+                and_gate,
+                num_bits,
+            );
 
             let variable_bit_not: Rc<RefCell<dyn LogicGate>> =
                 if and_gate {
@@ -3034,29 +3244,15 @@ mod tests {
                     VariableBitOr::new(num_bits)
                 };
 
-            let a_binary = format!("{:0width$b}", a_input, width = num_bits);
-            let b_binary = format!("{:0width$b}", b_input, width = num_bits);
-            let result_binary = format!("{:0width$b}", result, width = num_bits);
-
-            //Leave these here in case it fails the number will be reproducible.
-            println!("num_bits: {}", num_bits);
-            println!("{}", a_input);
-            println!("{}", b_input);
-            println!("{}", result_binary);
-
-            let a_input = convert_binary_to_vec(&a_binary);
-            let b_input = convert_binary_to_vec(&b_binary);
-            let output = convert_binary_to_vec(&result_binary);
-
             run_multi_input_output_logic_gate(
                 vec![],
                 vec![
-                    output
+                    gen_randoms_result.output
                 ],
                 HashMap::from(
                     [
-                        ("a", vec![a_input]),
-                        ("b", vec![b_input]),
+                        ("a", vec![gen_randoms_result.a_input_signals]),
+                        ("b", vec![gen_randoms_result.b_input_signals]),
                     ]
                 ),
                 variable_bit_not,
@@ -3207,43 +3403,6 @@ mod tests {
         }
     }
 
-    enum AluOperations {
-        None,
-        XOrLe,
-        Or,
-        And,
-        Not,
-        Shl,
-        Shr,
-        Adder,
-    }
-
-    struct AluReturns {
-        a: Vec<Signal>,
-        b: Vec<Signal>,
-        c: Vec<Signal>,
-    }
-
-    impl AluReturns {
-        fn new(a: Signal, b: Signal, c: Signal) -> Self {
-            AluReturns{ a: vec![a], b: vec![b], c: vec![c] }
-        }
-    }
-
-    impl AluOperations {
-        fn get_vectors(alu_operation: AluOperations) -> AluReturns {
-            match alu_operation {
-                AluOperations::None => AluReturns::new(HIGH, HIGH, HIGH),
-                AluOperations::XOrLe => AluReturns::new(HIGH, HIGH, LOW),
-                AluOperations::Or => AluReturns::new(HIGH, LOW, HIGH),
-                AluOperations::And => AluReturns::new(HIGH, LOW, LOW),
-                AluOperations::Not => AluReturns::new(LOW, HIGH, HIGH),
-                AluOperations::Shl => AluReturns::new(LOW, HIGH, LOW),
-                AluOperations::Shr => AluReturns::new(LOW, LOW, HIGH),
-                AluOperations::Adder => AluReturns::new(LOW, LOW, LOW),
-            }
-        }
-    }
     #[test]
     fn arithmetic_logic_unit_off_test() {
         let num_bits = rand::thread_rng().gen_range(2..16);
@@ -3320,57 +3479,75 @@ mod tests {
         for _ in 0..20 {
             let num_bits = rand::thread_rng().gen_range(2..16);
 
-            let mut xor_le_returns = generate_random_xor_le_inputs_outputs(num_bits);
+            let xor_le_returns = generate_random_xor_le_inputs_outputs(num_bits);
 
-            xor_le_returns.output.push(convert_bool_to_signal(xor_le_returns.a_input > xor_le_returns.b_input));  //A Larger  (A_L)
-            xor_le_returns.output.push(convert_bool_to_signal(xor_le_returns.a_input == xor_le_returns.b_input)); //Equal     (EQ)
-            xor_le_returns.output.push(convert_bool_to_signal(xor_le_returns.result_num == 0)); //Zero      (Z)
-            xor_le_returns.output.push(NONE); //Carry Out (C_OUT)
-
-            let alu = ArithmeticLogicUnit::new(num_bits);
-            let alu_operation = AluOperations::get_vectors(AluOperations::XOrLe);
-
-            run_multi_input_output_logic_gate(
-                vec![],
-                vec![
-                    xor_le_returns.output //A_L, EQ, Z, C_OUT;
-                ],
-                HashMap::from(
-                    [
-                        ("a", vec![xor_le_returns.a_input_signals]),
-                        ("b", vec![xor_le_returns.b_input_signals]),
-                        ("A", vec![alu_operation.a]),
-                        ("B", vec![alu_operation.b]),
-                        ("C", vec![alu_operation.c]),
-                        ("C_IN", vec![vec![LOW]]),
-                    ]
-                ),
-                alu,
-            );
+            run_alu(num_bits, AluOperations::XOrLe, xor_le_returns);
         }
     }
 
-    fn arithmetic_logic_unit_or_test() {
-        let alu = ArithmeticLogicUnit::new(8);
+    #[test]
+    fn arithmetic_logic_unit_and_or_test() {
+        for _ in 0..20 {
+            let num_bits = rand::thread_rng().gen_range(2..16);
+
+            let and_gate = rand::thread_rng().gen_bool(0.5);
+            let gen_randoms_result = generate_random_and_or_inputs_outputs(
+                and_gate,
+                num_bits,
+            );
+
+            let opt =
+                if and_gate {
+                    AluOperations::And
+                } else {
+                    AluOperations::Or
+                };
+
+            run_alu(num_bits, opt, gen_randoms_result);
+        }
     }
 
-    fn arithmetic_logic_unit_and_test() {
-        let alu = ArithmeticLogicUnit::new(8);
-    }
-
+    #[test]
     fn arithmetic_logic_unit_not_test() {
-        let alu = ArithmeticLogicUnit::new(8);
+        for _ in 0..20 {
+            let num_bits = rand::thread_rng().gen_range(2..16);
+
+            let gen_randoms_result = generate_random_not_inputs_outputs(num_bits);
+
+            run_alu(num_bits, AluOperations::Not, gen_randoms_result);
+        }
     }
 
-    fn arithmetic_logic_unit_shift_left_test() {
-        let alu = ArithmeticLogicUnit::new(8);
+    #[test]
+    fn arithmetic_logic_unit_shift_left_right_test() {
+        for _ in 0..20 {
+            let num_bits = rand::thread_rng().gen_range(2..16);
+            let left_shift = rand::thread_rng().gen_bool(0.5);
+
+            let gen_randoms_result = generate_randoms_shl_shr_inputs_outputs(
+                num_bits,
+                left_shift
+            );
+
+            let opt =
+                if left_shift {
+                    AluOperations::Shl
+                } else {
+                    AluOperations::Shr
+                };
+
+            run_alu(num_bits, opt, gen_randoms_result);
+        }
     }
 
-    fn arithmetic_logic_unit_shift_right_test() {
-        let alu = ArithmeticLogicUnit::new(8);
-    }
-
+    #[test]
     fn arithmetic_logic_unit_adder_test() {
-        let alu = ArithmeticLogicUnit::new(8);
+        for _ in 0..20 {
+            let num_bits = rand::thread_rng().gen_range(2..16);
+
+            let gen_randoms_result = generate_randoms_adder_inputs_outputs(num_bits);
+
+            run_alu(num_bits, AluOperations::Adder, gen_randoms_result);
+        }
     }
 }

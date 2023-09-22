@@ -18,19 +18,29 @@ use crate::run_circuit::start_clock;
 
 fn main() {
 
-    //TODO: Rule for the ALU
-    // idx 0 is the least significant bit
-    // idx 7 is the most significant bit
+    //TODO: There are technically a few things to be built still.
+    // Accumulator (This is identical to a VariableBitRegister)
+    // TMP (This is identical to a VariableBitMemoryCell)
+    // Bus (Can probably just make a VariableBitBus or something and connect all the inputs & outputs to it)
+    // Clock (This will need logic on top of what I already have for it).
 
-    //TODO: Make a note inside somewhere for possible optimizations for the ALU
+    //TODO: I can do this
+    // 1) I can make the Control Section
+    //  As I build things inside the Control section I can test the output bits and were they are
+    //  supposed to be at different clock ticks.
 
-    //TODO: need
-    // ALU & don't forget the SignalGatekeeper
-    //  SignalGatekeeper can be put before every gate except the XOR I think, it will need to be
-    //  OFF until the decoder switches it on
+    //TODO: I assume that I will want to accumulate everything in the bus, then propagate it out.
 
+    //TODO: I can probably tie my SignalGatekeeper to the set values of a lot of other places. For
+    // example the RAM, the registers, the memory etc... Otherwise, it will need to propagate through
+    // the entire thing every time.
+
+    //TODO: I wonder if I can tie things together like this to force them to happen only AFTER the
+    // set or enable bit have been changed. Does it matter?
     //TODO: There are other gates I can probably tie together using run_circuit, although I don't
-    // know if it will matter. Any of the ones that have a Vec of gates inside them.
+    // know if it will matter. Any of the ones that have a Vec of gates inside them. However, I think
+    // it only matters if they have a variable number of inputs to the specific blocks inside of them
+    // to avoid the same block from being called twice.
 
     //TODO: With the way that I did run_circuit and grouping the gates before running them, it might
     // be possible to run them in a multithreaded way. Or maybe every time a signal splits I can

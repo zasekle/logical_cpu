@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not, Or, Splitter};
 use crate::logic::complex_logic::VariableBitCPUEnable;
-use crate::logic::foundations::{build_simple_inputs_and_outputs, ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, push_reg_outputs_to_output_gates, Signal, UniqueID};
+use crate::logic::foundations::{build_simple_inputs_and_outputs, build_simple_inputs_and_outputs_with_and, ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, push_reg_outputs_to_output_gates, Signal, UniqueID};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
@@ -888,6 +888,170 @@ impl LogicGate for RAMUnit {
     }
 }
 
+pub struct VariableBitBusOne {
+    complex_gate: ComplexGateMembers,
+    and_gates: Vec<Rc<RefCell<And>>>,
+    or_gate: Rc<RefCell<Or>>,
+    not_gate: Rc<RefCell<Not>>,
+}
+
+#[allow(dead_code)]
+impl VariableBitBusOne {
+    pub fn new(number_bits: usize) -> Rc<RefCell<Self>> {
+        assert_ne!(number_bits, 0);
+
+        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+
+        let mut and_gates =Vec::new();
+
+        build_simple_inputs_and_outputs_with_and(
+            number_bits,
+            &mut input_gates,
+            &mut output_gates,
+            &mut output_gates_logic,
+            &mut and_gates,
+        );
+
+        and_gates.pop();
+
+        let set_input_gate = SimpleInput::new(2, "BUS_1");
+
+        input_gates.push(set_input_gate.clone());
+
+        let mut bit_register = VariableBitBusOne {
+            complex_gate: ComplexGateMembers::new(
+                number_bits + 1,
+                number_bits,
+                GateType::VariableBitBusOneType,
+                input_gates,
+                output_gates,
+            ),
+            and_gates,
+            or_gate: Or::new(2, 1),
+            not_gate: Not::new(number_bits - 1),
+        };
+
+        bit_register.build_and_prime_circuit(number_bits, output_gates_logic);
+
+        Rc::new(RefCell::new(bit_register))
+    }
+
+    fn build_and_prime_circuit(
+        &mut self,
+        number_bits: usize,
+        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+    ) {
+        let bus_one_input = self.complex_gate.input_gates[self.get_index_from_tag("BUS_1")].clone();
+
+        bus_one_input.borrow_mut().connect_output_to_next_gate(
+            0,
+            0,
+            self.not_gate.clone(),
+        );
+
+        for i in 0..number_bits {
+            let mut input_gate = self.complex_gate.input_gates[i].borrow_mut();
+
+            if i == 0 {
+                input_gate.connect_output_to_next_gate(
+                    0,
+                    0,
+                    self.or_gate.clone(),
+                );
+
+                bus_one_input.borrow_mut().connect_output_to_next_gate(
+                    1,
+                    1,
+                    self.or_gate.clone(),
+                );
+
+                self.or_gate.borrow_mut().connect_output_to_next_gate(
+                    0,
+                    0,
+                    output_gates[i].clone(),
+                );
+            } else {
+                input_gate.connect_output_to_next_gate(
+                    0,
+                    0,
+                    self.and_gates[i - 1].clone(),
+                );
+
+                self.not_gate.borrow_mut().connect_output_to_next_gate(
+                    i - 1,
+                    1,
+                    self.and_gates[i - 1].clone(),
+                );
+
+                self.and_gates[i - 1].borrow_mut().connect_output_to_next_gate(
+                    0,
+                    0,
+                    output_gates[i].clone(),
+                );
+            }
+        }
+
+        //Prime gates
+        self.complex_gate.calculate_output_from_inputs(
+            true,
+            None,
+        );
+    }
+}
+
+impl LogicGate for VariableBitBusOne {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+        self.complex_gate.connect_output_to_next_gate(
+            self.get_unique_id(),
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+        );
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        //ActiveLowSRLatch has an `invalid` state of LOW LOW. However, this is not being enforced by
+        // assertions because it may be an intermediate state.
+        self.complex_gate.update_input_signal(input)
+    }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals(
+            &self.get_tag(),
+            None,
+        )
+    }
+
+    fn get_gate_type(&self) -> GateType {
+        self.complex_gate.simple_gate.gate_type
+    }
+
+    fn get_unique_id(&self) -> UniqueID {
+        self.complex_gate.simple_gate.unique_id
+    }
+
+    fn toggle_output_printing(&mut self, print_output: bool) {
+        self.complex_gate.simple_gate.should_print_output = print_output;
+    }
+
+    fn get_tag(&self) -> String {
+        self.complex_gate.simple_gate.tag.clone()
+    }
+
+    fn set_tag(&mut self, tag: &str) {
+        self.complex_gate.simple_gate.tag = tag.to_string();
+    }
+
+    fn get_index_from_tag(&self, tag: &str) -> usize {
+        self.complex_gate.get_index_from_tag(tag)
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+}
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -1191,6 +1355,31 @@ mod tests {
                 ]
             ),
             RAMUnit::new(3, 1),
+        );
+    }
+
+    #[test]
+    fn variable_bit_bus_one_test() {
+        //If the BUS_1 input is HIGH, the output returns one. Otherwise, it passes the input
+        // through.
+        let num_bits = 8;
+        let mut one_signals = vec![LOW; num_bits];
+        one_signals[0] = HIGH;
+        run_multi_input_output_logic_gate(
+            vec![
+                vec![HIGH; num_bits],
+                vec![HIGH; num_bits],
+            ],
+            vec![
+                vec![HIGH; num_bits],
+                one_signals,
+            ],
+            HashMap::from(
+                [
+                    ("BUS_1", vec![vec![LOW], vec![HIGH]]),
+                ]
+            ),
+            VariableBitBusOne::new(num_bits),
         );
     }
 }

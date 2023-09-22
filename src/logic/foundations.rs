@@ -90,6 +90,7 @@ impl GateInput {
     }
 }
 
+#[derive(Debug)]
 pub struct InputSignalReturn {
     pub changed_count_this_tick: usize,
     pub input_signal_updated: bool,
@@ -234,6 +235,9 @@ pub enum GateType {
     VariableBitZType,
     VariableBitEnableType,
     ArithmeticLogicUnitType,
+    VariableBitBusOneType,
+    VariableOutputStepperType,
+    ControlSectionType,
 }
 
 impl fmt::Display for GateType {
@@ -274,6 +278,9 @@ impl fmt::Display for GateType {
             GateType::VariableBitZType => "VARIABLE_BIT_Z",
             GateType::VariableBitEnableType => "VARIABLE_BIT_ENABLE",
             GateType::ArithmeticLogicUnitType => "ARITHMETIC_LOGIC_UNIT",
+            GateType::VariableBitBusOneType => "VARIABLE_BIT_BUS_ONE",
+            GateType::VariableOutputStepperType => "VARIABLE_OUTPUT_STEPPER",
+            GateType::ControlSectionType => "CONTROL_SECTION",
         };
         write!(f, "{}", printable)
     }
