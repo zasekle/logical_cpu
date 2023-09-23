@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn, ConnectedOutput, calculate_input_signals_from_all_inputs, Signal, calculate_input_signal_from_single_inputs};
-use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
+use crate::logic::foundations::Signal::{HIGH, LOW_, NONE};
 
 pub struct Or {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
 }
 
 #[allow(dead_code)]
@@ -69,7 +69,7 @@ impl LogicGate for Or {
 }
 
 pub struct And {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
 }
 
 #[allow(dead_code)]
@@ -133,7 +133,7 @@ impl LogicGate for And {
 }
 
 pub struct Not {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
 }
 
 #[allow(dead_code)]
@@ -197,7 +197,7 @@ impl LogicGate for Not {
 }
 
 pub struct Nor {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
 }
 
 #[allow(dead_code)]
@@ -261,7 +261,7 @@ impl LogicGate for Nor {
 }
 
 pub struct Nand {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
 }
 
 #[allow(dead_code)]
@@ -325,7 +325,7 @@ impl LogicGate for Nand {
 }
 
 pub struct XOr {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
 }
 
 impl XOr {
@@ -387,7 +387,7 @@ impl LogicGate for XOr {
     }
 }
 pub struct Splitter {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
     outputs_per_input: usize,
 }
 
@@ -401,7 +401,7 @@ impl Splitter {
                         input_num,
                         input_num * outputs_per_input,
                         GateType::SplitterType,
-                        Some(LOW),
+                        Some(LOW_),
                     ),
                     outputs_per_input,
                 }
@@ -502,7 +502,7 @@ impl LogicGate for Splitter {
 }
 
 pub struct ControlledBuffer {
-    members: BasicGateMembers,
+    pub members: BasicGateMembers,
 }
 
 #[allow(dead_code)]
@@ -651,7 +651,7 @@ mod tests {
     use rand::Rng;
     use crate::globals::CLOCK_TICK_NUMBER;
     use crate::logic::foundations::{ComplexGateMembers, Signal};
-    use crate::logic::foundations::Signal::{HIGH, LOW};
+    use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::{AutomaticInput, SimpleInput};
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
     use crate::run_circuit::run_circuit;
@@ -717,9 +717,9 @@ mod tests {
 
         test_simple_gate(
             or_gate,
-            LOW,
-            Some(LOW),
-            LOW,
+            LOW_,
+            Some(LOW_),
+            LOW_,
         );
     }
 
@@ -729,7 +729,7 @@ mod tests {
 
         test_simple_gate(
             or_gate,
-            LOW,
+            LOW_,
             Some(HIGH),
             HIGH,
         );
@@ -742,7 +742,7 @@ mod tests {
         test_simple_gate(
             or_gate,
             HIGH,
-            Some(LOW),
+            Some(LOW_),
             HIGH,
         );
     }
@@ -765,9 +765,9 @@ mod tests {
 
         test_simple_gate(
             and_gate,
-            LOW,
-            Some(LOW),
-            LOW,
+            LOW_,
+            Some(LOW_),
+            LOW_,
         );
     }
 
@@ -777,9 +777,9 @@ mod tests {
 
         test_simple_gate(
             and_gate,
-            LOW,
+            LOW_,
             Some(HIGH),
-            LOW,
+            LOW_,
         );
     }
 
@@ -790,8 +790,8 @@ mod tests {
         test_simple_gate(
             and_gate,
             HIGH,
-            Some(LOW),
-            LOW,
+            Some(LOW_),
+            LOW_,
         );
     }
 
@@ -813,7 +813,7 @@ mod tests {
 
         test_simple_gate(
             not_gate,
-            LOW,
+            LOW_,
             None,
             HIGH,
         );
@@ -827,7 +827,7 @@ mod tests {
             not_gate,
             HIGH,
             None,
-            LOW,
+            LOW_,
         );
     }
 
@@ -837,8 +837,8 @@ mod tests {
 
         test_simple_gate(
             nor_gate,
-            LOW,
-            Some(LOW),
+            LOW_,
+            Some(LOW_),
             HIGH,
         );
     }
@@ -849,9 +849,9 @@ mod tests {
 
         test_simple_gate(
             nor_gate,
-            LOW,
+            LOW_,
             Some(HIGH),
-            LOW,
+            LOW_,
         );
     }
 
@@ -862,8 +862,8 @@ mod tests {
         test_simple_gate(
             nor_gate,
             HIGH,
-            Some(LOW),
-            LOW,
+            Some(LOW_),
+            LOW_,
         );
     }
 
@@ -875,7 +875,7 @@ mod tests {
             nor_gate,
             HIGH,
             Some(HIGH),
-            LOW,
+            LOW_,
         );
     }
 
@@ -885,8 +885,8 @@ mod tests {
 
         test_simple_gate(
             nand_gate,
-            LOW,
-            Some(LOW),
+            LOW_,
+            Some(LOW_),
             HIGH,
         );
     }
@@ -898,7 +898,7 @@ mod tests {
         test_simple_gate(
             nand_gate,
             HIGH,
-            Some(LOW),
+            Some(LOW_),
             HIGH,
         );
     }
@@ -909,7 +909,7 @@ mod tests {
 
         test_simple_gate(
             nand_gate,
-            LOW,
+            LOW_,
             Some(HIGH),
             HIGH,
         );
@@ -923,7 +923,7 @@ mod tests {
             nand_gate,
             HIGH,
             Some(HIGH),
-            LOW,
+            LOW_,
         );
     }
 
@@ -933,9 +933,9 @@ mod tests {
 
         test_simple_gate(
             xor_gate,
-            LOW,
-            Some(LOW),
-            LOW,
+            LOW_,
+            Some(LOW_),
+            LOW_,
         );
     }
 
@@ -945,7 +945,7 @@ mod tests {
 
         test_simple_gate(
             xor_gate,
-            LOW,
+            LOW_,
             Some(HIGH),
             HIGH,
         );
@@ -958,7 +958,7 @@ mod tests {
         test_simple_gate(
             xor_gate,
             HIGH,
-            Some(LOW),
+            Some(LOW_),
             HIGH,
         );
     }
@@ -971,7 +971,7 @@ mod tests {
             xor_gate,
             HIGH,
             Some(HIGH),
-            LOW,
+            LOW_,
         );
     }
 
@@ -1013,7 +1013,7 @@ mod tests {
 
     #[test]
     fn test_controlled_buffer_low() {
-        test_controlled_buffer(LOW);
+        test_controlled_buffer(LOW_);
     }
 
     #[test]
@@ -1026,18 +1026,18 @@ mod tests {
 
         let output_gate = SimpleOutput::new("OUT");
 
-        let single_enable_input_gate = AutomaticInput::new(vec![LOW, LOW, LOW, LOW, HIGH, HIGH, HIGH, HIGH], 1, "Single_Enable");
+        let single_enable_input_gate = AutomaticInput::new(vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH], 1, "Single_Enable");
         // If this value goes high, the value will be unpredictable.
-        let other_enable_input_gates = AutomaticInput::new(vec![LOW; 8], num_gates - 1, "Other_Enable");
+        let other_enable_input_gates = AutomaticInput::new(vec![LOW_; 8], num_gates - 1, "Other_Enable");
 
-        let output_signal = vec![[NONE], [NONE], [NONE], [NONE], [HIGH], [HIGH], [LOW], [LOW]];
+        let output_signal = vec![[NONE], [NONE], [NONE], [NONE], [HIGH], [HIGH], [LOW_], [LOW_]];
 
         for i in 0..num_gates {
             let input_gate =
                 if i == throughput_gate_index {
-                    AutomaticInput::new(vec![HIGH, HIGH, LOW, LOW, HIGH, HIGH, LOW, LOW], 1, "Start_Throughput")
+                    AutomaticInput::new(vec![HIGH, HIGH, LOW_, LOW_, HIGH, HIGH, LOW_, LOW_], 1, "Start_Throughput")
                 } else {
-                    AutomaticInput::new(vec![HIGH, LOW, HIGH, LOW, HIGH, LOW, HIGH, LOW], 1, "Start_Normal")
+                    AutomaticInput::new(vec![HIGH, LOW_, HIGH, LOW_, HIGH, LOW_, HIGH, LOW_], 1, "Start_Normal")
                 };
 
             let controlled_buffer = ControlledBuffer::new(1);
@@ -1219,7 +1219,7 @@ mod tests {
                 self.controlled_buffer.borrow_mut().update_input_signal(
                     GateInput::new(
                         enable_index,
-                        LOW,
+                        LOW_,
                         UniqueID::zero_id(),
                     )
                 );
@@ -1337,7 +1337,7 @@ mod tests {
         for i in 0..input_num {
             let signal_num = rand::thread_rng().gen_range(0..=2);
             let signal = match signal_num {
-                0 => LOW,
+                0 => LOW_,
                 1 => HIGH,
                 _ => NONE,
             };

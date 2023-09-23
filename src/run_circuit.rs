@@ -198,7 +198,7 @@ pub fn run_circuit<F>(
 mod tests {
     use std::time::Duration;
     use crate::logic::basic_gates::{Not, Or};
-    use crate::logic::foundations::Signal::{HIGH, LOW};
+    use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::AutomaticInput;
     use crate::logic::output_gates::SimpleOutput;
     use crate::run_circuit::run_circuit;
@@ -337,7 +337,7 @@ mod tests {
     // should be changed to HIGH.
     #[test]
     fn first_tick_propagates() {
-        let input_gate = AutomaticInput::new(vec![LOW], 1, "");
+        let input_gate = AutomaticInput::new(vec![LOW_], 1, "");
         let output_gate = SimpleOutput::new("");
         let not_gate = Not::new(1);
 
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn multiple_ticks() {
-        let input_gate = AutomaticInput::new(vec![LOW, HIGH, HIGH], 1, "");
+        let input_gate = AutomaticInput::new(vec![LOW_, HIGH, HIGH], 1, "");
         let output_gate = SimpleOutput::new("");
         let not_gate = Not::new(1);
 
@@ -392,7 +392,7 @@ mod tests {
             output_gate.clone(),
         );
 
-        let expected_outputs = vec![HIGH, LOW, LOW];
+        let expected_outputs = vec![HIGH, LOW_, LOW_];
         let mut current_index = 0;
 
         start_clock(

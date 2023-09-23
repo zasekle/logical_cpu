@@ -67,6 +67,22 @@ pub fn run_multi_input_output_logic_gate(
     tagged_input_signal: HashMap<&str, Vec<Vec<Signal>>>,
     gate: Rc<RefCell<dyn LogicGate>>,
 ) {
+    let collected_output = run_multi_input_output_logic_gate_return(
+        input_signals,
+        &output_signal,
+        tagged_input_signal,
+        gate,
+    );
+
+    assert_eq!(collected_output, output_signal);
+}
+
+pub fn run_multi_input_output_logic_gate_return(
+    input_signals: Vec<Vec<Signal>>,
+    output_signal: &Vec<Vec<Signal>>,
+    tagged_input_signal: HashMap<&str, Vec<Vec<Signal>>>,
+    gate: Rc<RefCell<dyn LogicGate>>,
+) -> Vec<Vec<Signal>> {
     let num_outputs = output_signal[0].len();
 
     let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
@@ -197,8 +213,7 @@ pub fn run_multi_input_output_logic_gate(
 
         propagate_signal_through_circuit = false;
     }
-
-    assert_eq!(collected_output, output_signal);
+    collected_output
 }
 
 pub fn collect_outputs_from_output_gates(output_gates: &&Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>, single_collected_output: &mut Vec<Signal>) {

@@ -7,11 +7,11 @@ use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
 #[allow(unused_imports)]
-use crate::logic::foundations::Signal::{LOW, HIGH};
+use crate::logic::foundations::Signal::{LOW_, HIGH};
 use crate::logic::memory_gates::OneBitMemoryCell;
 
 pub struct VariableOutputStepper {
-    complex_gate: ComplexGateMembers,
+    pub complex_gate: ComplexGateMembers,
     mem_cells: Vec<Rc<RefCell<OneBitMemoryCell>>>,
     output_and_gates: Vec<Rc<RefCell<And>>>,
     output_not_gates: Vec<Rc<RefCell<Not>>>,
@@ -602,7 +602,7 @@ impl LogicGate for SignalGatekeeper {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use crate::logic::foundations::Signal::{HIGH, LOW};
+    use crate::logic::foundations::Signal::{HIGH, LOW_};
     use rand::Rng;
     use crate::test_stuff::run_multi_input_output_logic_gate;
     use super::*;
@@ -618,7 +618,7 @@ mod tests {
         for out in output {
             match out {
                 GateOutputState::NotConnected(signal) => {
-                    assert_eq!(signal, LOW);
+                    assert_eq!(signal, LOW_);
                 }
                 GateOutputState::Connected(_) => panic!("Final output gate should never be connected.")
             }
@@ -629,17 +629,17 @@ mod tests {
     fn cpu_enable_inputs_change() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, HIGH, LOW],
-                vec![HIGH, HIGH, LOW],
-                vec![LOW, HIGH, LOW],
+                vec![HIGH, HIGH, LOW_],
+                vec![HIGH, HIGH, LOW_],
+                vec![LOW_, HIGH, LOW_],
             ],
             vec![
-                vec![HIGH, HIGH, LOW],
-                vec![LOW, LOW, LOW],
-                vec![LOW, HIGH, LOW],
+                vec![HIGH, HIGH, LOW_],
+                vec![LOW_, LOW_, LOW_],
+                vec![LOW_, HIGH, LOW_],
             ],
             HashMap::from(
-                [("E", vec![vec![HIGH], vec![LOW], vec![HIGH]])]
+                [("E", vec![vec![HIGH], vec![LOW_], vec![HIGH]])]
             ),
             VariableBitCPUEnable::new(3),
         );
@@ -649,15 +649,15 @@ mod tests {
     fn signal_gatekeeper_tests() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, HIGH, LOW],
-                vec![HIGH, HIGH, LOW],
+                vec![HIGH, HIGH, LOW_],
+                vec![HIGH, HIGH, LOW_],
             ],
             vec![
-                vec![LOW, LOW, LOW],
-                vec![HIGH, HIGH, LOW],
+                vec![LOW_, LOW_, LOW_],
+                vec![HIGH, HIGH, LOW_],
             ],
             HashMap::from(
-                [("E", vec![vec![LOW], vec![HIGH]])]
+                [("E", vec![vec![LOW_], vec![HIGH]])]
             ),
             SignalGatekeeper::new(3),
         );
@@ -668,35 +668,35 @@ mod tests {
         run_multi_input_output_logic_gate(
             vec![],
             vec![
-                vec![HIGH, LOW, LOW, LOW, LOW, LOW], //0
-                vec![HIGH, LOW, LOW, LOW, LOW, LOW],
-                vec![LOW, HIGH, LOW, LOW, LOW, LOW], //1
-                vec![LOW, HIGH, LOW, LOW, LOW, LOW],
-                vec![LOW, LOW, HIGH, LOW, LOW, LOW], //2
-                vec![LOW, LOW, HIGH, LOW, LOW, LOW],
-                vec![LOW, LOW, LOW, HIGH, LOW, LOW], //3
-                vec![LOW, LOW, LOW, HIGH, LOW, LOW],
-                vec![LOW, LOW, LOW, LOW, HIGH, LOW], //4
-                vec![LOW, LOW, LOW, LOW, HIGH, LOW],
-                vec![LOW, LOW, LOW, LOW, LOW, HIGH], //5
-                vec![LOW, LOW, LOW, LOW, LOW, HIGH],
-                vec![HIGH, LOW, LOW, LOW, LOW, LOW], //0
+                vec![HIGH, LOW_, LOW_, LOW_, LOW_, LOW_], //0
+                vec![HIGH, LOW_, LOW_, LOW_, LOW_, LOW_],
+                vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_], //1
+                vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_],
+                vec![LOW_, LOW_, HIGH, LOW_, LOW_, LOW_], //2
+                vec![LOW_, LOW_, HIGH, LOW_, LOW_, LOW_],
+                vec![LOW_, LOW_, LOW_, HIGH, LOW_, LOW_], //3
+                vec![LOW_, LOW_, LOW_, HIGH, LOW_, LOW_],
+                vec![LOW_, LOW_, LOW_, LOW_, HIGH, LOW_], //4
+                vec![LOW_, LOW_, LOW_, LOW_, HIGH, LOW_],
+                vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH], //5
+                vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH],
+                vec![HIGH, LOW_, LOW_, LOW_, LOW_, LOW_], //0
             ],
             HashMap::from(
                 [("CLK", vec![
-                    vec![LOW], //0
+                    vec![LOW_], //0
                     vec![HIGH],
-                    vec![LOW], //1
+                    vec![LOW_], //1
                     vec![HIGH],
-                    vec![LOW], //2
+                    vec![LOW_], //2
                     vec![HIGH],
-                    vec![LOW], //3
+                    vec![LOW_], //3
                     vec![HIGH],
-                    vec![LOW], //4
+                    vec![LOW_], //4
                     vec![HIGH],
-                    vec![LOW], //5
+                    vec![LOW_], //5
                     vec![HIGH],
-                    vec![LOW], //0
+                    vec![LOW_], //0
                 ])]
             ),
             VariableOutputStepper::new(6),

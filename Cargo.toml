@@ -8,3 +8,10 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 backtrace = "0.3.69"
+
+# This will add two restrictions to the code.
+# 1) No input can have multiple outputs connected to it.
+# 2) Any input can only connect once, if another attempt to connect is made, it will panic.
+# Note that this is more for specific testing purposes. The CPU will not build or run if it is enabled.
+[features]
+high_restriction = []

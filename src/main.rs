@@ -44,7 +44,11 @@ fn main() {
 
     //TODO: With the way that I did run_circuit and grouping the gates before running them, it might
     // be possible to run them in a multithreaded way. Or maybe every time a signal splits I can
-    // make a new thread (or a new task to pass into a thread pool at least).
+    // make a new thread (or a new task to pass into a thread pool at least). Or I could just make
+    // multiple processors connected to the same RAM and executing different instructions lol.
+
+    //TODO: The reset pin on the ControlUnit relies on all registers being set to pull down, so if
+    // they get NONE as the input, they need the bits to be set low.
 
     //Remember that when running stuff in the registers, there is always the possibility that
     // multiple clock ticks are needed. The first will do something like enable the `Set` bit. The

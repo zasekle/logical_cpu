@@ -27,7 +27,7 @@ impl SimpleOutput {
         Rc::new(
             RefCell::new(
                 SimpleOutput {
-                    output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW)]),
+                    output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW_)]),
                     unique_id: UniqueID::generate(),
                     oscillation_detection: OscillationDetection::new(),
                     should_print_output: false,

@@ -4,7 +4,7 @@ use crate::logic::basic_gates::{And, ControlledBuffer, Not, Or, Splitter, XOr};
 use crate::logic::complex_logic::SignalGatekeeper;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, InputSignalReturn, Signal, ComplexGateMembers, build_simple_inputs_and_outputs};
-use crate::logic::foundations::Signal::{HIGH, LOW};
+use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::{VariableBitRegister, VariableDecoder};
@@ -1420,7 +1420,7 @@ impl VariableBitXOrLE {
                 self.xor_le_gates[i].borrow_mut().update_input_signal(
                     GateInput::new(
                         xor_larger_input_index,
-                        LOW,
+                        LOW_,
                         UniqueID::zero_id(),
                     )
                 );
@@ -1804,13 +1804,13 @@ impl AluOperations {
     fn get_vectors(alu_operation: AluOperations) -> AluReturns {
         match alu_operation {
             AluOperations::None => AluReturns::new(HIGH, HIGH, HIGH),
-            AluOperations::XOrLe => AluReturns::new(HIGH, HIGH, LOW),
-            AluOperations::Or => AluReturns::new(HIGH, LOW, HIGH),
-            AluOperations::And => AluReturns::new(HIGH, LOW, LOW),
-            AluOperations::Not => AluReturns::new(LOW, HIGH, HIGH),
-            AluOperations::Shl => AluReturns::new(LOW, HIGH, LOW),
-            AluOperations::Shr => AluReturns::new(LOW, LOW, HIGH),
-            AluOperations::Adder => AluReturns::new(LOW, LOW, LOW),
+            AluOperations::XOrLe => AluReturns::new(HIGH, HIGH, LOW_),
+            AluOperations::Or => AluReturns::new(HIGH, LOW_, HIGH),
+            AluOperations::And => AluReturns::new(HIGH, LOW_, LOW_),
+            AluOperations::Not => AluReturns::new(LOW_, HIGH, HIGH),
+            AluOperations::Shl => AluReturns::new(LOW_, HIGH, LOW_),
+            AluOperations::Shr => AluReturns::new(LOW_, LOW_, HIGH),
+            AluOperations::Adder => AluReturns::new(LOW_, LOW_, LOW_),
         }
     }
 }
@@ -2647,7 +2647,7 @@ mod tests {
     use std::collections::HashMap;
     use rand::Rng;
     use crate::logic::foundations::Signal;
-    use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
+    use crate::logic::foundations::Signal::{HIGH, LOW_, NONE};
     use crate::test_stuff::run_multi_input_output_logic_gate;
     use super::*;
 
@@ -2701,7 +2701,7 @@ mod tests {
 
     fn convert_char_to_signal_and_num(c: char) -> (Signal, usize) {
         if c == '0' {
-            (LOW, 0)
+            (LOW_, 0)
         } else {
             (HIGH, 1)
         }
@@ -2709,7 +2709,7 @@ mod tests {
 
     fn convert_num_to_signal(j: usize) -> Signal {
         if j == 0 {
-            LOW
+            LOW_
         } else {
             HIGH
         }
@@ -2717,7 +2717,7 @@ mod tests {
 
     fn convert_bool_to_signal(b: bool) -> Signal {
         if !b {
-            LOW
+            LOW_
         } else {
             HIGH
         }
@@ -2776,6 +2776,7 @@ mod tests {
         let alu = ArithmeticLogicUnit::new(num_bits);
         let alu_operation = AluOperations::get_vectors(opt);
 
+        //a=LOW b=LOW c=HIGH
         run_multi_input_output_logic_gate(
             vec![],
             vec![
@@ -2788,7 +2789,7 @@ mod tests {
                     ("A", vec![alu_operation.a]),
                     ("B", vec![alu_operation.b]),
                     ("C", vec![alu_operation.c]),
-                    ("C_IN", vec![vec![LOW]]),
+                    ("C_IN", vec![vec![LOW_]]),
                 ]
             ),
             alu,
@@ -2902,7 +2903,7 @@ mod tests {
             0,
             result as usize,
             input,
-            vec![LOW; num_bits],
+            vec![LOW_; num_bits],
             output,
             NONE,
         )
@@ -2953,7 +2954,7 @@ mod tests {
             0,
             result,
             a_input,
-            vec![LOW; num_bits],
+            vec![LOW_; num_bits],
             result_output,
             shift_out,
         )
@@ -3001,20 +3002,20 @@ mod tests {
     #[test]
     fn half_adder_low_low() {
         test_half_adder(
-            LOW,
-            LOW,
-            LOW,
-            LOW,
+            LOW_,
+            LOW_,
+            LOW_,
+            LOW_,
         );
     }
 
     #[test]
     fn half_adder_low_high() {
         test_half_adder(
-            LOW,
+            LOW_,
             HIGH,
             HIGH,
-            LOW,
+            LOW_,
         );
     }
 
@@ -3022,9 +3023,9 @@ mod tests {
     fn half_adder_high_low() {
         test_half_adder(
             HIGH,
-            LOW,
+            LOW_,
             HIGH,
-            LOW,
+            LOW_,
         );
     }
 
@@ -3033,7 +3034,7 @@ mod tests {
         test_half_adder(
             HIGH,
             HIGH,
-            LOW,
+            LOW_,
             HIGH,
         );
     }
@@ -3041,43 +3042,43 @@ mod tests {
     #[test]
     fn full_adder_low_low_low() {
         test_full_adder(
-            LOW,
-            LOW,
-            LOW,
-            LOW,
-            LOW,
+            LOW_,
+            LOW_,
+            LOW_,
+            LOW_,
+            LOW_,
         );
     }
 
     #[test]
     fn full_adder_low_low_high() {
         test_full_adder(
-            LOW,
-            LOW,
+            LOW_,
+            LOW_,
             HIGH,
             HIGH,
-            LOW,
+            LOW_,
         );
     }
 
     #[test]
     fn full_adder_low_high_low() {
         test_full_adder(
-            LOW,
+            LOW_,
             HIGH,
-            LOW,
+            LOW_,
             HIGH,
-            LOW,
+            LOW_,
         );
     }
 
     #[test]
     fn full_adder_low_high_high() {
         test_full_adder(
-            LOW,
+            LOW_,
             HIGH,
             HIGH,
-            LOW,
+            LOW_,
             HIGH,
         );
     }
@@ -3086,10 +3087,10 @@ mod tests {
     fn full_adder_high_low_low() {
         test_full_adder(
             HIGH,
-            LOW,
-            LOW,
+            LOW_,
+            LOW_,
             HIGH,
-            LOW,
+            LOW_,
         );
     }
 
@@ -3097,9 +3098,9 @@ mod tests {
     fn full_adder_high_low_high() {
         test_full_adder(
             HIGH,
-            LOW,
+            LOW_,
             HIGH,
-            LOW,
+            LOW_,
             HIGH,
         );
     }
@@ -3109,8 +3110,8 @@ mod tests {
         test_full_adder(
             HIGH,
             HIGH,
-            LOW,
-            LOW,
+            LOW_,
+            LOW_,
             HIGH,
         );
     }
@@ -3132,7 +3133,7 @@ mod tests {
         let mut vec = Vec::new();
         for c in binary.chars().rev() {
             if c == '0' {
-                vec.push(LOW);
+                vec.push(LOW_);
             } else {
                 vec.push(HIGH);
             }
@@ -3159,7 +3160,7 @@ mod tests {
                     [
                         ("a", vec![gen_randoms_result.a_input_signals]),
                         ("b", vec![gen_randoms_result.b_input_signals]),
-                        ("C_IN", vec![vec![LOW]]),
+                        ("C_IN", vec![vec![LOW_]]),
                     ]
                 ),
                 variable_bit_adder,
@@ -3332,12 +3333,12 @@ mod tests {
     fn variable_z_gate_tests() {
         let num_bits = 4;
         for i in 0..=num_bits {
-            let mut input_vector = vec![LOW; num_bits];
+            let mut input_vector = vec![LOW_; num_bits];
             let mut output_vector = vec![HIGH];
 
             if i != num_bits {
                 input_vector[i] = HIGH;
-                output_vector[0] = LOW;
+                output_vector[0] = LOW_;
             }
 
             let variable_z = VariableBitZ::new(num_bits);
@@ -3361,7 +3362,7 @@ mod tests {
             let num_bits = rand::thread_rng().gen_range(2..16);
 
             let mut rng = rand::thread_rng();
-            let signals = [NONE, LOW, HIGH];
+            let signals = [NONE, LOW_, HIGH];
 
             let input: Vec<Signal> = (0..num_bits)
                 .map(|_| {
@@ -3374,7 +3375,7 @@ mod tests {
             let enable = vec![signals[idx].clone()];
 
             let output =
-                if *enable.first().unwrap() == LOW {
+                if *enable.first().unwrap() == LOW_ {
                     vec![NONE; num_bits]
                 } else {
                     input.clone()
@@ -3411,7 +3412,7 @@ mod tests {
         let b_input_signals = vec![HIGH; num_bits];
         let mut output = vec![NONE; num_bits];
 
-        output.push(LOW);  //A Larger  (A_L)
+        output.push(LOW_);  //A Larger  (A_L)
         output.push(HIGH); //Equal     (EQ)
         output.push(HIGH); //Zero      (Z)
         output.push(NONE); //Carry Out (C_OUT)
@@ -3442,11 +3443,11 @@ mod tests {
     fn arithmetic_logic_unit_zero_test() {
         let num_bits = rand::thread_rng().gen_range(2..16);
 
-        let a_input_signals = vec![LOW; num_bits];
-        let b_input_signals = vec![LOW; num_bits];
-        let mut output = vec![LOW; num_bits];
+        let a_input_signals = vec![LOW_; num_bits];
+        let b_input_signals = vec![LOW_; num_bits];
+        let mut output = vec![LOW_; num_bits];
 
-        output.push(LOW);  //A Larger  (A_L)
+        output.push(LOW_);  //A Larger  (A_L)
         output.push(HIGH); //Equal     (EQ)
         output.push(HIGH); //Zero      (Z)
         output.push(NONE); //Carry Out (C_OUT)
@@ -3467,7 +3468,7 @@ mod tests {
                     ("A", vec![alu_operation.a]),
                     ("B", vec![alu_operation.b]),
                     ("C", vec![alu_operation.c]),
-                    ("C_IN", vec![vec![LOW]]),
+                    ("C_IN", vec![vec![LOW_]]),
                 ]
             ),
             alu,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, InputSignalReturn, BasicGateMembers};
-use crate::logic::foundations::{Signal::{HIGH, LOW}};
+use crate::logic::foundations::{Signal::{HIGH, LOW_}};
 
 pub struct Clock {
     output_states: Vec<GateOutputState>,
@@ -233,7 +233,7 @@ impl SimpleInput {
                         1,
                         output_num,
                         GateType::SimpleInputType,
-                        Some(LOW),
+                        Some(LOW_),
                     ),
                     tag: String::from(tag),
                 }

@@ -7,7 +7,7 @@ use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
 #[allow(unused_imports)]
-use crate::logic::foundations::Signal::{LOW, HIGH};
+use crate::logic::foundations::Signal::{LOW_, HIGH};
 use crate::logic::memory_gates::VariableBitMemoryCell;
 
 pub struct VariableBitRegister {
@@ -189,7 +189,7 @@ impl LogicGate for VariableBitRegister {
 }
 
 pub struct VariableDecoder {
-    complex_gate: ComplexGateMembers,
+    pub complex_gate: ComplexGateMembers,
     and_gates: Vec<Rc<RefCell<And>>>,
     not_gates: Vec<Rc<RefCell<Not>>>,
 }
@@ -1055,7 +1055,7 @@ impl LogicGate for VariableBitBusOne {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
+    use crate::logic::foundations::Signal::{HIGH, LOW_, NONE};
     use rand::Rng;
     use crate::test_stuff::run_multi_input_output_logic_gate;
     use super::*;
@@ -1074,7 +1074,7 @@ mod tests {
                     if i < num_bits {
                         assert_eq!(signal, NONE);
                     } else {
-                        assert_eq!(signal, LOW);
+                        assert_eq!(signal, LOW_);
                     }
                 }
                 GateOutputState::Connected(_) => panic!("Final output gate should never be connected.")
@@ -1086,10 +1086,10 @@ mod tests {
     fn processor_register_simple_test() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, HIGH, LOW]
+                vec![HIGH, HIGH, LOW_]
             ],
             vec![
-                vec![HIGH, HIGH, LOW, HIGH, HIGH, LOW],
+                vec![HIGH, HIGH, LOW_, HIGH, HIGH, LOW_],
             ],
             HashMap::from(
                 [
@@ -1105,16 +1105,16 @@ mod tests {
     fn processor_register_set_bit_low() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, LOW, HIGH],
-                vec![HIGH, HIGH, LOW],
+                vec![HIGH, LOW_, HIGH],
+                vec![HIGH, HIGH, LOW_],
             ],
             vec![
-                vec![HIGH, LOW, HIGH, HIGH, LOW, HIGH],
-                vec![HIGH, LOW, HIGH, HIGH, LOW, HIGH],
+                vec![HIGH, LOW_, HIGH, HIGH, LOW_, HIGH],
+                vec![HIGH, LOW_, HIGH, HIGH, LOW_, HIGH],
             ],
             HashMap::from(
                 [
-                    ("S", vec![vec![HIGH], vec![LOW]]),
+                    ("S", vec![vec![HIGH], vec![LOW_]]),
                     ("E", vec![vec![HIGH], vec![HIGH]])
                 ],
             ),
@@ -1126,26 +1126,26 @@ mod tests {
     fn processor_register_enable_bit_low() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, LOW, HIGH, HIGH],
-                vec![HIGH, LOW, HIGH, HIGH],
-                vec![HIGH, HIGH, LOW, LOW],
+                vec![HIGH, LOW_, HIGH, HIGH],
+                vec![HIGH, LOW_, HIGH, HIGH],
+                vec![HIGH, HIGH, LOW_, LOW_],
             ],
             vec![
-                vec![HIGH, LOW, HIGH, HIGH, HIGH, LOW, HIGH, HIGH],
-                vec![NONE, NONE, NONE, NONE, HIGH, LOW, HIGH, HIGH],
-                vec![NONE, NONE, NONE, NONE, HIGH, LOW, HIGH, HIGH],
+                vec![HIGH, LOW_, HIGH, HIGH, HIGH, LOW_, HIGH, HIGH],
+                vec![NONE, NONE, NONE, NONE, HIGH, LOW_, HIGH, HIGH],
+                vec![NONE, NONE, NONE, NONE, HIGH, LOW_, HIGH, HIGH],
             ],
             HashMap::from(
                 [
                     ("S", vec![
                         vec![HIGH],
                         vec![HIGH],
-                        vec![LOW],
+                        vec![LOW_],
                     ]),
                     ("E", vec![
                         vec![HIGH],
-                        vec![LOW],
-                        vec![LOW],
+                        vec![LOW_],
+                        vec![LOW_],
                     ])
                 ],
             ),
@@ -1167,7 +1167,7 @@ mod tests {
                     if i == 0 {
                         assert_eq!(signal, HIGH);
                     } else {
-                        assert_eq!(signal, LOW);
+                        assert_eq!(signal, LOW_);
                     }
                 }
                 GateOutputState::Connected(_) => panic!("Final output gate should never be connected.")
@@ -1189,14 +1189,14 @@ mod tests {
             let mut i_vector = Vec::with_capacity(number_inputs);
             for c in binary_input_number.chars() {
                 if c == '0' {
-                    i_vector.push(LOW);
+                    i_vector.push(LOW_);
                 } else {
                     i_vector.push(HIGH);
                 }
             }
             input_vector.push(i_vector);
 
-            let mut o_vector = vec![LOW; number_outputs];
+            let mut o_vector = vec![LOW_; number_outputs];
             o_vector[i] = HIGH;
 
             output_vector.push(o_vector);
@@ -1219,11 +1219,11 @@ mod tests {
                 vec![HIGH],
             ],
             vec![
-                vec![NONE, LOW],
+                vec![NONE, LOW_],
             ],
             HashMap::from(
                 [
-                    ("R", vec![vec![LOW]]),
+                    ("R", vec![vec![LOW_]]),
                     ("H", vec![vec![h_signal]]),
                     ("V", vec![vec![v_signal]]),
                     ("S", vec![vec![HIGH]]),
@@ -1236,12 +1236,12 @@ mod tests {
 
     #[test]
     fn single_ram_cell_low_v() {
-        single_ram_cell_low_v_h(LOW, HIGH);
+        single_ram_cell_low_v_h(LOW_, HIGH);
     }
 
     #[test]
     fn single_ram_cell_low_h() {
-        single_ram_cell_low_v_h(HIGH, LOW);
+        single_ram_cell_low_v_h(HIGH, LOW_);
     }
 
     fn vec_with_values<T: Clone>(val1: T, x: usize, val2: T, y: usize) -> Vec<T> {
@@ -1255,7 +1255,7 @@ mod tests {
             vec![
                 vec![HIGH; num_bits],
                 vec![HIGH; num_bits],
-                vec![LOW; num_bits],
+                vec![LOW_; num_bits],
             ],
             vec![
                 vec_with_values(NONE, num_bits, HIGH, num_bits),
@@ -1264,11 +1264,11 @@ mod tests {
             ],
             HashMap::from(
                 [
-                    ("R", vec![vec![HIGH], vec![LOW], vec![LOW]]),
-                    ("H", vec![vec![LOW], vec![LOW], vec![HIGH]]),
-                    ("V", vec![vec![LOW], vec![LOW], vec![HIGH]]),
-                    ("S", vec![vec![LOW], vec![LOW], vec![LOW]]),
-                    ("E", vec![vec![LOW], vec![LOW], vec![HIGH]]),
+                    ("R", vec![vec![HIGH], vec![LOW_], vec![LOW_]]),
+                    ("H", vec![vec![LOW_], vec![LOW_], vec![HIGH]]),
+                    ("V", vec![vec![LOW_], vec![LOW_], vec![HIGH]]),
+                    ("S", vec![vec![LOW_], vec![LOW_], vec![LOW_]]),
+                    ("E", vec![vec![LOW_], vec![LOW_], vec![HIGH]]),
                 ]
             ),
             SingleRAMCell::new(num_bits),
@@ -1280,24 +1280,24 @@ mod tests {
         let num_bits = 6;
         run_multi_input_output_logic_gate(
             vec![
-                vec![LOW; num_bits],
+                vec![LOW_; num_bits],
                 vec![HIGH; num_bits],
                 vec![HIGH; num_bits],
-                vec![LOW; num_bits],
+                vec![LOW_; num_bits],
             ],
             vec![
-                vec_with_values(NONE, num_bits, LOW, num_bits),
+                vec_with_values(NONE, num_bits, LOW_, num_bits),
                 vec_with_values(NONE, num_bits, HIGH, num_bits),
                 vec_with_values(NONE, num_bits, HIGH, num_bits),
                 vec_with_values(HIGH, num_bits, HIGH, num_bits),
             ],
             HashMap::from(
                 [
-                    ("R", vec![vec![LOW], vec![LOW], vec![LOW], vec![LOW]]),
-                    ("H", vec![vec![HIGH], vec![HIGH], vec![LOW], vec![HIGH]]),
-                    ("V", vec![vec![HIGH], vec![HIGH], vec![LOW], vec![HIGH]]),
-                    ("S", vec![vec![HIGH], vec![HIGH], vec![LOW], vec![LOW]]),
-                    ("E", vec![vec![LOW], vec![LOW], vec![LOW], vec![HIGH]]),
+                    ("R", vec![vec![LOW_], vec![LOW_], vec![LOW_], vec![LOW_]]),
+                    ("H", vec![vec![HIGH], vec![HIGH], vec![LOW_], vec![HIGH]]),
+                    ("V", vec![vec![HIGH], vec![HIGH], vec![LOW_], vec![HIGH]]),
+                    ("S", vec![vec![HIGH], vec![HIGH], vec![LOW_], vec![LOW_]]),
+                    ("E", vec![vec![LOW_], vec![LOW_], vec![LOW_], vec![HIGH]]),
                 ]
             ),
             SingleRAMCell::new(num_bits),
@@ -1308,13 +1308,13 @@ mod tests {
     fn ram_unit_test() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, LOW, HIGH], // Change SA bit so address can be written
-                vec![HIGH, LOW, HIGH], // Update address to RAM 3.
-                vec![HIGH, LOW, HIGH], // Change S bit so input is saved to RAM address location.
-                vec![HIGH, LOW, HIGH], // Change S bit so input is no longer saved to RAM address location.
-                vec![LOW, LOW, LOW], // Get output at RAM 1
-                vec![LOW, HIGH, LOW], // Get output at RAM 2
-                vec![LOW, HIGH, HIGH], // Get output at RAM 3
+                vec![HIGH, LOW_, HIGH], // Change SA bit so address can be written
+                vec![HIGH, LOW_, HIGH], // Update address to RAM 3.
+                vec![HIGH, LOW_, HIGH], // Change S bit so input is saved to RAM address location.
+                vec![HIGH, LOW_, HIGH], // Change S bit so input is no longer saved to RAM address location.
+                vec![LOW_, LOW_, LOW_], // Get output at RAM 1
+                vec![LOW_, HIGH, LOW_], // Get output at RAM 2
+                vec![LOW_, HIGH, HIGH], // Get output at RAM 3
                 vec![HIGH, HIGH, HIGH], // Get output at RAM 4
             ],
             vec![
@@ -1322,36 +1322,36 @@ mod tests {
                 vec![NONE, NONE, NONE],
                 vec![NONE, NONE, NONE],
                 vec![NONE, NONE, NONE],
-                vec![LOW, LOW, LOW],
-                vec![LOW, LOW, LOW],
-                vec![HIGH, LOW, HIGH],
-                vec![LOW, LOW, LOW],
+                vec![LOW_, LOW_, LOW_],
+                vec![LOW_, LOW_, LOW_],
+                vec![HIGH, LOW_, HIGH],
+                vec![LOW_, LOW_, LOW_],
             ],
             HashMap::from(
                 [
                     ("addr", vec![
-                        vec![LOW, LOW], //0b00
-                        vec![HIGH, LOW], //0b10
-                        vec![HIGH, LOW], //0b10
-                        vec![HIGH, LOW], //0b10
-                        vec![LOW, LOW], //0b00
-                        vec![LOW, HIGH], //0b01
-                        vec![HIGH, LOW], //0b10
+                        vec![LOW_, LOW_], //0b00
+                        vec![HIGH, LOW_], //0b10
+                        vec![HIGH, LOW_], //0b10
+                        vec![HIGH, LOW_], //0b10
+                        vec![LOW_, LOW_], //0b00
+                        vec![LOW_, HIGH], //0b01
+                        vec![HIGH, LOW_], //0b10
                         vec![HIGH, HIGH], //0b11
                     ]),
                     ("SA", vec![vec![HIGH]; 8]),
-                    ("R", vec![vec![LOW]; 8]),
+                    ("R", vec![vec![LOW_]; 8]),
                     ("S", vec![
-                        vec![LOW],
-                        vec![LOW],
+                        vec![LOW_],
+                        vec![LOW_],
                         vec![HIGH],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
-                        vec![LOW],
+                        vec![LOW_],
+                        vec![LOW_],
+                        vec![LOW_],
+                        vec![LOW_],
+                        vec![LOW_],
                     ]),
-                    ("E", vec_with_values(vec![LOW], 4, vec![HIGH], 4), )
+                    ("E", vec_with_values(vec![LOW_], 4, vec![HIGH], 4), )
                 ]
             ),
             RAMUnit::new(3, 1),
@@ -1363,7 +1363,7 @@ mod tests {
         //If the BUS_1 input is HIGH, the output returns one. Otherwise, it passes the input
         // through.
         let num_bits = 8;
-        let mut one_signals = vec![LOW; num_bits];
+        let mut one_signals = vec![LOW_; num_bits];
         one_signals[0] = HIGH;
         run_multi_input_output_logic_gate(
             vec![
@@ -1376,7 +1376,7 @@ mod tests {
             ],
             HashMap::from(
                 [
-                    ("BUS_1", vec![vec![LOW], vec![HIGH]]),
+                    ("BUS_1", vec![vec![LOW_], vec![HIGH]]),
                 ]
             ),
             VariableBitBusOne::new(num_bits),

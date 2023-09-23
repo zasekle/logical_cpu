@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use crate::globals::{get_clock_tick_number, MAX_INPUT_CHANGES, NEXT_UNIQUE_ID};
 use crate::logic::basic_gates::And;
-use crate::logic::foundations::Signal::{HIGH, LOW, NONE};
+use crate::logic::foundations::Signal::{HIGH, LOW_, NONE};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::run_circuit;
@@ -22,7 +22,8 @@ use crate::run_circuit::run_circuit;
 #[derive(PartialEq, Debug, Clone)]
 pub enum Signal {
     NONE,
-    LOW,
+    LOW_,
+    //The _ is just to line up the width for visual purposes.
     HIGH,
 }
 
@@ -303,7 +304,7 @@ impl BasicGateMembers {
         assert_ne!(input_num, 0);
 
         let mut result = BasicGateMembers {
-            input_signals: vec![HashMap::from([(UniqueID::zero_id(), LOW)]); input_num],
+            input_signals: vec![HashMap::from([(UniqueID::zero_id(), LOW_)]); input_num],
             output_states: Vec::with_capacity(output_num),
             unique_id: UniqueID::generate(),
             oscillation_detection: OscillationDetection::new(),
@@ -375,6 +376,31 @@ impl BasicGateMembers {
 
         //This is a temporary signal. When the input is updated afterwards, it will add it.
         self.input_signals[gate_input_index].insert(sending_id, signal);
+
+        #[cfg(feature = "high_restriction")]
+        if self.input_signals[gate_input_index].len() > 1 {
+            panic!("A gate had multiple connections to the same input")
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum GateTagType {
+    Input,
+    Output,
+}
+
+pub struct GateTagInfo {
+    pub index: usize,
+    pub tag_type: GateTagType,
+}
+
+impl GateTagInfo {
+    fn new(index: usize, tag_type: GateTagType) -> Self {
+        GateTagInfo {
+            index,
+            tag_type,
+        }
     }
 }
 
@@ -382,7 +408,7 @@ pub struct ComplexGateMembers {
     pub simple_gate: BasicGateMembers,
     pub input_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
     pub output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
-    pub gate_tags_to_index: HashMap<String, usize>,
+    pub gate_tags_to_index: HashMap<String, GateTagInfo>,
 }
 
 impl ComplexGateMembers {
@@ -403,14 +429,20 @@ impl ComplexGateMembers {
         for (i, gate) in input_gates.iter().enumerate() {
             gate_tags_to_index.insert(
                 gate.borrow_mut().get_tag(),
-                i,
+                GateTagInfo::new(
+                    i,
+                    GateTagType::Input,
+                ),
             );
         }
 
         for (i, gate) in output_gates.iter().enumerate() {
             gate_tags_to_index.insert(
                 gate.borrow_mut().get_tag(),
-                i,
+                GateTagInfo::new(
+                    i,
+                    GateTagType::Output,
+                ),
             );
         }
 
@@ -422,7 +454,7 @@ impl ComplexGateMembers {
                 input_num,
                 output_num,
                 gate_type,
-                Some(LOW),
+                Some(LOW_),
             ),
             input_gates,
             output_gates,
@@ -494,7 +526,7 @@ impl ComplexGateMembers {
             None => {
                 panic!("Gate {} id {} did not contain tag {}.", self.simple_gate.gate_type, self.simple_gate.unique_id.id, tag)
             }
-            Some(index) => index.clone()
+            Some(gate_tag_info) => gate_tag_info.index.clone()
         }
     }
 
@@ -545,6 +577,11 @@ impl ComplexGateMembers {
                 next_gate_mut_ref.get_unique_id().id(),
                 next_gate_input_key
             );
+        }
+
+        #[cfg(feature = "high_restriction")]
+        if let GateOutputState::Connected(output) = self.simple_gate.output_states[current_gate_output_key].clone() {
+            panic!("output was already connect and it got connected again\n{:#?}", output)
         }
 
         self.simple_gate.output_states[current_gate_output_key] =
@@ -610,7 +647,7 @@ pub struct GateLogic;
 
 impl GateLogic {
     pub fn calculate_output_for_or(input_signals: &Vec<Signal>) -> Signal {
-        let mut output_signal = LOW;
+        let mut output_signal = LOW_;
         for s in input_signals.iter() {
             if *s == HIGH {
                 output_signal = HIGH;
@@ -623,8 +660,8 @@ impl GateLogic {
 
     pub fn calculate_output_for_and(input_signals: &Vec<Signal>) -> Signal {
         for s in input_signals.iter() {
-            if *s == LOW {
-                return LOW;
+            if *s == LOW_ {
+                return LOW_;
             }
         }
 
@@ -636,7 +673,7 @@ impl GateLogic {
         let current_signal = input_signals.first().unwrap();
 
         if *current_signal == HIGH {
-            LOW
+            LOW_
         } else {
             HIGH
         }
@@ -658,7 +695,7 @@ impl GateLogic {
         for input in input_signals.iter() {
             match *input {
                 NONE => {}
-                LOW => {
+                LOW_ => {
                     low_signal_exists = true;
                 }
                 HIGH => {
@@ -667,14 +704,14 @@ impl GateLogic {
             }
 
             if high_signal_exists && low_signal_exists {
-                return HIGH
+                return HIGH;
             }
         }
 
         if !high_signal_exists && !low_signal_exists {
             NONE
         } else {
-            LOW
+            LOW_
         }
     }
 
@@ -806,6 +843,12 @@ impl GateLogic {
                 next_gate_input_index,
             );
         }
+
+        #[cfg(feature = "high_restriction")]
+        if let GateOutputState::Connected(output) = output_states[current_gate_output_index].clone() {
+            panic!("output was already connect and it got connected again\n{:#?}", output)
+        }
+
         output_states[current_gate_output_index] =
             GateOutputState::Connected(
                 ConnectedOutput {

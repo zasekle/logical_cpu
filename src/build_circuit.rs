@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::logic::foundations::LogicGate;
 
 #[allow(unused_imports)]
-use crate::logic::foundations::Signal::{HIGH, LOW};
+use crate::logic::foundations::Signal::{HIGH, LOW_};
 
 #[allow(unused_imports)]
 use crate::logic::basic_gates::{
@@ -33,8 +33,8 @@ pub struct InputAndOutputGates {
 pub fn build_simple_circuit() -> InputAndOutputGates {
     let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
     let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-    let r_input_gate = AutomaticInput::new(vec![LOW], 1, "START_R");
-    let s_input_gate = AutomaticInput::new(vec![LOW], 1, "START_S");
+    let r_input_gate = AutomaticInput::new(vec![LOW_], 1, "START_R");
+    let s_input_gate = AutomaticInput::new(vec![LOW_], 1, "START_S");
     let q_output_gate = SimpleOutput::new("END_Q");
     let not_q_output_gate = SimpleOutput::new("END_~Q");
 

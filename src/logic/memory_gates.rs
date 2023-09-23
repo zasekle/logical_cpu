@@ -6,7 +6,7 @@ use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
 #[allow(unused_imports)]
-use crate::logic::foundations::Signal::{LOW, HIGH};
+use crate::logic::foundations::Signal::{LOW_, HIGH};
 
 pub struct SRLatch {
     complex_gate: ComplexGateMembers,
@@ -65,7 +65,7 @@ impl SRLatch {
         reset_input_gate.borrow_mut().update_input_signal(
             GateInput::new(
                 0,
-                LOW,
+                LOW_,
                 UniqueID::zero_id(),
             )
         );
@@ -422,7 +422,7 @@ impl OneBitMemoryCell {
         enable_input_gate.borrow_mut().update_input_signal(
             GateInput::new(
                 0,
-                LOW,
+                LOW_,
                 UniqueID::zero_id(),
             )
         );
@@ -722,7 +722,7 @@ mod tests {
     use std::collections::HashMap;
     use crate::globals::CLOCK_TICK_NUMBER;
     use crate::logic::foundations::Signal;
-    use crate::logic::foundations::Signal::{HIGH, LOW};
+    use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::AutomaticInput;
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
     use crate::run_circuit::run_circuit;
@@ -939,7 +939,7 @@ mod tests {
         let second_output = output.get(1).unwrap();
 
         match first_output {
-            GateOutputState::NotConnected(signal) => assert_eq!(*signal, LOW),
+            GateOutputState::NotConnected(signal) => assert_eq!(*signal, LOW_),
             GateOutputState::Connected(_) => panic!("Output should never be connected"),
         }
 
@@ -952,10 +952,10 @@ mod tests {
     #[test]
     fn sr_gate_low_low_after_low_high() {
         run_sr_latch(
-            vec![LOW, LOW],
-            vec![HIGH, LOW],
+            vec![LOW_, LOW_],
+            vec![HIGH, LOW_],
             vec![HIGH, HIGH],
-            vec![LOW, LOW],
+            vec![LOW_, LOW_],
             SRLatch::new(),
         );
     }
@@ -963,9 +963,9 @@ mod tests {
     #[test]
     fn sr_gate_low_low_after_high_low() {
         run_sr_latch(
-            vec![HIGH, LOW],
-            vec![LOW, LOW],
-            vec![LOW, LOW],
+            vec![HIGH, LOW_],
+            vec![LOW_, LOW_],
+            vec![LOW_, LOW_],
             vec![HIGH, HIGH],
             SRLatch::new(),
         );
@@ -974,10 +974,10 @@ mod tests {
     #[test]
     fn sr_gate_low_high() {
         run_sr_latch(
-            vec![LOW],
+            vec![LOW_],
             vec![HIGH],
             vec![HIGH],
-            vec![LOW],
+            vec![LOW_],
             SRLatch::new(),
         );
     }
@@ -986,8 +986,8 @@ mod tests {
     fn sr_gate_high_low() {
         run_sr_latch(
             vec![HIGH],
-            vec![LOW],
-            vec![LOW],
+            vec![LOW_],
+            vec![LOW_],
             vec![HIGH],
             SRLatch::new(),
         );
@@ -998,8 +998,8 @@ mod tests {
         run_sr_latch(
             vec![HIGH],
             vec![HIGH],
-            vec![LOW],
-            vec![LOW],
+            vec![LOW_],
+            vec![LOW_],
             SRLatch::new(),
         );
     }
@@ -1021,7 +1021,7 @@ mod tests {
         }
 
         match second_output {
-            GateOutputState::NotConnected(signal) => assert_eq!(*signal, LOW),
+            GateOutputState::NotConnected(signal) => assert_eq!(*signal, LOW_),
             GateOutputState::Connected(_) => panic!("Output should never be connected"),
         }
     }
@@ -1029,9 +1029,9 @@ mod tests {
     #[test]
     fn active_low_sr_gate_high_high_after_low_high() {
         run_sr_latch(
-            vec![LOW, HIGH],
+            vec![LOW_, HIGH],
             vec![HIGH, HIGH],
-            vec![LOW, LOW],
+            vec![LOW_, LOW_],
             vec![HIGH, HIGH],
             ActiveLowSRLatch::new(),
         );
@@ -1041,9 +1041,9 @@ mod tests {
     fn active_low_sr_gate_high_high_after_high_low() {
         run_sr_latch(
             vec![HIGH, HIGH],
-            vec![LOW, HIGH],
+            vec![LOW_, HIGH],
             vec![HIGH, HIGH],
-            vec![LOW, LOW],
+            vec![LOW_, LOW_],
             ActiveLowSRLatch::new(),
         );
     }
@@ -1051,9 +1051,9 @@ mod tests {
     #[test]
     fn active_low_sr_gate_low_high() {
         run_sr_latch(
-            vec![LOW],
+            vec![LOW_],
             vec![HIGH],
-            vec![LOW],
+            vec![LOW_],
             vec![HIGH],
             ActiveLowSRLatch::new(),
         );
@@ -1063,9 +1063,9 @@ mod tests {
     fn active_low_sr_gate_high_low() {
         run_sr_latch(
             vec![HIGH],
-            vec![LOW],
+            vec![LOW_],
             vec![HIGH],
-            vec![LOW],
+            vec![LOW_],
             ActiveLowSRLatch::new(),
         );
     }
@@ -1073,8 +1073,8 @@ mod tests {
     #[test]
     fn active_low_sr_gate_low_low() {
         run_sr_latch(
-            vec![LOW],
-            vec![LOW],
+            vec![LOW_],
+            vec![LOW_],
             vec![HIGH],
             vec![HIGH],
             ActiveLowSRLatch::new(),
@@ -1093,7 +1093,7 @@ mod tests {
         let first_output = output.first().unwrap();
 
         match first_output {
-            GateOutputState::NotConnected(signal) => assert_eq!(*signal, LOW),
+            GateOutputState::NotConnected(signal) => assert_eq!(*signal, LOW_),
             GateOutputState::Connected(_) => panic!("Output should never be connected"),
         }
     }
@@ -1101,9 +1101,9 @@ mod tests {
     #[test]
     fn one_bit_mem_low_high() {
         run_one_bit_memory_cell(
-            vec![LOW],
+            vec![LOW_],
             vec![HIGH],
-            vec![LOW],
+            vec![LOW_],
         );
     }
 
@@ -1111,8 +1111,8 @@ mod tests {
     fn one_bit_mem_high_low() {
         run_one_bit_memory_cell(
             vec![HIGH],
-            vec![LOW],
-            vec![LOW],
+            vec![LOW_],
+            vec![LOW_],
         );
     }
 
@@ -1128,8 +1128,8 @@ mod tests {
     #[test]
     fn one_bit_mem_high_high_to_low_low() {
         run_one_bit_memory_cell(
-            vec![HIGH, LOW],
-            vec![HIGH, LOW],
+            vec![HIGH, LOW_],
+            vec![HIGH, LOW_],
             vec![HIGH, HIGH],
         );
     }
@@ -1137,27 +1137,27 @@ mod tests {
     #[test]
     fn one_bit_mem_low_high_to_low_low() {
         run_one_bit_memory_cell(
-            vec![LOW, LOW],
-            vec![HIGH, LOW],
-            vec![LOW, LOW],
+            vec![LOW_, LOW_],
+            vec![HIGH, LOW_],
+            vec![LOW_, LOW_],
         );
     }
 
     #[test]
     fn one_bit_mem_high_low_to_low_low() {
         run_one_bit_memory_cell(
-            vec![HIGH, LOW],
-            vec![LOW, LOW],
-            vec![LOW, LOW],
+            vec![HIGH, LOW_],
+            vec![LOW_, LOW_],
+            vec![LOW_, LOW_],
         );
     }
 
     #[test]
     fn one_bit_mem_low_low_to_low_low() {
         run_one_bit_memory_cell(
-            vec![LOW, LOW],
-            vec![LOW, LOW],
-            vec![LOW, LOW],
+            vec![LOW_, LOW_],
+            vec![LOW_, LOW_],
+            vec![LOW_, LOW_],
         );
     }
 
@@ -1165,8 +1165,8 @@ mod tests {
     fn one_bit_mem_high_high_to_high_low() {
         run_one_bit_memory_cell(
             vec![HIGH, HIGH],
-            vec![HIGH, LOW],
-            vec![HIGH, LOW],
+            vec![HIGH, LOW_],
+            vec![HIGH, LOW_],
         );
     }
 
@@ -1174,8 +1174,8 @@ mod tests {
     fn one_bit_mem_high_low_to_high_high() {
         run_one_bit_memory_cell(
             vec![HIGH, HIGH],
-            vec![LOW, HIGH],
-            vec![LOW, HIGH],
+            vec![LOW_, HIGH],
+            vec![LOW_, HIGH],
         );
     }
 
@@ -1190,7 +1190,7 @@ mod tests {
         for out in output {
             match out {
                 GateOutputState::NotConnected(signal) => {
-                    assert_eq!(signal, LOW);
+                    assert_eq!(signal, LOW_);
                 }
                 GateOutputState::Connected(_) => panic!("Final output gate should never be connected.")
             }
@@ -1201,10 +1201,10 @@ mod tests {
     fn variable_bit_signal_high() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, LOW, HIGH],
+                vec![HIGH, LOW_, HIGH],
             ],
             vec![
-                vec![HIGH, LOW, HIGH, HIGH, LOW, HIGH],
+                vec![HIGH, LOW_, HIGH, HIGH, LOW_, HIGH],
             ],
             HashMap::from(
                 [("S", vec![vec![HIGH]])]
@@ -1217,13 +1217,13 @@ mod tests {
     fn variable_bit_signal_low() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, LOW],
+                vec![HIGH, LOW_],
             ],
             vec![
-                vec![LOW, LOW, LOW, LOW],
+                vec![LOW_, LOW_, LOW_, LOW_],
             ],
             HashMap::from(
-                [("S", vec![vec![LOW]])]
+                [("S", vec![vec![LOW_]])]
             ),
             VariableBitMemoryCell::new(2),
         );
@@ -1233,19 +1233,19 @@ mod tests {
     fn variable_bit_saved_states() {
         run_multi_input_output_logic_gate(
             vec![
-                vec![HIGH, HIGH, LOW],
-                vec![HIGH, HIGH, LOW],
-                vec![HIGH, HIGH, LOW],
-                vec![LOW, LOW, HIGH],
+                vec![HIGH, HIGH, LOW_],
+                vec![HIGH, HIGH, LOW_],
+                vec![HIGH, HIGH, LOW_],
+                vec![LOW_, LOW_, HIGH],
             ],
             vec![
-                vec![LOW, LOW, LOW, LOW, LOW, LOW],
-                vec![HIGH, HIGH, LOW, HIGH, HIGH, LOW],
-                vec![HIGH, HIGH, LOW, HIGH, HIGH, LOW],
-                vec![LOW, LOW, HIGH, LOW, LOW, HIGH],
+                vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_],
+                vec![HIGH, HIGH, LOW_, HIGH, HIGH, LOW_],
+                vec![HIGH, HIGH, LOW_, HIGH, HIGH, LOW_],
+                vec![LOW_, LOW_, HIGH, LOW_, LOW_, HIGH],
             ],
             HashMap::from(
-                [("S", vec![vec![LOW], vec![HIGH], vec![LOW], vec![HIGH]])]
+                [("S", vec![vec![LOW_], vec![HIGH], vec![LOW_], vec![HIGH]])]
             ),
             VariableBitMemoryCell::new(3),
         );
