@@ -358,6 +358,7 @@ impl BasicGateMembers {
             Some(&mut self.input_signals),
             &mut self.output_states,
             current_gate_output_index,
+            &self.tag,
             next_gate_input_index,
             next_gate,
             self.should_print_output,
@@ -783,6 +784,7 @@ impl GateLogic {
         input_signals: Option<&mut Vec<HashMap<UniqueID, Signal>>>,
         output_states: &mut Vec<GateOutputState>,
         current_gate_output_index: usize,
+        current_gate_tag: &str,
         next_gate_input_index: usize,
         next_gate: Rc<RefCell<dyn LogicGate>>,
         should_print_output: bool,
@@ -802,6 +804,7 @@ impl GateLogic {
             next_gate,
             output_signal,
             gate_type,
+            current_gate_tag,
             should_print_output,
         );
     }
@@ -814,6 +817,7 @@ impl GateLogic {
         next_gate: Rc<RefCell<dyn LogicGate>>,
         output_signal: Signal,
         current_gate_type: GateType,
+        current_gate_tag: &str,
         should_print_output: bool,
     ) {
         //This unsafe block must be done for two reasons.
@@ -833,15 +837,29 @@ impl GateLogic {
         );
 
         if should_print_output {
-            println!(
-                "Connection for\n   type {} id {} index {}\nTO\n   type {} id {} index {}",
-                current_gate_type,
-                current_gate_id.id(),
-                current_gate_output_index,
-                next_gate_mut_ref.get_gate_type(),
-                next_gate_mut_ref.get_unique_id().id(),
-                next_gate_input_index,
-            );
+            if current_gate_tag.is_empty() && next_gate_mut_ref.get_tag().is_empty() {
+                println!(
+                    "Connection for\n   type {} id {} index {}\nTO\n   type {} id {} index {}",
+                    current_gate_type,
+                    current_gate_id.id(),
+                    current_gate_output_index,
+                    next_gate_mut_ref.get_gate_type(),
+                    next_gate_mut_ref.get_unique_id().id(),
+                    next_gate_input_index,
+                );
+            } else {
+                println!(
+                    "Connection for\n   type {} tag {} id {} index {}\nTO\n   type {} tag {} id {} index {}",
+                    current_gate_type,
+                    current_gate_tag,
+                    current_gate_id.id(),
+                    current_gate_output_index,
+                    next_gate_mut_ref.get_gate_type(),
+                    next_gate_mut_ref.get_tag(),
+                    next_gate_mut_ref.get_unique_id().id(),
+                    next_gate_input_index,
+                );
+            }
         }
 
         #[cfg(feature = "high_restriction")]

@@ -65,7 +65,7 @@ pub struct ControlSection {
     r_s_decoder: Rc<RefCell<VariableDecoder>>,
     ir_s_or: Rc<RefCell<Or>>,
     ir_s_and: Rc<RefCell<And>>,
-    tmp_s_or: Rc<RefCell<And>>,
+    tmp_s_or: Rc<RefCell<Or>>,
     tmp_s_and: Rc<RefCell<And>>,
     reg_b_e_or: Rc<RefCell<Or>>,
     reg_a_or: Rc<RefCell<Or>>,
@@ -179,6 +179,11 @@ impl ControlSection {
         input_gates.push(SimpleInput::new(4, "IR_5"));
         input_gates.push(SimpleInput::new(4, "IR_6"));
         input_gates.push(SimpleInput::new(8, "IR_7"));
+
+        // //todo d
+        // for i in input_gates.iter() {
+        //     i.borrow_mut().toggle_output_printing(true);
+        // }
 
         for i in 8..bus_width {
             let input_tag = format!("IR_{}", i);
@@ -298,7 +303,7 @@ impl ControlSection {
             r_s_decoder: VariableDecoder::new(2),
             ir_s_or: Or::new(2, 1),
             ir_s_and: And::new(2, 1),
-            tmp_s_or: And::new(2, 1),
+            tmp_s_or: Or::new(2, 1),
             tmp_s_and: And::new(2, 1),
             reg_b_e_or: Or::new(4, 4),
             reg_a_or: Or::new(3, 4),
@@ -350,6 +355,134 @@ impl ControlSection {
             add_and: And::new(3, 1),
             add_not: Not::new(1),
         };
+
+        control_section.clk_and.borrow_mut().set_tag("clk_and");
+        control_section.load_not.borrow_mut().set_tag("load_not");
+        control_section.stepper.borrow_mut().set_tag("stepper");
+        control_section.stepper_splitters[0].borrow_mut().set_tag("stepper_splitters[0]");
+        control_section.stepper_splitters[1].borrow_mut().set_tag("stepper_splitters[1]");
+        control_section.stepper_splitters[2].borrow_mut().set_tag("stepper_splitters[2]");
+        control_section.stepper_splitters[3].borrow_mut().set_tag("stepper_splitters[3]");
+        control_section.stepper_splitters[4].borrow_mut().set_tag("stepper_splitters[4]");
+        control_section.stepper_splitters[5].borrow_mut().set_tag("stepper_splitters[5]");
+        control_section.stepper_1_and.borrow_mut().set_tag("stepper_1_and");
+        control_section.bus_1_or.borrow_mut().set_tag("bus_1_or");
+        control_section.ram_e_and.borrow_mut().set_tag("ram_e_and");
+        control_section.ram_e_or.borrow_mut().set_tag("ram_e_or");
+        control_section.acc_e_and.borrow_mut().set_tag("acc_e_and");
+        control_section.acc_e_or.borrow_mut().set_tag("acc_e_or");
+        control_section.iar_e_and.borrow_mut().set_tag("iar_e_and");
+        control_section.iar_e_or.borrow_mut().set_tag("iar_e_or");
+        control_section.io_clk_e_and.borrow_mut().set_tag("io_clk_e_and");
+        control_section.io_clks_s_and.borrow_mut().set_tag("io_clks_s_and");
+        control_section.r0_e_or.borrow_mut().set_tag("r0_e_or");
+        control_section.r0_e_reg_b_and.borrow_mut().set_tag("r0_e_reg_b_and");
+        control_section.r0_e_reg_a_and.borrow_mut().set_tag("r0_e_reg_a_and");
+        control_section.r1_e_or.borrow_mut().set_tag("r1_e_or");
+        control_section.r1_e_reg_b_and.borrow_mut().set_tag("r1_e_reg_b_and");
+        control_section.r1_e_reg_a_and.borrow_mut().set_tag("r1_e_reg_a_and");
+        control_section.r2_e_or.borrow_mut().set_tag("r2_e_or");
+        control_section.r2_e_reg_b_and.borrow_mut().set_tag("r2_e_reg_b_and");
+        control_section.r2_e_reg_a_and.borrow_mut().set_tag("r2_e_reg_a_and");
+        control_section.r3_e_or.borrow_mut().set_tag("r3_e_or");
+        control_section.r3_e_reg_b_and.borrow_mut().set_tag("r3_e_reg_b_and");
+        control_section.r3_e_reg_a_and.borrow_mut().set_tag("r3_e_reg_a_and");
+        control_section.r_e_reg_b_decoder.borrow_mut().set_tag("r_e_reg_b_decoder");
+        control_section.r_e_reg_a_decoder.borrow_mut().set_tag("r_e_reg_a_decoder");
+        control_section.mar_s_or.borrow_mut().set_tag("mar_s_or");
+        control_section.mar_s_and.borrow_mut().set_tag("mar_s_and");
+        control_section.mar_s_outer_or.borrow_mut().set_tag("mar_s_outer_or");
+        control_section.ram_s_or.borrow_mut().set_tag("ram_s_or");
+        control_section.ram_s_load_and.borrow_mut().set_tag("ram_s_load_and");
+        control_section.ram_s_and.borrow_mut().set_tag("ram_s_and");
+        control_section.acc_s_or.borrow_mut().set_tag("acc_s_or");
+        control_section.acc_s_and.borrow_mut().set_tag("acc_s_and");
+        control_section.acc_s_outer_or.borrow_mut().set_tag("acc_s_outer_or");
+        control_section.iar_s_or.borrow_mut().set_tag("iar_s_or");
+        control_section.iar_s_and.borrow_mut().set_tag("iar_s_and");
+        control_section.iar_s_outer_or.borrow_mut().set_tag("iar_s_outer_or");
+        control_section.r0_s_or.borrow_mut().set_tag("r0_s_or");
+        control_section.r0_s_and.borrow_mut().set_tag("r0_s_and");
+        control_section.r1_s_or.borrow_mut().set_tag("r1_s_or");
+        control_section.r1_s_and.borrow_mut().set_tag("r1_s_and");
+        control_section.r2_s_or.borrow_mut().set_tag("r2_s_or");
+        control_section.r2_s_and.borrow_mut().set_tag("r2_s_and");
+        control_section.r3_s_or.borrow_mut().set_tag("r3_s_or");
+        control_section.r3_s_and.borrow_mut().set_tag("r3_s_and");
+        control_section.r_s_decoder.borrow_mut().set_tag("r_s_decoder");
+        control_section.ir_s_or.borrow_mut().set_tag("ir_s_or");
+        control_section.ir_s_and.borrow_mut().set_tag("ir_s_and");
+        control_section.tmp_s_or.borrow_mut().set_tag("tmp_s_or");
+        control_section.tmp_s_and.borrow_mut().set_tag("tmp_s_and");
+        control_section.reg_b_e_or.borrow_mut().set_tag("reg_b_e_or");
+        control_section.reg_a_or.borrow_mut().set_tag("reg_a_or");
+        control_section.alu_0_and.borrow_mut().set_tag("alu_0_and");
+        control_section.alu_1_and.borrow_mut().set_tag("alu_1_and");
+        control_section.alu_2_and.borrow_mut().set_tag("alu_2_and");
+        control_section.flags_s_or.borrow_mut().set_tag("flags_s_or");
+        control_section.flags_s_and.borrow_mut().set_tag("flags_s_and");
+        control_section.flags_s_outer_or.borrow_mut().set_tag("flags_s_outer_or");
+        control_section.reg_b_s_or.borrow_mut().set_tag("reg_b_s_or");
+        control_section.load_store_instr_not.borrow_mut().set_tag("load_store_instr_not");
+        control_section.load_store_instr_decoder.borrow_mut().set_tag("load_store_instr_decoder");
+        control_section.load_store_instr_0_top_and.borrow_mut().set_tag("load_store_instr_0_top_and");
+        control_section.load_store_instr_1_and.borrow_mut().set_tag("load_store_instr_1_and");
+        control_section.load_store_instr_2_and.borrow_mut().set_tag("load_store_instr_2_and");
+        control_section.load_store_instr_3_and.borrow_mut().set_tag("load_store_instr_3_and");
+        control_section.load_store_instr_4_and.borrow_mut().set_tag("load_store_instr_4_and");
+        control_section.load_store_instr_5_and.borrow_mut().set_tag("load_store_instr_5_and");
+        control_section.load_store_instr_6_and.borrow_mut().set_tag("load_store_instr_6_and");
+        control_section.load_store_instr_7_and.borrow_mut().set_tag("load_store_instr_7_and");
+        control_section.stepper_out_4_top_0_and.borrow_mut().set_tag("stepper_out_4_top_0_and");
+        control_section.stepper_out_4_1_and.borrow_mut().set_tag("stepper_out_4_1_and");
+        control_section.stepper_out_4_2_and.borrow_mut().set_tag("stepper_out_4_2_and");
+        control_section.stepper_out_4_3_and.borrow_mut().set_tag("stepper_out_4_3_and");
+        control_section.stepper_out_4_4_and.borrow_mut().set_tag("stepper_out_4_4_and");
+        control_section.stepper_out_4_5_and.borrow_mut().set_tag("stepper_out_4_5_and");
+        control_section.stepper_out_4_6_and.borrow_mut().set_tag("stepper_out_4_6_and");
+        control_section.stepper_out_4_7_and.borrow_mut().set_tag("stepper_out_4_7_and");
+        control_section.stepper_out_4_8_and.borrow_mut().set_tag("stepper_out_4_8_and");
+        control_section.stepper_out_5_top_0_and.borrow_mut().set_tag("stepper_out_5_top_0_and");
+        control_section.stepper_out_5_1_and.borrow_mut().set_tag("stepper_out_5_1_and");
+        control_section.stepper_out_5_2_and.borrow_mut().set_tag("stepper_out_5_2_and");
+        control_section.stepper_out_5_3_and.borrow_mut().set_tag("stepper_out_5_3_and");
+        control_section.stepper_out_5_4_and.borrow_mut().set_tag("stepper_out_5_4_and");
+        control_section.stepper_out_5_5_and.borrow_mut().set_tag("stepper_out_5_5_and");
+        control_section.stepper_out_5_6_and.borrow_mut().set_tag("stepper_out_5_6_and");
+        control_section.stepper_out_5_6_not.borrow_mut().set_tag("stepper_out_5_6_not");
+        control_section.stepper_out_6_top_0_and.borrow_mut().set_tag("stepper_out_6_top_0_and");
+        control_section.stepper_out_6_1_and.borrow_mut().set_tag("stepper_out_6_1_and");
+        control_section.stepper_out_6_2_and.borrow_mut().set_tag("stepper_out_6_2_and");
+        control_section.eight_input_and.borrow_mut().set_tag("eight_input_and");
+        control_section.eight_input_and_not_loc_2.borrow_mut().set_tag("eight_input_and_not_loc_2");
+        control_section.eight_input_and_not_loc_3.borrow_mut().set_tag("eight_input_and_not_loc_3");
+        control_section.c_in_and.borrow_mut().set_tag("c_in_and");
+        control_section.a_l_and.borrow_mut().set_tag("a_l_and");
+        control_section.eq_and.borrow_mut().set_tag("eq_and");
+        control_section.z_and.borrow_mut().set_tag("z_and");
+        control_section.alu_input_or.borrow_mut().set_tag("alu_input_or");
+        control_section.add_and.borrow_mut().set_tag("add_and");
+        control_section.add_not.borrow_mut().set_tag("add_not");
+
+        // //todo d
+        // control_section.stepper_splitters[0].borrow_mut().toggle_output_printing(true);
+        // control_section.stepper_splitters[1].borrow_mut().toggle_output_printing(true);
+        // control_section.stepper_splitters[2].borrow_mut().toggle_output_printing(true);
+        control_section.stepper_splitters[3].borrow_mut().toggle_output_printing(true);
+        control_section.stepper_splitters[4].borrow_mut().toggle_output_printing(true);
+        // control_section.stepper_splitters[5].borrow_mut().toggle_output_printing(true);
+        // control_section.stepper_out_4_top_0_and.borrow_mut().toggle_output_printing(true);
+        // control_section.tmp_s_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r0_e_reg_b_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r1_e_reg_b_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r2_e_reg_b_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r3_e_reg_b_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r0_e_reg_a_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r1_e_reg_a_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r2_e_reg_a_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r3_e_reg_a_and.borrow_mut().toggle_output_printing(true);
+        // control_section.r_e_reg_b_decoder.borrow_mut().toggle_output_printing(true);
+        // control_section.r_e_reg_a_decoder.borrow_mut().toggle_output_printing(true);
 
         control_section.build_and_prime_circuit(output_gates_logic);
 
@@ -981,13 +1114,13 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            0,
+            1,
             self.r_e_reg_b_decoder.clone(),
         );
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             3,
-            0,
+            1,
             self.r_s_decoder.clone(),
         );
     }
@@ -1009,13 +1142,13 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            1,
+            0,
             self.r_e_reg_b_decoder.clone(),
         );
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             3,
-            1,
+            0,
             self.r_s_decoder.clone(),
         );
     }
@@ -1040,7 +1173,7 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            0,
+            1,
             self.r_e_reg_a_decoder.clone(),
         );
 
@@ -1079,7 +1212,7 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             3,
-            1,
+            0,
             self.r_e_reg_a_decoder.clone(),
         );
 
@@ -1753,9 +1886,6 @@ impl ControlSection {
             0,
             output_gates[ram_s_index].clone(),
         );
-
-        output_gates[ram_s_index].borrow_mut().toggle_output_printing(true); //todo d
-        self.ram_s_or.borrow_mut().toggle_output_printing(true); //todo d
     }
 
     fn ram_s_load_and_connect(&mut self) {
@@ -2786,14 +2916,27 @@ mod tests {
     use std::collections::HashMap;
     use crate::logic::foundations::{GateTagInfo, GateTagType};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
+    use crate::logic::input_gates::AutomaticInput;
+    use crate::run_circuit::run_circuit;
     use crate::test_stuff::run_multi_input_output_logic_gate_return;
     use super::*;
 
+    //This uses a 4 cycle clock, so the number of clock cycles it will advance will be
+    // 4 * advance_to_splitter_num.
     fn test_control_section(
         output_signals_map: HashMap<&str, Vec<Signal>>,
         input_signals_map: HashMap<&str, Vec<Vec<Signal>>>,
+        start_at_splitter_num: usize,
     ) {
         assert_ne!(output_signals_map.len(), 0);
+        //Splitters only go [1-6].
+        assert!(start_at_splitter_num > 0);
+        assert!(start_at_splitter_num < 7);
+
+        //Minus 1 to get a proper number to fit multiplication (to get to splitter 1 it is 0 * 4).
+        // The outer minus 1 is to get to the spot right before the splitter is initialized.
+        let clock_ticks_to_advance: i32 = ((start_at_splitter_num as i32 - 1) * 4) - 1;
+
         let length = output_signals_map.iter().next().unwrap().1.len();
         for (_tag, v) in output_signals_map.iter() {
             assert_eq!(v.len(), length);
@@ -2813,8 +2956,52 @@ mod tests {
             output_signals.push(output);
         }
 
-        // println!("output_signals: {:#?}", output_signals);
+        if clock_ticks_to_advance > 1 {
+            //The splitter changes on the negative edge, so transitioning from HIGH->LOW.
+            let mut clock_input = Vec::new();
+            for _ in 0..start_at_splitter_num {
+                clock_input.push(HIGH);
+                clock_input.push(LOW_);
+            }
 
+            let clock_input = AutomaticInput::new(clock_input, 1, "Clock");
+
+            let clk_index = control_section.borrow_mut().get_index_from_tag(ControlSection::CLOCK);
+            clock_input.borrow_mut().connect_output_to_next_gate(
+                0,
+                clk_index,
+                control_section.clone(),
+            );
+
+            let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+            input_gates.push(clock_input);
+            let output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+
+            let mut cycle_nums = 0;
+            let mut continue_cycles = true;
+            while continue_cycles {
+                cycle_nums += 1;
+                continue_cycles = run_circuit(
+                    &input_gates,
+                    &output_gates,
+                    false,
+                    &mut |_clock_tick_inputs, _output_gates| {},
+                    None,
+                );
+            }
+
+            println!("cycle_nums {cycle_nums}");
+
+            control_section.borrow_mut().update_input_signal(
+                GateInput::new(
+                    clk_index,
+                    Signal::NONE,
+                    input_gates[0].borrow_mut().get_unique_id(),
+                )
+            );
+        }
+
+        println!("Running inputs.");
         let collected_output = run_multi_input_output_logic_gate_return(
             vec![],
             &output_signals,
@@ -2824,7 +3011,30 @@ mod tests {
 
         assert_eq!(output_signals.len(), collected_output.len());
 
+        println!("Advanced for {} clock ticks", clock_ticks_to_advance);
         println!("Ran for {} clock ticks", output_signals.len());
+        let tags_sorted_by_index = extract_output_tags_sorted_by_index(control_section);
+
+        let mut failed = false;
+        for i in 0..output_signals.len() {
+            let mut failed_map = HashMap::new();
+
+            for j in 0..output_signals[i].len() {
+                if (tags_sorted_by_index[j].clone(), output_signals[i][j].clone()) != (tags_sorted_by_index[j].clone(), collected_output[i][j].clone()) {
+                    failed_map.insert(tags_sorted_by_index[j].clone(), (output_signals[i][j].clone(), collected_output[i][j].clone()));
+                    failed = true;
+                };
+            }
+
+            if !failed_map.is_empty() {
+                println!("Clock tick {}\nfailed (passed, collected): {:?}", i, failed_map);
+            }
+        }
+
+        assert!(!failed);
+    }
+
+    fn extract_output_tags_sorted_by_index(control_section: Rc<RefCell<ControlSection>>) -> Vec<String> {
         let control_sec = control_section.borrow_mut();
         let tags_and_index: Vec<(&String, &GateTagInfo)> = control_sec.complex_gate.gate_tags_to_index.iter().collect();
         let tags_and_index: Vec<(&String, &GateTagInfo)> = tags_and_index.iter()
@@ -2838,27 +3048,10 @@ mod tests {
         let mut tags_and_index: Vec<(&String, usize)> = tags_and_index.iter()
             .map(|&(tag, gate_tag_info)| {
                 (tag, gate_tag_info.index)
-            }
-            ).collect();
+            }).collect();
         tags_and_index.sort_by(|a, b| a.1.cmp(&b.1));
-        let tags_sorted_by_index: Vec<&String> = tags_and_index.iter().map(|(tag, _)| *tag).collect();
-
-        let mut failed = false;
-        for i in 0..output_signals.len() {
-            let mut failed_map = HashMap::new();
-
-            for j in 0..output_signals[i].len() {
-                if (tags_sorted_by_index[j], output_signals[i][j].clone()) != (tags_sorted_by_index[j], collected_output[i][j].clone()) {
-                    failed_map.insert(tags_sorted_by_index[j], (output_signals[i][j].clone(), collected_output[i][j].clone()));
-                    failed = true;
-                };
-            }
-
-            if !failed_map.is_empty() {
-                println!("Clock tick {}\nfailed (passed, collected): {:?}", i, failed_map);
-            }
-        }
-        assert!(!failed);
+        let tags_sorted_by_index: Vec<String> = tags_and_index.iter().map(|(tag, _)| (*tag).clone()).collect();
+        tags_sorted_by_index
     }
 
     struct ClockTickRounds {
@@ -2867,12 +3060,12 @@ mod tests {
         clock_set: (&'static str, Vec<Vec<Signal>>),
     }
 
-    fn get_clock_tick_rounds(num_rounds: usize) -> ClockTickRounds {
+    fn get_clock_cycles(num_cycles: usize) -> ClockTickRounds {
         let mut clock_vec = Vec::new();
         let mut clock_enable_vec = Vec::new();
         let mut clock_set_vec = Vec::new();
 
-        for _ in 0..num_rounds {
+        for _ in 0..num_cycles {
             clock_vec.push(vec![LOW_]);
             clock_vec.push(vec![HIGH]);
             clock_vec.push(vec![HIGH]);
@@ -2897,41 +3090,97 @@ mod tests {
     }
 
     #[test]
+    fn control_section_initialization() {
+        let control_section = ControlSection::new(8);
+
+        let tags_sorted_by_index = extract_output_tags_sorted_by_index(control_section.clone());
+
+        let collected_output = control_section.borrow_mut().fetch_output_signals().unwrap();
+
+        let mut generated_output = vec![LOW_; tags_sorted_by_index.len()];
+        generated_output[0] = HIGH; //Set BUS_1 high
+
+        let collected_output: Vec<Signal> = collected_output.into_iter().map(
+            |out| {
+                match out {
+                    GateOutputState::NotConnected(signal) => signal,
+                    GateOutputState::Connected(_) => panic!("No gate output should be connected.")
+                }
+            }
+        ).collect();
+
+        assert_eq!(generated_output, collected_output);
+    }
+
+    #[test]
     fn control_section_fetch_instructions() {
-        //TODO: Does the RAM_S even need to go HIGH? I mean I don't really see why it does.
-        let clock_tick_rounds = get_clock_tick_rounds(1);
+        let clock_tick_rounds = get_clock_cycles(3);
         test_control_section(
             HashMap::from(
                 [
-                    (ControlSection::BUS_1, vec![HIGH, HIGH]),//, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
-                    (ControlSection::IAR_E, vec![HIGH, HIGH]),//, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
-                    (ControlSection::MAR_S, vec![LOW_, HIGH]),//, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
-                    (ControlSection::ACC_S, vec![LOW_, HIGH]),//, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
-                    (ControlSection::RAM_S, vec![LOW_, HIGH]),//, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
-                    (ControlSection::RAM_E, vec![LOW_, LOW_]),//, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
-                    (ControlSection::IR_S, vec![LOW_, LOW_]),//, LOW_, LOW_,LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
-                    (ControlSection::ACC_E, vec![LOW_, LOW_]),//, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
-                    (ControlSection::IAR_S, vec![LOW_, LOW_]),//, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                    (ControlSection::BUS_1, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::IAR_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::MAR_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::RAM_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::IR_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::IAR_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
                 ]
             ),
             HashMap::from(
                 [
-                    (ControlSection::CLOCK       , vec![vec![LOW_], vec![HIGH]]),
-                    (ControlSection::CLOCK_ENABLE, vec![vec![HIGH], vec![HIGH]]),
-                    (ControlSection::CLOCK_SET   , vec![vec![LOW_], vec![HIGH]]),
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_set,
+                    clock_tick_rounds.clock_enable
                 ]
-                // [
-                //     clock_tick_rounds.clock,
-                //     clock_tick_rounds.clock_set,
-                //     clock_tick_rounds.clock_enable
-                // ]
             ),
+            1,
         );
     }
 
     #[test]
-    fn control_unit_initialization() {
-        let control_section = ControlSection::new(8);
-        control_section.borrow_mut().toggle_output_printing(true);
+    fn control_section_add() {
+        let clock_tick_rounds = get_clock_cycles(2);
+        //TODO: C_OUT should only be active when stepper 5 is active, but, doesn't it go active on
+        // step 3->4 because that's the negative edge of the clock? Not 100% sure now.
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_,]),
+                    (ControlSection::R2_E,  vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_,]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH,]),
+                    (ControlSection::IO,    vec![HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH,]),
+                    (ControlSection::R1_E,  vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_,]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_,]),
+                    (ControlSection::R2_S,  vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    // (ControlSection::CLOCK,        vec![vec![LOW_], vec![HIGH]]),
+                    // (ControlSection::CLOCK_ENABLE, vec![vec![HIGH], vec![HIGH]]),
+                    // (ControlSection::CLOCK_SET,    vec![vec![LOW_], vec![HIGH]]),
+                    ("IR", vec![
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
+                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
+                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
+                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
+                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
+                    ])
+                ]
+            ),
+            4,
+        );
     }
 }

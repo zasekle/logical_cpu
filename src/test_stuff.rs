@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use crate::globals::CLOCK_TICK_NUMBER;
+use crate::globals::{CLOCK_TICK_NUMBER, get_clock_tick_number};
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, Signal, UniqueID};
 use crate::logic::input_gates::AutomaticInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
@@ -195,6 +195,8 @@ pub fn run_multi_input_output_logic_gate_return(
         unsafe {
             CLOCK_TICK_NUMBER += 1;
         }
+
+        println!("CLOCK_TICK_NUMBER: {}", get_clock_tick_number());
 
         continue_clock = run_circuit(
             &input_gates,
