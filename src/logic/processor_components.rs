@@ -888,6 +888,7 @@ impl LogicGate for RAMUnit {
     }
 }
 
+//This is a higher level thing for the CPU to connect to and add one.
 pub struct VariableBitBusOne {
     complex_gate: ComplexGateMembers,
     and_gates: Vec<Rc<RefCell<And>>>,
@@ -1052,6 +1053,7 @@ impl LogicGate for VariableBitBusOne {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;

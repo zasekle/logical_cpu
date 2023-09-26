@@ -121,48 +121,48 @@ pub struct ControlSection {
 #[allow(dead_code)]
 impl ControlSection {
     //Inputs
-    const CLOCK: &'static str = "CLK";
-    const CLOCK_ENABLE: &'static str = "CLKE";
-    const CLOCK_SET: &'static str = "CLKS";
-    const C_IN: &'static str = "C_IN";
-    const A_L: &'static str = "A_L";
-    const EQ: &'static str = "EQ";
-    const Z: &'static str = "Z";
+    pub const CLOCK: &'static str = "CLK";
+    pub const CLOCK_ENABLE: &'static str = "CLKE";
+    pub const CLOCK_SET: &'static str = "CLKS";
+    pub const C_IN: &'static str = "C_IN";
+    pub const A_L: &'static str = "A_L";
+    pub const EQ: &'static str = "EQ";
+    pub const Z: &'static str = "Z";
 
     //High level inputs
-    const HIGH_LVL_MARS: &'static str = "H_MARS";
-    const HIGH_LVL_RESET: &'static str = "H_RESET";
-    const HIGH_LVL_LOAD: &'static str = "H_LOAD";
+    pub const HIGH_LVL_MARS: &'static str = "H_MARS";
+    pub const HIGH_LVL_RESET: &'static str = "H_RESET";
+    pub const HIGH_LVL_LOAD: &'static str = "H_LOAD";
 
     //Outputs
-    const BUS_1: &'static str = "BUS_1";
-    const RAM_E: &'static str = "RAM_E";
-    const ACC_E: &'static str = "ACC_E";
-    const IAR_E: &'static str = "IAR_E";
-    const R0_E: &'static str = "R0_E";
-    const R1_E: &'static str = "R1_E";
-    const R2_E: &'static str = "R2_E";
-    const R3_E: &'static str = "R3_E";
-    const MAR_S: &'static str = "MAR_S";
-    const RAM_S: &'static str = "RAM_S";
-    const ACC_S: &'static str = "ACC_S";
-    const IAR_S: &'static str = "IAR_S";
-    const R0_S: &'static str = "R0_S";
-    const R1_S: &'static str = "R1_S";
-    const R2_S: &'static str = "R2_S";
-    const R3_S: &'static str = "R3_S";
-    const IR_S: &'static str = "IR_S";
-    const TMP_S: &'static str = "TMP_S";
-    const ALU_0: &'static str = "ALU_0";
-    const ALU_1: &'static str = "ALU_1";
-    const ALU_2: &'static str = "ALU_2";
-    const FLAG_S: &'static str = "FLAG_S";
-    const IO_CLK_S: &'static str = "IO_CLK_S";
-    const IO_CLK_E: &'static str = "IO_CLK_E";
-    const C_OUT: &'static str = "C_OUT";
-    const END: &'static str = "END";
-    const IO: &'static str = "IO";
-    const DA: &'static str = "DA";
+    pub const BUS_1: &'static str = "BUS_1";
+    pub const RAM_E: &'static str = "RAM_E";
+    pub const ACC_E: &'static str = "ACC_E";
+    pub const IAR_E: &'static str = "IAR_E";
+    pub const R0_E: &'static str = "R0_E";
+    pub const R1_E: &'static str = "R1_E";
+    pub const R2_E: &'static str = "R2_E";
+    pub const R3_E: &'static str = "R3_E";
+    pub const MAR_S: &'static str = "MAR_S";
+    pub const RAM_S: &'static str = "RAM_S";
+    pub const ACC_S: &'static str = "ACC_S";
+    pub const IAR_S: &'static str = "IAR_S";
+    pub const R0_S: &'static str = "R0_S";
+    pub const R1_S: &'static str = "R1_S";
+    pub const R2_S: &'static str = "R2_S";
+    pub const R3_S: &'static str = "R3_S";
+    pub const IR_S: &'static str = "IR_S";
+    pub const TMP_S: &'static str = "TMP_S";
+    pub const ALU_0: &'static str = "ALU_0";
+    pub const ALU_1: &'static str = "ALU_1";
+    pub const ALU_2: &'static str = "ALU_2";
+    pub const FLAG_S: &'static str = "FLAG_S";
+    pub const IO_CLK_S: &'static str = "IO_CLK_S";
+    pub const IO_CLK_E: &'static str = "IO_CLK_E";
+    pub const C_OUT: &'static str = "C_OUT";
+    pub const END: &'static str = "END";
+    pub const IO: &'static str = "IO";
+    pub const DA: &'static str = "DA";
 
     pub fn new(bus_width: usize) -> Rc<RefCell<Self>> {
         assert!(bus_width > 7);
@@ -179,11 +179,6 @@ impl ControlSection {
         input_gates.push(SimpleInput::new(4, "IR_5"));
         input_gates.push(SimpleInput::new(4, "IR_6"));
         input_gates.push(SimpleInput::new(8, "IR_7"));
-
-        // //todo d
-        // for i in input_gates.iter() {
-        //     i.borrow_mut().toggle_output_printing(true);
-        // }
 
         for i in 8..bus_width {
             let input_tag = format!("IR_{}", i);
@@ -463,26 +458,6 @@ impl ControlSection {
         control_section.alu_input_or.borrow_mut().set_tag("alu_input_or");
         control_section.add_and.borrow_mut().set_tag("add_and");
         control_section.add_not.borrow_mut().set_tag("add_not");
-
-        // //todo d
-        // control_section.stepper_splitters[0].borrow_mut().toggle_output_printing(true);
-        // control_section.stepper_splitters[1].borrow_mut().toggle_output_printing(true);
-        // control_section.stepper_splitters[2].borrow_mut().toggle_output_printing(true);
-        control_section.stepper_splitters[3].borrow_mut().toggle_output_printing(true);
-        control_section.stepper_splitters[4].borrow_mut().toggle_output_printing(true);
-        // control_section.stepper_splitters[5].borrow_mut().toggle_output_printing(true);
-        // control_section.stepper_out_4_top_0_and.borrow_mut().toggle_output_printing(true);
-        // control_section.tmp_s_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r0_e_reg_b_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r1_e_reg_b_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r2_e_reg_b_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r3_e_reg_b_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r0_e_reg_a_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r1_e_reg_a_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r2_e_reg_a_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r3_e_reg_a_and.borrow_mut().toggle_output_printing(true);
-        // control_section.r_e_reg_b_decoder.borrow_mut().toggle_output_printing(true);
-        // control_section.r_e_reg_a_decoder.borrow_mut().toggle_output_printing(true);
 
         control_section.build_and_prime_circuit(output_gates_logic);
 

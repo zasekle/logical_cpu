@@ -7,3 +7,4 @@ pub mod complex_logic;
 pub mod processor_components;
 pub mod arithmetic_gates;
 pub mod control_section;
+pub mod variable_bit_cpu;

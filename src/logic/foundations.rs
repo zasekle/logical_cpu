@@ -239,6 +239,7 @@ pub enum GateType {
     VariableBitBusOneType,
     VariableOutputStepperType,
     ControlSectionType,
+    VariableBitCPUType,
 }
 
 impl fmt::Display for GateType {
@@ -282,6 +283,7 @@ impl fmt::Display for GateType {
             GateType::VariableBitBusOneType => "VARIABLE_BIT_BUS_ONE",
             GateType::VariableOutputStepperType => "VARIABLE_OUTPUT_STEPPER",
             GateType::ControlSectionType => "CONTROL_SECTION",
+            GateType::VariableBitCPUType => "VARIABLE_BIT_CPU",
         };
         write!(f, "{}", printable)
     }

@@ -18,37 +18,26 @@ use crate::run_circuit::start_clock;
 
 fn main() {
 
-    //TODO: There are technically a few things to be built still.
-    // Accumulator (This is identical to a VariableBitRegister)
-    // TMP (This is identical to a VariableBitMemoryCell)
-    // Bus (Can probably just make a VariableBitBus or something and connect all the inputs & outputs to it)
-    // Clock (This will need logic on top of what I already have for it).
-
-    //TODO: I can do this
-    // 1) I can make the Control Section
-    //  As I build things inside the Control section I can test the output bits and were they are
-    //  supposed to be at different clock ticks.
-
-    //TODO: I assume that I will want to accumulate everything in the bus, then propagate it out.
-
     //TODO: I can probably tie my SignalGatekeeper to the set values of a lot of other places. For
     // example the RAM, the registers, the memory etc... Otherwise, it will need to propagate through
     // the entire thing every time.
 
-    //TODO: I wonder if I can tie things together like this to force them to happen only AFTER the
-    // set or enable bit have been changed. Does it matter?
+    //TODO: may be worthwhile to change the way RAMUnit and VariableBitCPU work to take more than
+    // just the absolute size of a decoder and instead take more fine grained numbers.
+
     //TODO: There are other gates I can probably tie together using run_circuit, although I don't
     // know if it will matter. Any of the ones that have a Vec of gates inside them. However, I think
     // it only matters if they have a variable number of inputs to the specific blocks inside of them
-    // to avoid the same block from being called twice.
+    // to avoid the same block from being called twice. Might be worthwhile in the adder (or other ALU
+    // gates?)
 
     //TODO: With the way that I did run_circuit and grouping the gates before running them, it might
     // be possible to run them in a multithreaded way. Or maybe every time a signal splits I can
     // make a new thread (or a new task to pass into a thread pool at least). Or I could just make
     // multiple processors connected to the same RAM and executing different instructions lol.
-
-    //TODO: The reset pin on the ControlUnit relies on all registers being set to pull down, so if
-    // they get NONE as the input, they need the bits to be set low.
+    // Probably not the last one, while it would give me some insight into how to handle some of the
+    // multi-threaded problems, it would also make the simulation run the propagation of electricity
+    // on multiple CPUs.
 
     //Remember that when running stuff in the registers, there is always the possibility that
     // multiple clock ticks are needed. The first will do something like enable the `Set` bit. The

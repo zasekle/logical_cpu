@@ -635,14 +635,6 @@ impl LogicGate for ControlledBuffer {
         self.members.tag = tag.to_string()
     }
 
-    fn get_index_from_tag(&self, tag: &str) -> usize {
-        if tag == "E" {
-            self.members.input_signals.len() - 1
-        } else {
-            panic!("Gate {} using tag {} id {} did not exist.", self.get_tag(), tag, self.get_unique_id().id())
-        }
-    }
-
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
