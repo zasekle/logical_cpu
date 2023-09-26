@@ -3112,6 +3112,14 @@ mod tests {
         assert_eq!(generated_output, collected_output);
     }
 
+    fn copy_input_n_times(v: Vec<Signal>, num_copies: usize) -> Vec<Vec<Signal>> {
+        let mut return_vec = Vec::new();
+        for _ in 0..num_copies {
+            return_vec.push(v.clone());
+        }
+        return_vec
+    }
+
     #[test]
     fn control_section_fetch_instructions() {
         let clock_tick_rounds = get_clock_cycles(3);
@@ -3141,19 +3149,20 @@ mod tests {
 
     #[test]
     fn control_section_add() {
-        let clock_tick_rounds = get_clock_cycles(2);
-        //TODO: C_OUT should only be active when stepper 5 is active, but, doesn't it go active on
-        // step 3->4 because that's the negative edge of the clock? Not 100% sure now.
+        let clock_tick_rounds = get_clock_cycles(3);
         test_control_section(
             HashMap::from(
                 [
-                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_,]),
-                    (ControlSection::R2_E,  vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_,]),
-                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH,]),
-                    (ControlSection::IO,    vec![HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH,]),
-                    (ControlSection::R1_E,  vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_,]),
-                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_,]),
-                    (ControlSection::R2_S,  vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R2_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::IO, vec![HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH]),
+                    (ControlSection::R1_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R2_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
                 ]
             ),
             HashMap::from(
@@ -3161,23 +3170,468 @@ mod tests {
                     clock_tick_rounds.clock,
                     clock_tick_rounds.clock_enable,
                     clock_tick_rounds.clock_set,
-                    // (ControlSection::CLOCK,        vec![vec![LOW_], vec![HIGH]]),
-                    // (ControlSection::CLOCK_ENABLE, vec![vec![HIGH], vec![HIGH]]),
-                    // (ControlSection::CLOCK_SET,    vec![vec![LOW_], vec![HIGH]]),
-                    ("IR", vec![
+                    ("IR", copy_input_n_times(
                         vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        vec![LOW_, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH], // R1+R2=R2
-                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
-                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
-                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
-                        // vec![HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // R1+R2=R2
-                    ])
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_shift_right() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R0_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R3_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                    (ControlSection::ALU_0, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, HIGH, LOW_, LOW_, HIGH], // R3
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_shift_left() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R0_E, vec![HIGH, HIGH, HIGH, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R0_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                    (ControlSection::ALU_1, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, HIGH], // R3
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_not() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R1_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R0_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R1_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                    (ControlSection::ALU_0, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ALU_1, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_, HIGH], // R1
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_and() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R0_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R3_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                    (ControlSection::ALU_2, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH], // R3 & R0 = R3
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_or() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R0_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R3_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                    (ControlSection::ALU_0, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ALU_2, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, HIGH, LOW_, HIGH, HIGH], // R3 | R0 = R3
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_xor() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R0_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R3_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                    (ControlSection::ALU_1, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ALU_2, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH], // R3 ^ R0 = R3
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_cmp() {
+        //TODO: Is this test correct, maybe the output needs to be stored in a specific register?
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::TMP_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R0_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::C_OUT, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ALU_0, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ALU_1, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ALU_2, vec![LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, HIGH, HIGH, HIGH, HIGH], // R3 > R0 = R3
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_store() {
+        let clock_tick_rounds = get_clock_cycles(2);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::R0_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::MAR_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::RAM_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_], // Store R3 in RAM address inside R0.
+                        8,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_load() {
+        let clock_tick_rounds = get_clock_cycles(2);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::R0_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::MAR_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::RAM_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::R3_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_], // Load R3 from RAM address inside R0.
+                        8,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+
+    #[test]
+    fn control_section_data() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::IAR_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::MAR_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::RAM_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::IAR_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_], // Store data from next instruction address in R3.
+                        12,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_jump() {
+        let clock_tick_rounds = get_clock_cycles(1);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::R3_E, vec![HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::IAR_S, vec![LOW_, HIGH, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, HIGH, LOW_, LOW_, HIGH, HIGH, LOW_, LOW_], // Jump to address in R3.
+                        4,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_jump_addr() {
+        let clock_tick_rounds = get_clock_cycles(2);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::IAR_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::MAR_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::RAM_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::IAR_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_], // Jumps to the address stored in the next byte (inside IAR) in RAM.
+                        8,
+                    ))
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_jump_if_true() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::IAR_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::MAR_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::RAM_E, vec![LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::IAR_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![HIGH, LOW_, LOW_, LOW_, HIGH, LOW_, HIGH, LOW_], // Jumps to the address stored in next RAM location if flags set (flag set).
+                        12,
+                    )),
+                    ("Z", vec![vec![LOW_], vec![LOW_], vec![LOW_], vec![LOW_], vec![LOW_], vec![LOW_], vec![LOW_], vec![LOW_], vec![HIGH], vec![HIGH], vec![HIGH], vec![LOW_]])
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_jump_if_false() {
+        let clock_tick_rounds = get_clock_cycles(3);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, HIGH]),
+                    (ControlSection::IAR_E, vec![HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::MAR_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_S, vec![LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::ACC_E, vec![LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                    (ControlSection::IAR_S, vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, LOW_, LOW_, LOW_, LOW_, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![LOW_, HIGH, LOW_, LOW_, HIGH, LOW_, HIGH, LOW_], // Jumps to the address stored in next RAM location if flags set (flag not set).
+                        12,
+                    )),
+                ]
+            ),
+            4,
+        );
+    }
+
+    #[test]
+    fn control_section_clear_flags() {
+        let clock_tick_rounds = get_clock_cycles(1);
+        test_control_section(
+            HashMap::from(
+                [
+                    (ControlSection::BUS_1,  vec![HIGH, HIGH, HIGH, LOW_]),
+                    (ControlSection::FLAG_S, vec![LOW_, HIGH, LOW_, LOW_]),
+                ]
+            ),
+            HashMap::from(
+                [
+                    clock_tick_rounds.clock,
+                    clock_tick_rounds.clock_enable,
+                    clock_tick_rounds.clock_set,
+                    ("IR", copy_input_n_times(
+                        vec![LOW_, LOW_, LOW_, LOW_, LOW_, HIGH, HIGH, LOW_], // Jumps to the address stored in next RAM location if flags set (flag not set).
+                        4,
+                    )),
                 ]
             ),
             4,
