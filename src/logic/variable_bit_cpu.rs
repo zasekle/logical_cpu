@@ -2,13 +2,15 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::logic::arithmetic_gates::ArithmeticLogicUnit;
 use crate::logic::basic_gates::{And, Splitter};
+use crate::logic::complex_logic::FourCycleClockHookup;
 use crate::logic::control_section::ControlSection;
 
 use crate::logic::foundations::{ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
-use crate::logic::output_gates::{LogicGateAndOutputGate};
+use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
 #[allow(unused_imports)]
 use crate::logic::foundations::Signal::{LOW_, HIGH};
+use crate::logic::input_gates::{Clock, SimpleInput};
 use crate::logic::memory_gates::{OneBitMemoryCell, VariableBitMemoryCell};
 use crate::logic::processor_components::{RAMUnit, VariableBitBusOne, VariableBitRegister};
 
@@ -32,12 +34,31 @@ pub struct VariableBitCPU {
     acc: Rc<RefCell<VariableBitRegister>>,
     flags: Rc<RefCell<VariableBitMemoryCell>>,
     flags_c_out_splitter: Rc<RefCell<Splitter>>,
-    //TODO: clock
+    clock: Rc<RefCell<Clock>>,
+    four_cycle_clock_hookup: Rc<RefCell<FourCycleClockHookup>>,
     //TODO: The other pieces
 }
 
 #[allow(dead_code)]
 impl VariableBitCPU {
+
+    //Inputs
+    pub const LOAD: &'static str = "LOAD";
+    pub const RESET: &'static str = "RESET";
+    pub const MARS: &'static str = "MARS";
+    pub const END: &'static str = "END";
+
+    //Outputs
+    pub const R0: &'static str = "R0";
+    pub const R1: &'static str = "R1";
+    pub const R2: &'static str = "R2";
+    pub const R3: &'static str = "R3";
+    pub const IR: &'static str = "IR";
+    pub const IAR: &'static str = "IAR";
+    pub const ACC: &'static str = "ACC";
+    pub const TMP: &'static str = "TMP";
+    pub const FLAGS: &'static str = "FLAGS";
+
     pub fn new(number_bits: usize, ram_cells_decoder_input: usize) -> Rc<RefCell<Self>> {
         assert_ne!(number_bits, 0);
 
@@ -48,16 +69,25 @@ impl VariableBitCPU {
         //TODO: The reset pin on the ControlUnit relies on all registers being set to pull down, so if
         // they get NONE as the input, they need the bits to be set low.
 
-        //TODO: inputs & outputs
-        // Inputs
-        //  LOAD
-        //  RESET
-        //  MARS
-        //  END
-        //  Somehow set the ram
-        // Outputs
-        //  Registers at least
-        //  How to get to RAM?
+        input_gates.push(SimpleInput::new(1, VariableBitCPU::LOAD));
+        input_gates.push(SimpleInput::new(1, VariableBitCPU::RESET));
+        input_gates.push(SimpleInput::new(1, VariableBitCPU::MARS));
+        input_gates.push(SimpleInput::new(1, VariableBitCPU::END));
+
+        let mut store_output = |gate: Rc<RefCell<SimpleOutput>>| {
+            output_gates.push(gate.clone());
+            output_gates_logic.push(gate.clone());
+        };
+
+        store_output(SimpleOutput::new(VariableBitCPU::R0));
+        store_output(SimpleOutput::new(VariableBitCPU::R1));
+        store_output(SimpleOutput::new(VariableBitCPU::R2));
+        store_output(SimpleOutput::new(VariableBitCPU::R3));
+        store_output(SimpleOutput::new(VariableBitCPU::IR));
+        store_output(SimpleOutput::new(VariableBitCPU::IAR));
+        store_output(SimpleOutput::new(VariableBitCPU::ACC));
+        store_output(SimpleOutput::new(VariableBitCPU::TMP));
+        store_output(SimpleOutput::new(VariableBitCPU::FLAGS));
 
         let mut bit_register = VariableBitCPU {
             complex_gate: ComplexGateMembers::new(
@@ -85,11 +115,17 @@ impl VariableBitCPU {
             acc: VariableBitRegister::new(number_bits),
             flags: VariableBitMemoryCell::new(4), //size 4 for the alu outputs
             flags_c_out_splitter: Splitter::new(1, 2),
+            clock: Clock::new(1, "CLK"),
+            four_cycle_clock_hookup: FourCycleClockHookup::new(),
         };
 
         bit_register.build_and_prime_circuit(number_bits, output_gates_logic);
 
         Rc::new(RefCell::new(bit_register))
+    }
+
+    pub fn get_clock(&self) -> Rc<RefCell<Clock>> {
+        self.clock.clone()
     }
 
     fn build_and_prime_circuit(
@@ -98,6 +134,7 @@ impl VariableBitCPU {
         output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
     ) {
 
+        //TODO: do the clock and the four_cycle hookups
         self.connect_bus(bus_size);
         self.connect_register_0(bus_size);
         self.connect_register_1(bus_size);

@@ -3357,7 +3357,6 @@ mod tests {
 
     #[test]
     fn control_section_cmp() {
-        //TODO: Is this test correct, maybe the output needs to be stored in a specific register?
         let clock_tick_rounds = get_clock_cycles(3);
         test_control_section(
             HashMap::from(

@@ -17,6 +17,7 @@ use crate::build_circuit::InputAndOutputGates;
 use crate::run_circuit::start_clock;
 
 fn main() {
+    //TODO: finish the clock todo, then go back and work on variable_bit_cpu.rs
 
     //TODO: I can probably tie my SignalGatekeeper to the set values of a lot of other places. For
     // example the RAM, the registers, the memory etc... Otherwise, it will need to propagate through

@@ -56,7 +56,11 @@ impl LogicGate for SimpleOutput {
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
+        let changed_count_this_tick = self.oscillation_detection.detect_oscillation(
+            &self.gate_type,
+            &self.unique_id,
+            &self.tag,
+        );
 
         let input_signal_updated = if self.output_state[&input.sending_id] == input.signal {
             false

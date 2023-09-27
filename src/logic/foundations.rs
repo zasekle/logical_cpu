@@ -175,7 +175,7 @@ impl OscillationDetection {
         }
     }
 
-    pub fn detect_oscillation(&mut self, gate_type: &GateType) -> usize
+    pub fn detect_oscillation(&mut self, gate_type: &GateType, id: &UniqueID, tag: &str) -> usize
     {
         let clock_tick_number = get_clock_tick_number();
 
@@ -184,8 +184,10 @@ impl OscillationDetection {
 
             if self.changed_count_this_tick >= MAX_INPUT_CHANGES {
                 panic!(
-                    "Oscillation (a loop) was detected on the current {} gate",
+                    "Oscillation (a loop) was detected on the current {} gate id {} tag {}",
                     gate_type,
+                    id.id,
+                    tag,
                 );
             }
         } else {
@@ -220,6 +222,8 @@ pub enum GateType {
     OneBitMemoryCellType,
     VariableBitMemoryCellType,
     VariableCPUEnableType,
+    MasterSlaveJKFlipFlopType,
+    FourCycleClockHookupType,
     VariableBitRegisterType,
     VariableDecoderType,
     VariableSingleRAMCellType,
@@ -264,6 +268,8 @@ impl fmt::Display for GateType {
             GateType::OneBitMemoryCellType => "ONE_BIT_MEMORY_CELL",
             GateType::VariableBitMemoryCellType => "VARIABLE_BIT_MEMORY_CELL",
             GateType::VariableCPUEnableType => "VARIABLE_CPU_ENABLE",
+            GateType::MasterSlaveJKFlipFlopType => "MASTER_SLAVE_JK_FLIP_FLOP",
+            GateType::FourCycleClockHookupType => "FOUR_CYCLE_CLOCK_HOOKUP",
             GateType::VariableBitRegisterType => "VARIABLE_BIT_REGISTER",
             GateType::VariableDecoderType => "VARIABLE_DECODER",
             GateType::VariableSingleRAMCellType => "VARIABLE_SINGLE_RAM_CELL",
@@ -320,7 +326,7 @@ impl BasicGateMembers {
         } else {
             GateLogic::calculate_output_from_inputs(
                 &gate_type,
-                Some(&result.input_signals),
+                &result.input_signals,
             ).unwrap()
         };
 
@@ -333,7 +339,11 @@ impl BasicGateMembers {
     }
 
     pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        let changed_count_this_tick = self.oscillation_detection.detect_oscillation(&self.gate_type);
+        let changed_count_this_tick = self.oscillation_detection.detect_oscillation(
+            &self.gate_type,
+            &self.unique_id,
+            self.tag.as_str()
+        );
 
         let input_signal_updated = if self.input_signals[input.input_index][&input.sending_id] == input.signal {
             false
@@ -357,7 +367,7 @@ impl BasicGateMembers {
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
             self.unique_id,
-            Some(&mut self.input_signals),
+            &mut self.input_signals,
             &mut self.output_states,
             current_gate_output_index,
             &self.tag,
@@ -718,8 +728,12 @@ impl GateLogic {
         }
     }
 
-    pub fn calculate_output_for_clock() -> Signal {
-        HIGH
+    pub fn calculate_output_for_clock(input_signals: &Vec<Signal>) -> Signal {
+        if *input_signals.first().unwrap() == LOW_ {
+            HIGH
+        } else {
+            LOW_
+        }
     }
 
     pub fn calculate_output_for_automatic_input(input_signals: &Vec<Signal>) -> Signal {
@@ -735,7 +749,7 @@ impl GateLogic {
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
         Self::fetch_output_signals(
             &basic_gate.gate_type,
-            Some(&basic_gate.input_signals),
+            &basic_gate.input_signals,
             &mut basic_gate.output_states,
             basic_gate.unique_id,
             basic_gate.should_print_output,
@@ -745,7 +759,7 @@ impl GateLogic {
 
     pub fn fetch_output_signals(
         gate_type: &GateType,
-        input_signals: Option<&Vec<HashMap<UniqueID, Signal>>>,
+        input_signals: &Vec<HashMap<UniqueID, Signal>>,
         output_states: &mut Vec<GateOutputState>,
         unique_id: UniqueID,
         should_print_output: bool,
@@ -783,7 +797,7 @@ impl GateLogic {
     pub fn connect_output_to_next_gate(
         gate_type: GateType,
         current_gate_id: UniqueID,
-        input_signals: Option<&mut Vec<HashMap<UniqueID, Signal>>>,
+        input_signals: &Vec<HashMap<UniqueID, Signal>>,
         output_states: &mut Vec<GateOutputState>,
         current_gate_output_index: usize,
         current_gate_tag: &str,
@@ -795,7 +809,7 @@ impl GateLogic {
         // it.
         let output_signal = GateLogic::calculate_output_from_inputs(
             &gate_type,
-            input_signals.map(|x| &*x),
+            input_signals,
         ).unwrap();
 
         GateLogic::connect_output_to_next_gate_no_calculate(
@@ -884,25 +898,20 @@ impl GateLogic {
 
     pub fn calculate_output_from_inputs(
         gate_type: &GateType,
-        input_signals: Option<&Vec<HashMap<UniqueID, Signal>>>,
+        input_signals: &Vec<HashMap<UniqueID, Signal>>,
     ) -> Result<Signal, GateLogicError> {
-        let input_signals = match input_signals {
-            None => None,
-            Some(input_signals) => {
-                Some(calculate_input_signals_from_all_inputs(input_signals)?)
-            }
-        };
+        let input_signals = calculate_input_signals_from_all_inputs(input_signals)?;
 
         let output_signal = match gate_type {
-            GateType::NotType => GateLogic::calculate_output_for_not(&input_signals.unwrap()),
-            GateType::OrType => GateLogic::calculate_output_for_or(&input_signals.unwrap()),
-            GateType::AndType => GateLogic::calculate_output_for_and(&input_signals.unwrap()),
-            GateType::NorType => GateLogic::calculate_output_for_nor(&input_signals.unwrap()),
-            GateType::NandType => GateLogic::calculate_output_for_nand(&input_signals.unwrap()),
-            GateType::XOrType => GateLogic::calculate_output_for_xor(&input_signals.unwrap()),
-            GateType::ClockType => GateLogic::calculate_output_for_clock(),
-            GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(&input_signals.unwrap()),
-            GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(&input_signals.unwrap()),
+            GateType::NotType => GateLogic::calculate_output_for_not(&input_signals),
+            GateType::OrType => GateLogic::calculate_output_for_or(&input_signals),
+            GateType::AndType => GateLogic::calculate_output_for_and(&input_signals),
+            GateType::NorType => GateLogic::calculate_output_for_nor(&input_signals),
+            GateType::NandType => GateLogic::calculate_output_for_nand(&input_signals),
+            GateType::XOrType => GateLogic::calculate_output_for_xor(&input_signals),
+            GateType::ClockType => GateLogic::calculate_output_for_clock(&input_signals),
+            GateType::AutomaticInputType => GateLogic::calculate_output_for_automatic_input(&input_signals),
+            GateType::SimpleInputType => GateLogic::calculate_output_for_simple_input(&input_signals),
             _ => panic!("calculate_outputs_from_inputs called with invalid gate_type of {}", gate_type)
         };
 
