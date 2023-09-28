@@ -11,7 +11,7 @@ pub struct Clock {
     should_print_output: bool,
     gate_type: GateType,
     tag: String,
-    previous_signal: Vec<Signal>,
+    previous_signal: Signal,
 }
 
 #[allow(dead_code)]
@@ -23,7 +23,7 @@ impl Clock {
             should_print_output: false,
             gate_type: GateType::ClockType,
             tag: String::from(tag),
-            previous_signal: vec![HIGH],
+            previous_signal: HIGH,
         };
 
         clock.output_states.resize_with(
@@ -35,14 +35,9 @@ impl Clock {
     }
 
     fn get_formatted_input(&self) -> Vec<HashMap<UniqueID, Signal>> {
-        self.previous_signal
-            .iter()
-            .map(|val| {
-                let mut map = HashMap::new();
-                map.insert(self.unique_id, val.clone());
-                map
-            })
-            .collect()
+        vec![
+            HashMap::from([(self.unique_id, self.previous_signal.clone())])
+        ]
     }
 }
 
@@ -75,15 +70,24 @@ impl LogicGate for Clock {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        //TODO: Does this need to save the new clock tick to the index 0 of `previous signal`?
-        GateLogic::fetch_output_signals(
+        let input_signals = &self.get_formatted_input();
+        let fetch_result = GateLogic::fetch_output_signals(
             &self.gate_type,
-            &self.get_formatted_input(),
+            &input_signals,
             &mut self.output_states,
             self.unique_id,
             self.should_print_output,
             self.tag.as_str(),
-        )
+        );
+
+        let output_signal = GateLogic::calculate_output_from_inputs(
+            &self.gate_type,
+            &input_signals
+        )?;
+
+        self.previous_signal = output_signal;
+
+        fetch_result
     }
 
     fn get_gate_type(&self) -> GateType {

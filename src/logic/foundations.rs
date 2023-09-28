@@ -175,8 +175,21 @@ impl OscillationDetection {
         }
     }
 
-    pub fn detect_oscillation(&mut self, gate_type: &GateType, id: &UniqueID, tag: &str) -> usize
+    pub fn detect_oscillation(
+        &mut self,
+        gate_type: &GateType,
+        id: &UniqueID,
+        tag: &str,
+        input_id: &UniqueID,
+    ) -> usize
     {
+        //If the zero id was used, don't detect oscillation. This is because when a gate needs to
+        // update its own input, it can update the clock tick and cause problems for higher level
+        // gates that are trying to prime their circuit (it won't propagate).
+        if input_id.id == 0 {
+            return self.changed_count_this_tick;
+        }
+
         let clock_tick_number = get_clock_tick_number();
 
         if self.current_tick == clock_tick_number {
@@ -224,6 +237,8 @@ pub enum GateType {
     VariableCPUEnableType,
     MasterSlaveJKFlipFlopType,
     FourCycleClockHookupType,
+    VariableBitCounterType,
+    VariableBitMultiplexerType,
     VariableBitRegisterType,
     VariableDecoderType,
     VariableSingleRAMCellType,
@@ -270,6 +285,8 @@ impl fmt::Display for GateType {
             GateType::VariableCPUEnableType => "VARIABLE_CPU_ENABLE",
             GateType::MasterSlaveJKFlipFlopType => "MASTER_SLAVE_JK_FLIP_FLOP",
             GateType::FourCycleClockHookupType => "FOUR_CYCLE_CLOCK_HOOKUP",
+            GateType::VariableBitCounterType => "VARIABLE_BIT_COUNTER",
+            GateType::VariableBitMultiplexerType => "VARIABLE_BIT_MULTIPLEXER",
             GateType::VariableBitRegisterType => "VARIABLE_BIT_REGISTER",
             GateType::VariableDecoderType => "VARIABLE_DECODER",
             GateType::VariableSingleRAMCellType => "VARIABLE_SINGLE_RAM_CELL",
@@ -342,7 +359,8 @@ impl BasicGateMembers {
         let changed_count_this_tick = self.oscillation_detection.detect_oscillation(
             &self.gate_type,
             &self.unique_id,
-            self.tag.as_str()
+            self.tag.as_str(),
+            &input.sending_id,
         );
 
         let input_signal_updated = if self.input_signals[input.input_index][&input.sending_id] == input.signal {
@@ -625,7 +643,11 @@ impl ComplexGateMembers {
         )
     }
 
-    pub fn fetch_output_signals(&mut self, tag: &String, gate_type_to_run_together: Option<GateType>) -> Result<Vec<GateOutputState>, GateLogicError> {
+    pub fn fetch_output_signals(
+        &mut self,
+        tag: &String,
+        gate_type_to_run_together: Option<GateType>,
+    ) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.calculate_output_from_inputs(
             false,
             gate_type_to_run_together,

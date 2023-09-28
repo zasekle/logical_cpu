@@ -631,16 +631,20 @@ impl LogicGate for ControlledBuffer {
         self.members.tag.clone()
     }
 
+    fn set_tag(&mut self, tag: &str) {
+        self.members.tag = tag.to_string()
+    }
+
     fn get_index_from_tag(&self, tag: &str) -> usize {
         if tag == "E" {
             self.members.input_signals.len() - 1
+        } else if tag.starts_with("i_") || tag.starts_with("o_") {
+            let tag_slice = &tag[2..];
+            let index_num = tag_slice.parse().unwrap();
+            index_num
         } else {
             panic!("Gate {} using tag {} id {} did not exist.", self.get_tag(), tag, self.get_unique_id().id())
         }
-    }
-
-    fn set_tag(&mut self, tag: &str) {
-        self.members.tag = tag.to_string()
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
@@ -1318,7 +1322,7 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
-            None
+            None,
         );
 
         assert_eq!(collected_output, output_signal);

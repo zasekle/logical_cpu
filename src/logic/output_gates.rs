@@ -60,6 +60,7 @@ impl LogicGate for SimpleOutput {
             &self.gate_type,
             &self.unique_id,
             &self.tag,
+            &input.sending_id,
         );
 
         let input_signal_updated = if self.output_state[&input.sending_id] == input.signal {

@@ -79,6 +79,7 @@ pub fn run_circuit<F>(
         let mut num_invalid_gates: usize = 0;
 
         for gate_cell in gates.into_iter() {
+
             let mut gate = gate_cell.borrow_mut();
             let gate_output = gate.fetch_output_signals();
 
@@ -119,7 +120,7 @@ pub fn run_circuit<F>(
             }
 
             drop(gate);
-            for output in gate_output {
+            for output in gate_output.into_iter() {
                 match output {
                     GateOutputState::NotConnected(signal) => {
                         if print_output {
@@ -139,6 +140,11 @@ pub fn run_circuit<F>(
 
                         let contains_id = next_gates_set.contains(&gate_id);
 
+                        if print_output {
+                            println!("checking gate {} tag {}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag());
+                            println!("input_signal_updated {input_signal_updated} propagate_signal_through_circuit {propagate_signal_through_circuit} changed_count_this_tick {changed_count_this_tick} contains_id {contains_id}");
+                        }
+
                         // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
                         //It is important to remember that a situation such as an OR gate feeding
                         // back into itself is perfectly valid. This can be interpreted that if the
@@ -152,6 +158,9 @@ pub fn run_circuit<F>(
                         // inputs are saved as part of the state, so collect_output() only needs
                         // to run once.
                         if (input_signal_updated || (propagate_signal_through_circuit && changed_count_this_tick == 1)) && !contains_id {
+                            if print_output {
+                                println!("Pushing gate {} tag {}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag());
+                            }
                             drop(mutable_next_gate);
                             // println!("next_gates.insert()");
                             next_gates_set.insert(gate_id);
@@ -160,7 +169,9 @@ pub fn run_circuit<F>(
                     }
                 }
             }
+
         }
+
 
         //This is set up to handle invalid states. If all gates are in an invalid state the app will
         // panic. See calculate_input_signal_from_single_inputs() in foundations.rs for more
