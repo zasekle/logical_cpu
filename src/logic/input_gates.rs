@@ -23,12 +23,12 @@ impl Clock {
             should_print_output: false,
             gate_type: GateType::ClockType,
             tag: String::from(tag),
-            previous_signal: HIGH,
+            previous_signal: LOW_,
         };
 
         clock.output_states.resize_with(
             output_num,
-            || GateOutputState::NotConnected(HIGH),
+            || GateOutputState::NotConnected(LOW_),
         );
 
         Rc::new(RefCell::new(clock))

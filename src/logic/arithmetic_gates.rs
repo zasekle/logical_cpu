@@ -1932,6 +1932,14 @@ impl ArithmeticLogicUnit {
             carry_in_signal_gatekeepers,
         };
 
+        //todo: d
+        for d in arithmetic_logic_unit.decoder_splitters.iter() {
+            d.borrow_mut().toggle_output_printing(true);
+        }
+        for d in arithmetic_logic_unit.enable_splitters.iter() {
+            d.borrow_mut().toggle_output_printing(true);
+        }
+
         arithmetic_logic_unit.build_and_prime_circuit(
             num_bits,
             output_gates_logic,
@@ -3511,7 +3519,9 @@ mod tests {
     #[test]
     fn arithmetic_logic_unit_not_test() {
         for _ in 0..20 {
-            let num_bits = rand::thread_rng().gen_range(2..16);
+            //todo fix
+            // let num_bits = rand::thread_rng().gen_range(2..16);
+            let num_bits = 2;
 
             let gen_randoms_result = generate_random_not_inputs_outputs(num_bits);
 

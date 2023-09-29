@@ -413,6 +413,16 @@ impl BasicGateMembers {
             panic!("A gate had multiple connections to the same input")
         }
     }
+
+    pub fn get_index_from_tag(&self, tag: &str) -> usize {
+        if tag.starts_with("i_") || tag.starts_with("o_") {
+            let tag_slice = &tag[2..];
+            let index_num = tag_slice.parse().unwrap();
+            index_num
+        } else {
+            panic!("Gate {} using tag {} id {} did not exist.", self.gate_type, self.tag, self.unique_id.id())
+        }
+    }
 }
 
 #[derive(PartialEq)]
@@ -656,13 +666,14 @@ impl ComplexGateMembers {
         let output_clone = self.simple_gate.output_states.clone();
 
         if self.simple_gate.should_print_output {
-            GateLogic::print_gate_output(
-                &self.simple_gate.gate_type,
-                &self.simple_gate.unique_id,
-                tag,
-                &self.simple_gate.input_signals,
-                &output_clone,
-            );
+            //todo uncomment, maybe make it not work for RAM
+            // GateLogic::print_gate_output(
+            //     &self.simple_gate.gate_type,
+            //     &self.simple_gate.unique_id,
+            //     tag,
+            //     &self.simple_gate.input_signals,
+            //     &output_clone,
+            // );
         }
 
         Ok(output_clone)

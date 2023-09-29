@@ -351,6 +351,11 @@ impl ControlSection {
             add_not: Not::new(1),
         };
 
+        //todo d
+        // control_section.load_not.borrow_mut().toggle_output_printing(true);
+        // control_section.clk_and.borrow_mut().toggle_output_printing(true);
+        // control_section.stepper.borrow_mut().toggle_output_printing(true);
+
         control_section.clk_and.borrow_mut().set_tag("clk_and");
         control_section.load_not.borrow_mut().set_tag("load_not");
         control_section.stepper.borrow_mut().set_tag("stepper");

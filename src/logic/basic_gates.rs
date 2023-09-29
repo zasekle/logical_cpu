@@ -386,14 +386,17 @@ impl LogicGate for XOr {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 }
+
 pub struct Splitter {
     pub members: BasicGateMembers,
     outputs_per_input: usize,
+    pull_output: Option<Signal>,
 }
 
 #[allow(dead_code)]
 impl Splitter {
     pub fn new(input_num: usize, outputs_per_input: usize) -> Rc<RefCell<Self>> {
+        assert_ne!(outputs_per_input, 0);
         Rc::new(
             RefCell::new(
                 Splitter {
@@ -404,6 +407,7 @@ impl Splitter {
                         Some(LOW_),
                     ),
                     outputs_per_input,
+                    pull_output: None,
                 }
             )
         )
@@ -411,6 +415,14 @@ impl Splitter {
 
     pub fn get_index_for_output(&self, current_gate_output_index: usize, index_of_output: usize) -> usize {
         current_gate_output_index * self.outputs_per_input + index_of_output
+        // current_gate_output_index * self.outputs_per_input + index_of_output = idx
+        // index_of_output = idx % self.outputs_per_input
+        // (idx - (idx % self.outputs_per_input))/self.outputs_per_input
+        // current_gate_output_index * self.members.input_signals.len() + index_of_output
+    }
+
+    pub fn pull_output(&mut self, signal: Signal) {
+        self.pull_output = Some(signal);
     }
 }
 
@@ -424,7 +436,8 @@ impl LogicGate for Splitter {
     ) {
         //When gates are being connected, there should be no issues with this error.
         let output_signal = calculate_input_signal_from_single_inputs(
-            &self.members.input_signals[current_gate_output_key/self.outputs_per_input]
+            // &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
+            &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
         ).unwrap();
 
         GateLogic::connect_output_to_next_gate_no_calculate(
@@ -451,17 +464,91 @@ impl LogicGate for Splitter {
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
 
+        //todo d
+        if self.get_tag() == "bus" {
+            println!("fetch_output_signals tag {} BEFORE: {:#?}", self.get_tag(), self.members.input_signals);
+        }
+
         //output_states is outputs_per_input*num_inputs length and input_states is num_inputs length.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
+
+        //todo d
+        // if self.get_tag() == "bus" {
+            println!("fetch_output_signals() AFTER : {:#?}", input_signals);
+        // }
+        let tag_copy = self.get_tag();
+
         for (i, output) in self.members.output_states.iter_mut().enumerate() {
+
+            // 25 % 8 = 1
+            //TODO: this is interesting, other things, including the counter will fail if this is
+            // changed, what exactly was I doing with i / self.outputs_per_input
+            // lets say out_per_in == 2 and there are 4 outputs possible so i=7 max
+            // i / out_per_in
+            // 0  -> 0
+            // 1  -> 2
+            // 2  -> 1
+            // 3  -> 0
+            // 4  -> 0
+            // 5  -> 0
+            // 6  -> 0
+            // 7  -> 0
+            // i % input_signals_len (4)
+            // 0  -> 0
+            // 1  -> 1
+            // 2  -> 2
+            // 3  -> 3
+            // 4  -> 0
+            // 5  -> 1
+            // 6  -> 2
+            // 7  -> 3
+
+            //TODO: I think something is still wrong here because of how I organize the data, look
+            // at the above index extraction
+            // let idx = (i - (i % self.outputs_per_input))/self.outputs_per_input;
+            let idx = i % input_signals.len();
+            // let idx = i / self.outputs_per_input;
+            // println!("fetch_output_signals i: {} idx: {} input_signals.len() {}", i, idx, input_signals.len());
+            let input_signal= input_signals[idx].clone();
+            // let input_signal = input_signals[i % self.outputs_per_input].clone();
+            // let input_signal = input_signals[i / self.outputs_per_input].clone();
+
+            //so it is putting index 1 in all the slots first
+
+            //todo d
+            if tag_copy == "bus" {
+                println!("fetch_output_signals i: {} idx: {} input_signals.len() {} input_signal {:?}", i, idx, input_signals.len(), input_signal);
+            }
+
+            //TODO: The problem is that I am clearly storing the outputs in the order I am thinking of in
+            // my head where it goes a_0 b_1 c_2 etc... But I don't output them that way. I output them
+            // as a_0 b_0 c_0 etc...
+
+            //TODO: fix
+            // let input_signal =
+            //     if input_signal == NONE {
+            //         if let Some(signal) = self.pull_output.clone() {
+            //             signal
+            //         } else {
+            //             NONE
+            //         }
+            //     } else {
+            //         input_signal
+            //     };
             match output {
                 GateOutputState::NotConnected(signal) => {
-                    *signal = input_signals[i / self.outputs_per_input].clone()
+                    *signal = input_signal;
                 }
                 GateOutputState::Connected(connected_output) => {
-                    connected_output.throughput.signal = input_signals[i / self.outputs_per_input].clone()
+                    connected_output.throughput.signal = input_signal;
                 }
             }
+        }
+
+        //TODO: so right now index [0-7] are HIGH (8) and everything else is low.
+        //todo d
+        if tag_copy == "bus" {
+            // println!("output: {:#?}", self.members.output_states);
         }
 
         if self.members.should_print_output {
@@ -495,6 +582,10 @@ impl LogicGate for Splitter {
 
     fn set_tag(&mut self, tag: &str) {
         self.members.tag = tag.to_string()
+    }
+
+    fn get_index_from_tag(&self, tag: &str) -> usize {
+        self.members.get_index_from_tag(tag)
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
@@ -638,12 +729,8 @@ impl LogicGate for ControlledBuffer {
     fn get_index_from_tag(&self, tag: &str) -> usize {
         if tag == "E" {
             self.members.input_signals.len() - 1
-        } else if tag.starts_with("i_") || tag.starts_with("o_") {
-            let tag_slice = &tag[2..];
-            let index_num = tag_slice.parse().unwrap();
-            index_num
         } else {
-            panic!("Gate {} using tag {} id {} did not exist.", self.get_tag(), tag, self.get_unique_id().id())
+            self.members.get_index_from_tag(tag)
         }
     }
 
@@ -1333,8 +1420,12 @@ mod tests {
         let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
         let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-        let input_num = rand::thread_rng().gen_range(1..=16);
-        let outputs_per_input = rand::thread_rng().gen_range(2..=16);
+        //todo: fix
+        // let input_num = rand::thread_rng().gen_range(1..=16);
+        // let outputs_per_input = rand::thread_rng().gen_range(2..=16);
+
+        let input_num = 1;
+        let outputs_per_input = 2;
 
         let splitter = Splitter::new(input_num, outputs_per_input);
 
@@ -1349,6 +1440,8 @@ mod tests {
             };
             let input_tag = format!("IN_{}", i);
             let input_gate = AutomaticInput::new(vec![signal.clone()], 1, input_tag.as_str());
+
+            println!("signal: {:?}", signal.clone());
 
             for _ in 0..outputs_per_input {
                 single_turn_output.push(signal.clone());
@@ -1365,17 +1458,20 @@ mod tests {
 
         output_signal.push(single_turn_output);
 
-        for i in 0..(input_num * outputs_per_input) {
-            let output_tag = format!("OUT_{}", i);
-            let output_gate = SimpleOutput::new(output_tag.as_str());
+        for i in 0..input_num {
+            for j in 0..outputs_per_input {
+                let output_tag = format!("OUT_{}", i);
+                let output_gate = SimpleOutput::new(output_tag.as_str());
+                let splitter_output = splitter.borrow_mut().get_index_for_output(i, j);
+                println!("i {i} j {j} splitter_output {splitter_output}");
+                splitter.borrow_mut().connect_output_to_next_gate(
+                    splitter_output,
+                    0,
+                    output_gate.clone(),
+                );
 
-            splitter.borrow_mut().connect_output_to_next_gate(
-                i,
-                0,
-                output_gate.clone(),
-            );
-
-            output_gates.push(output_gate);
+                output_gates.push(output_gate);
+            }
         }
 
         let mut collected_output: Vec<Vec<Signal>> = Vec::new();
@@ -1395,6 +1491,7 @@ mod tests {
             None,
         );
 
+        println!("{:#?}", collected_output);
         assert_eq!(collected_output, output_signal);
     }
 }

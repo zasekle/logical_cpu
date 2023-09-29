@@ -609,6 +609,11 @@ pub struct RAMUnit {
 
 #[allow(dead_code)]
 impl RAMUnit {
+
+    pub fn get_ram_output_string(ram_cell_index: usize, bit_index: usize) -> String {
+        format!("cell_{}_bit_{}", ram_cell_index, bit_index)
+    }
+
     pub fn new(bus_size_in_bits: usize, decoder_input_size: usize) -> Rc<RefCell<Self>> {
         assert_ne!(bus_size_in_bits, 0);
         assert_ne!(decoder_input_size, 0);
@@ -633,6 +638,8 @@ impl RAMUnit {
         for i in 0..(decoder_input_size * 2) {
             let input_tag = format!("addr_{}", i);
             input_gates.push(SimpleInput::new(1, input_tag.as_str()));
+            //todo d
+            // input_gates.last().unwrap().borrow_mut().toggle_output_printing(true);
         }
 
         let set_address_input_gate = SimpleInput::new(1, "SA");
@@ -647,14 +654,27 @@ impl RAMUnit {
 
         let mut ram_cells: Vec<Rc<RefCell<SingleRAMCell>>> = Vec::new();
 
-        for _ in 0..num_ram_cells {
-            ram_cells.push(SingleRAMCell::new(bus_size_in_bits));
+        for i in 0..num_ram_cells {
+            let ram_cell = SingleRAMCell::new(bus_size_in_bits);
+            let ram_cell_tag = format!("ram_cell_{}", i);
+            ram_cell.borrow_mut().set_tag(ram_cell_tag.as_str());
+            ram_cells.push(ram_cell);
+        }
+
+        let total_bits = num_ram_cells * bus_size_in_bits;
+        for i in 0..total_bits {
+            let ram_cell_index = i / bus_size_in_bits;
+            let bit_num = i % bus_size_in_bits;
+            let output_tag = Self::get_ram_output_string(ram_cell_index, bit_num);
+            let output_gate = SimpleOutput::new(output_tag.as_str());
+            output_gates.push(output_gate.clone());
+            output_gates_logic.push(output_gate);
         }
 
         let mut ram_cell = RAMUnit {
             complex_gate: ComplexGateMembers::new(
                 bus_size_in_bits + decoder_input_size * 2 + 4,
-                bus_size_in_bits,
+                total_bits + bus_size_in_bits,
                 GateType::RAMUnitType,
                 input_gates,
                 output_gates,
@@ -808,6 +828,16 @@ impl RAMUnit {
                     j,
                     self.controlled_buffer.clone(),
                 );
+
+                let output_tag = Self::get_ram_output_string(i, j);
+                let output_index = self.get_index_from_tag(output_tag.as_str());
+                let reg_output_tag = format!("reg_{}", j);
+                let reg_output_index = self.ram_cells[i].borrow_mut().get_index_from_tag(reg_output_tag.as_str());
+                self.ram_cells[i].borrow_mut().connect_output_to_next_gate(
+                    reg_output_index,
+                    0,
+                    output_gates[output_index].clone(),
+                );
             }
         }
 
@@ -845,6 +875,10 @@ impl LogicGate for RAMUnit {
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        //todo d
+        if self.get_tag() == "ram" {
+            println!("input: {:?}", input);
+        }
         //ActiveLowSRLatch has an `invalid` state of LOW LOW. However, this is not being enforced by
         // assertions because it may be an intermediate state.
         self.complex_gate.update_input_signal(input)
@@ -853,10 +887,33 @@ impl LogicGate for RAMUnit {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         //The second gate_type parameter will guarantee that all Single RAM cells run on the same
         // clock tick for efficiency.
-        self.complex_gate.fetch_output_signals(
+        let result = self.complex_gate.fetch_output_signals(
             &self.get_tag(),
             Some(GateType::VariableSingleRAMCellType),
-        )
+        );
+
+        // if self.simple_gate.should_print_output {
+        //     if tag.is_empty() {
+        //         println!(
+        //             "{} gate id {}\ninput is {:#?}\noutput is {:#?}",
+        //             gate_type,
+        //             unique_id.id(),
+        //             input,
+        //             output,
+        //         );
+        //     } else {
+        //         println!(
+        //             "{} gate tag {} id {}\ninput is {:#?}\noutput is {:#?}",
+        //             gate_type,
+        //             tag,
+        //             unique_id.id(),
+        //             input,
+        //             output,
+        //         );
+        //     }
+        // }
+
+        result
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -905,7 +962,7 @@ impl VariableBitBusOne {
         let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
         let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
 
-        let mut and_gates =Vec::new();
+        let mut and_gates = Vec::new();
 
         build_simple_inputs_and_outputs_with_and(
             number_bits,

@@ -1117,7 +1117,8 @@ impl FourCycleClockHookup {
             }
         }
 
-        check_output(&self.flip_flop.borrow_mut().complex_gate.simple_gate);
+        //J and K on the flip flop are tied high
+        // check_output(&self.flip_flop.borrow_mut().complex_gate.simple_gate);
         check_output(&self.q_splitter.borrow_mut().members);
         check_output(&self.q_input_and.borrow_mut().members);
         check_output(&self.q_not_input_nand.borrow_mut().members);

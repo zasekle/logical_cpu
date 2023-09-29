@@ -17,7 +17,15 @@ use crate::build_circuit::InputAndOutputGates;
 use crate::run_circuit::start_clock;
 
 fn main() {
-    //TODO: The end output will go HIGH when it is time to stop, make sure to take this into account.
+
+    //TODO: The "END" output will go HIGH when it is time to stop, make sure to take this into account.
+    // Maybe make it a special case for the run_circuit, that if an output tag is "END" (make it a
+    // static) and it is high, then stop.
+
+    //TODO
+    // Right now the way that it gets the memory is actually part of the circuit, might want to change
+    // that so it is programmatically done instead. There isn't actually any need to do it the way
+    // I currently am.
 
     //TODO: I can probably tie my SignalGatekeeper to the set values of a lot of other places. For
     // example the RAM, the registers, the memory etc... Otherwise, it will need to propagate through
@@ -52,6 +60,8 @@ fn main() {
 
     println!("Running circuit!");
 
+    //TODO: I don't think the propagation needs to be done because it is done inside VariableBitCPU
+    // priming (it is done inside start_clock).
     start_clock(
         &input_gates,
         &output_gates,

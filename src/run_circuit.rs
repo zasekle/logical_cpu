@@ -100,6 +100,9 @@ pub fn run_circuit<F>(
             };
 
             if gate.is_input_gate() {
+                if print_output {
+                    println!("input_gate_called: {}", gate.get_tag());
+                }
                 clock_tick_inputs.push(
                     (gate.get_tag(), gate_output.clone())
                 );
@@ -169,7 +172,6 @@ pub fn run_circuit<F>(
                     }
                 }
             }
-
         }
 
 
