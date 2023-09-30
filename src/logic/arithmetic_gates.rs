@@ -150,6 +150,10 @@ impl LogicGate for HalfAdder {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct FullAdder {
@@ -316,6 +320,10 @@ impl LogicGate for FullAdder {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -501,6 +509,10 @@ impl LogicGate for VariableBitAdder {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -690,6 +702,10 @@ impl<const LEFT_SHIFT: bool> LogicGate for VariableBitShiftLeft<LEFT_SHIFT> {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableBitNot {
@@ -815,6 +831,10 @@ impl LogicGate for VariableBitNot {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -959,6 +979,10 @@ impl LogicGate for VariableBitAnd {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableBitOr {
@@ -1101,6 +1125,10 @@ impl LogicGate for VariableBitOr {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -1304,6 +1332,10 @@ impl LogicGate for XOrLE {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -1517,6 +1549,10 @@ impl LogicGate for VariableBitXOrLE {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableBitZ {
@@ -1643,6 +1679,10 @@ impl LogicGate for VariableBitZ {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -1771,6 +1811,10 @@ impl LogicGate for VariableBitEnable {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -1933,12 +1977,12 @@ impl ArithmeticLogicUnit {
         };
 
         //todo: d
-        for d in arithmetic_logic_unit.decoder_splitters.iter() {
-            d.borrow_mut().toggle_output_printing(true);
-        }
-        for d in arithmetic_logic_unit.enable_splitters.iter() {
-            d.borrow_mut().toggle_output_printing(true);
-        }
+        // for d in arithmetic_logic_unit.decoder_splitters.iter() {
+        //     d.borrow_mut().toggle_output_printing(true);
+        // }
+        // for d in arithmetic_logic_unit.enable_splitters.iter() {
+        //     d.borrow_mut().toggle_output_printing(true);
+        // }
 
         arithmetic_logic_unit.build_and_prime_circuit(
             num_bits,
@@ -2187,7 +2231,7 @@ impl ArithmeticLogicUnit {
 
                 //Enable splitters -> Output
                 let splitter_output_index = self.enable_splitters[j].borrow_mut().get_index_for_output(
-                    i, 1,
+                    i, 1
                 );
                 self.enable_splitters[j].borrow_mut().connect_output_to_next_gate(
                     splitter_output_index,
@@ -2648,6 +2692,10 @@ impl LogicGate for ArithmeticLogicUnit {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 #[cfg(test)]
@@ -2782,9 +2830,13 @@ mod tests {
         gen_randoms_result.output.push(gen_randoms_result.carry_out); //Carry Out (C_OUT)
 
         let alu = ArithmeticLogicUnit::new(num_bits);
+        // alu.borrow_mut().toggle_output_printing(true); //todo d
+        // alu.borrow_mut().not.borrow_mut().toggle_output_printing(true); //todo d
+        // alu.borrow_mut().enable_gates[3].borrow_mut().toggle_output_printing(true); //todo d
+        alu.borrow_mut().enable_splitters[3].borrow_mut().toggle_output_printing(true); //todo d
+
         let alu_operation = AluOperations::get_vectors(opt);
 
-        //a=LOW b=LOW c=HIGH
         run_multi_input_output_logic_gate(
             vec![],
             vec![
@@ -3519,9 +3571,7 @@ mod tests {
     #[test]
     fn arithmetic_logic_unit_not_test() {
         for _ in 0..20 {
-            //todo fix
-            // let num_bits = rand::thread_rng().gen_range(2..16);
-            let num_bits = 2;
+            let num_bits = rand::thread_rng().gen_range(2..16);
 
             let gen_randoms_result = generate_random_not_inputs_outputs(num_bits);
 

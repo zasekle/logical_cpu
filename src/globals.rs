@@ -21,3 +21,6 @@ pub(crate) static NEXT_UNIQUE_ID: AtomicUsize = AtomicUsize::new(1);
 /// This is just used for testing purposes. Can enable it so a single run_circuit function prints
 /// output.
 pub(crate) static RUN_CIRCUIT_IS_HIGH_LEVEL: AtomicBool = AtomicBool::new(false);
+
+/// This is set to the output gate that ends the program.
+pub static END_OUTPUT_GATE_TAG: &'static str = "_END_OUTPUT_";

@@ -5,7 +5,7 @@ use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use crate::globals::{CLOCK_TICK_NUMBER, get_clock_tick_number};
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{ComplexGateMembers, GateInput, GateOutputState, GateTagInfo, GateTagType, LogicGate, Signal, UniqueID};
 use crate::logic::input_gates::AutomaticInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::{run_circuit, start_clock};
@@ -284,4 +284,24 @@ pub fn test_simple_gate(
             check_for_single_element_signal(&output_gates, output.clone());
         },
     );
+}
+
+#[allow(dead_code)]
+pub fn extract_output_tags_sorted_by_index(complex_gate: &ComplexGateMembers) -> Vec<String> {
+    let tags_and_index: Vec<(&String, &GateTagInfo)> = complex_gate.gate_tags_to_index.iter().collect();
+    let tags_and_index: Vec<(&String, &GateTagInfo)> = tags_and_index.iter()
+        .filter_map(|&(tag, gate_tag_info)| {
+            if gate_tag_info.tag_type == GateTagType::Output {
+                Some((tag, gate_tag_info))
+            } else {
+                None
+            }
+        }).collect();
+    let mut tags_and_index: Vec<(&String, usize)> = tags_and_index.iter()
+        .map(|&(tag, gate_tag_info)| {
+            (tag, gate_tag_info.index)
+        }).collect();
+    tags_and_index.sort_by(|a, b| a.1.cmp(&b.1));
+    let tags_sorted_by_index: Vec<String> = tags_and_index.iter().map(|(tag, _)| (*tag).clone()).collect();
+    tags_sorted_by_index
 }

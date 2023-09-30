@@ -177,6 +177,10 @@ impl LogicGate for SRLatch {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct ActiveLowSRLatch {
@@ -345,6 +349,10 @@ impl LogicGate for ActiveLowSRLatch {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -559,6 +567,10 @@ impl LogicGate for OneBitMemoryCell {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableBitMemoryCell {
@@ -714,6 +726,10 @@ impl LogicGate for VariableBitMemoryCell {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 

@@ -324,6 +324,10 @@ impl LogicGate for VariableOutputStepper {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableBitCPUEnable {
@@ -454,6 +458,10 @@ impl LogicGate for VariableBitCPUEnable {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -598,6 +606,10 @@ impl LogicGate for SignalGatekeeper {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -895,6 +907,10 @@ impl LogicGate for MasterSlaveJKFlipFlop {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct FourCycleClockHookup {
@@ -1176,6 +1192,10 @@ impl LogicGate for FourCycleClockHookup {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableBitMultiplexer {
@@ -1452,6 +1472,10 @@ impl LogicGate for VariableBitMultiplexer {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableBitCounter {
@@ -1668,6 +1692,10 @@ impl LogicGate for VariableBitCounter {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 

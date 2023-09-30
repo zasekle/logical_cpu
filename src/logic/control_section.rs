@@ -2889,16 +2889,19 @@ impl LogicGate for ControlSection {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use crate::logic::foundations::{GateTagInfo, GateTagType};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::AutomaticInput;
     use crate::run_circuit::run_circuit;
-    use crate::test_stuff::run_multi_input_output_logic_gate_return;
+    use crate::test_stuff::{extract_output_tags_sorted_by_index, run_multi_input_output_logic_gate_return};
     use super::*;
 
     //This uses a 4 cycle clock, so the number of clock cycles it will advance will be
@@ -2993,7 +2996,7 @@ mod tests {
 
         println!("Advanced for {} clock ticks", clock_ticks_to_advance);
         println!("Ran for {} clock ticks", output_signals.len());
-        let tags_sorted_by_index = extract_output_tags_sorted_by_index(control_section);
+        let tags_sorted_by_index = extract_output_tags_sorted_by_index(&control_section.borrow_mut().complex_gate);
 
         let mut failed = false;
         for i in 0..output_signals.len() {
@@ -3012,26 +3015,6 @@ mod tests {
         }
 
         assert!(!failed);
-    }
-
-    fn extract_output_tags_sorted_by_index(control_section: Rc<RefCell<ControlSection>>) -> Vec<String> {
-        let control_sec = control_section.borrow_mut();
-        let tags_and_index: Vec<(&String, &GateTagInfo)> = control_sec.complex_gate.gate_tags_to_index.iter().collect();
-        let tags_and_index: Vec<(&String, &GateTagInfo)> = tags_and_index.iter()
-            .filter_map(|&(tag, gate_tag_info)| {
-                if gate_tag_info.tag_type == GateTagType::Output {
-                    Some((tag, gate_tag_info))
-                } else {
-                    None
-                }
-            }).collect();
-        let mut tags_and_index: Vec<(&String, usize)> = tags_and_index.iter()
-            .map(|&(tag, gate_tag_info)| {
-                (tag, gate_tag_info.index)
-            }).collect();
-        tags_and_index.sort_by(|a, b| a.1.cmp(&b.1));
-        let tags_sorted_by_index: Vec<String> = tags_and_index.iter().map(|(tag, _)| (*tag).clone()).collect();
-        tags_sorted_by_index
     }
 
     struct ClockTickRounds {
@@ -3073,7 +3056,7 @@ mod tests {
     fn control_section_initialization() {
         let control_section = ControlSection::new(8);
 
-        let tags_sorted_by_index = extract_output_tags_sorted_by_index(control_section.clone());
+        let tags_sorted_by_index = extract_output_tags_sorted_by_index(&control_section.borrow_mut().complex_gate);
 
         let collected_output = control_section.borrow_mut().fetch_output_signals().unwrap();
 

@@ -110,7 +110,6 @@ pub trait LogicGate {
 
     fn toggle_output_printing(&mut self, print_output: bool);
 
-    ///Currently only used with input gates.
     fn get_tag(&self) -> String;
 
     fn set_tag(&mut self, tag: &str);
@@ -124,6 +123,8 @@ pub trait LogicGate {
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal);
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID);
 }
 
 #[derive(Debug, Clone)]
@@ -338,6 +339,10 @@ impl BasicGateMembers {
             tag: String::new(),
         };
 
+        if result.unique_id.id() == 2160 {
+            println!("id 2160 gate_type {} tag {}", result.gate_type, result.tag);
+        }
+
         let output_signal = if let Some(signal) = output_signal {
             signal
         } else {
@@ -422,6 +427,20 @@ impl BasicGateMembers {
         } else {
             panic!("Gate {} using tag {} id {} did not exist.", self.gate_type, self.tag, self.unique_id.id())
         }
+    }
+
+    pub fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        let input_map = self.input_signals.get_mut(input_index).unwrap();
+        input_map
+            .remove(&connected_id)
+            .expect(
+                format!(
+                    "When attempting to disconnect a gate, the gate with type {} id {} tag {} was not connected.",
+                    self.gate_type,
+                    self.unique_id.id,
+                    self.tag
+                ).as_str()
+            );
     }
 }
 
@@ -666,7 +685,7 @@ impl ComplexGateMembers {
         let output_clone = self.simple_gate.output_states.clone();
 
         if self.simple_gate.should_print_output {
-            //todo uncomment, maybe make it not work for RAM
+            //todo uncomment
             // GateLogic::print_gate_output(
             //     &self.simple_gate.gate_type,
             //     &self.simple_gate.unique_id,
@@ -686,6 +705,18 @@ impl ComplexGateMembers {
             signal.clone(),
         );
         self.simple_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    pub fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        //SimpleInput input index is always 0.
+        self.input_gates[input_index].borrow_mut().remove_connected_input(
+            0, connected_id,
+        );
+
+        self.simple_gate.remove_connected_input(
+            input_index,
+            connected_id,
+        );
     }
 }
 
@@ -869,6 +900,7 @@ impl GateLogic {
         current_gate_tag: &str,
         should_print_output: bool,
     ) {
+
         //This unsafe block must be done for two reasons.
         // 1) In order to allow a gate to connect to itself, it must already have a mutable reference
         //  outstanding.

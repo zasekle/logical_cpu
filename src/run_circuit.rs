@@ -1,9 +1,10 @@
-use std::cell::RefCell;
+use std::cell::{RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
-use crate::globals::{CLOCK_TICK_NUMBER, RUN_CIRCUIT_IS_HIGH_LEVEL};
+use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, RUN_CIRCUIT_IS_HIGH_LEVEL};
 use crate::logic::foundations::{GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate};
+use crate::logic::foundations::Signal::HIGH;
 use crate::logic::output_gates::LogicGateAndOutputGate;
 
 pub fn start_clock<F>(
@@ -51,6 +52,8 @@ pub fn run_circuit<F>(
 ) -> bool where
     F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>)
 {
+    let mut continue_clock = true;
+
     let print_output =
         if RUN_CIRCUIT_IS_HIGH_LEVEL.load(Ordering::SeqCst) {
             RUN_CIRCUIT_IS_HIGH_LEVEL.store(false, Ordering::SeqCst);
@@ -122,10 +125,26 @@ pub fn run_circuit<F>(
                 }
             }
 
+
             drop(gate);
             for output in gate_output.into_iter() {
                 match output {
                     GateOutputState::NotConnected(signal) => {
+
+                        if print_output {
+                            println!("NOT_CONNECTED gate_tag {}", gate_cell.borrow_mut().get_tag());
+                        }
+
+                        //todo d
+                        if gate_cell.borrow_mut().get_tag() == END_OUTPUT_GATE_TAG {
+                            println!("NOT CONNECTED END OUTPUT FOUND, signal {:?}", signal.clone());
+                        }
+
+                        if gate_cell.borrow_mut().get_tag() == END_OUTPUT_GATE_TAG
+                            && signal == HIGH {
+                            println!("End of program reached. Stopping execution.");
+                            continue_clock = false;
+                        }
                         if print_output {
                             println!("NotConnected(gate_output): {:?}", signal);
                         }
@@ -138,17 +157,20 @@ pub fn run_circuit<F>(
                         let mut mutable_next_gate = next_gate.borrow_mut();
 
                         let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
-                            mutable_next_gate.update_input_signal(next_gate_info.throughput);
+                            mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
                         let gate_id = mutable_next_gate.get_unique_id();
 
                         let contains_id = next_gates_set.contains(&gate_id);
 
+                        //todo: fix
                         if print_output {
-                            println!("checking gate {} tag {}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag());
-                            println!("input_signal_updated {input_signal_updated} propagate_signal_through_circuit {propagate_signal_through_circuit} changed_count_this_tick {changed_count_this_tick} contains_id {contains_id}");
+                        // if mutable_next_gate.get_tag() == END_OUTPUT_GATE_TAG {
+                            println!("CONNECTED END OUTPUT FOUND");
+                            println!("checking gate {} tag {} signal {:?}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag(), next_gate_info.throughput.signal.clone());
+                            // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
+                            println!("input_signal_updated: {input_signal_updated} propagate_signal_through_circuit: {propagate_signal_through_circuit} changed_count_this_tick {changed_count_this_tick} contains_id {contains_id}");
                         }
 
-                        // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
                         //It is important to remember that a situation such as an OR gate feeding
                         // back into itself is perfectly valid. This can be interpreted that if the
                         // input was not changed, the output was not changed either and so nothing
@@ -174,7 +196,6 @@ pub fn run_circuit<F>(
             }
         }
 
-
         //This is set up to handle invalid states. If all gates are in an invalid state the app will
         // panic. See calculate_input_signal_from_single_inputs() in foundations.rs for more
         // details.
@@ -185,7 +206,6 @@ pub fn run_circuit<F>(
                 gates.push(
                     format!("Gate {} id {} with tag {}.", mut_gate.get_gate_type(), mut_gate.get_unique_id().id(), mut_gate.get_tag())
                 );
-
             }
             panic!("All gates inside the circuit have returned invalid input, aborting.\nInvalid Gate List\n{:#?}", gates);
         }
@@ -204,7 +224,7 @@ pub fn run_circuit<F>(
         &output_gates,
     );
 
-    true
+    continue_clock
 }
 
 #[cfg(test)]

@@ -66,6 +66,10 @@ impl LogicGate for Or {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct And {
@@ -129,6 +133,10 @@ impl LogicGate for And {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -194,6 +202,10 @@ impl LogicGate for Not {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct Nor {
@@ -257,6 +269,10 @@ impl LogicGate for Nor {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -322,6 +338,10 @@ impl LogicGate for Nand {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct XOr {
@@ -385,6 +405,10 @@ impl LogicGate for XOr {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct Splitter {
@@ -413,12 +437,11 @@ impl Splitter {
         )
     }
 
-    pub fn get_index_for_output(&self, current_gate_output_index: usize, index_of_output: usize) -> usize {
-        current_gate_output_index * self.outputs_per_input + index_of_output
-        // current_gate_output_index * self.outputs_per_input + index_of_output = idx
-        // index_of_output = idx % self.outputs_per_input
-        // (idx - (idx % self.outputs_per_input))/self.outputs_per_input
-        // current_gate_output_index * self.members.input_signals.len() + index_of_output
+    pub fn get_index_for_output(&self, input_index: usize, index_of_output: usize) -> usize {
+        assert!(input_index < self.members.input_signals.len());
+        assert!(index_of_output < self.outputs_per_input);
+
+        input_index * self.outputs_per_input + index_of_output
     }
 
     pub fn pull_output(&mut self, signal: Signal) {
@@ -436,8 +459,8 @@ impl LogicGate for Splitter {
     ) {
         //When gates are being connected, there should be no issues with this error.
         let output_signal = calculate_input_signal_from_single_inputs(
-            // &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
-            &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
+            &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
+            // &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
         ).unwrap();
 
         GateLogic::connect_output_to_next_gate_no_calculate(
@@ -454,87 +477,35 @@ impl LogicGate for Splitter {
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        if self.get_unique_id().id() == 27
-            || self.get_unique_id().id() == 87
-        {
-            println!("Splitter update_input_signal id {}\ninput {:#?}", self.members.unique_id.id(), input);
-        }
+        // if self.get_unique_id().id() == 27
+        //     || self.get_unique_id().id() == 87
+        // {
+        //     println!("Splitter update_input_signal id {}\ninput {:#?}", self.members.unique_id.id(), input);
+        // }
         self.members.update_input_signal(input)
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
 
-        //todo d
-        if self.get_tag() == "bus" {
-            println!("fetch_output_signals tag {} BEFORE: {:#?}", self.get_tag(), self.members.input_signals);
-        }
-
         //output_states is outputs_per_input*num_inputs length and input_states is num_inputs length.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
-
-        //todo d
-        // if self.get_tag() == "bus" {
-            println!("fetch_output_signals() AFTER : {:#?}", input_signals);
-        // }
-        let tag_copy = self.get_tag();
 
         for (i, output) in self.members.output_states.iter_mut().enumerate() {
 
             // 25 % 8 = 1
-            //TODO: this is interesting, other things, including the counter will fail if this is
-            // changed, what exactly was I doing with i / self.outputs_per_input
-            // lets say out_per_in == 2 and there are 4 outputs possible so i=7 max
-            // i / out_per_in
-            // 0  -> 0
-            // 1  -> 2
-            // 2  -> 1
-            // 3  -> 0
-            // 4  -> 0
-            // 5  -> 0
-            // 6  -> 0
-            // 7  -> 0
-            // i % input_signals_len (4)
-            // 0  -> 0
-            // 1  -> 1
-            // 2  -> 2
-            // 3  -> 3
-            // 4  -> 0
-            // 5  -> 1
-            // 6  -> 2
-            // 7  -> 3
+            let idx = i / self.outputs_per_input;
+            let input_signal = input_signals[idx].clone();
 
-            //TODO: I think something is still wrong here because of how I organize the data, look
-            // at the above index extraction
-            // let idx = (i - (i % self.outputs_per_input))/self.outputs_per_input;
-            let idx = i % input_signals.len();
-            // let idx = i / self.outputs_per_input;
-            // println!("fetch_output_signals i: {} idx: {} input_signals.len() {}", i, idx, input_signals.len());
-            let input_signal= input_signals[idx].clone();
-            // let input_signal = input_signals[i % self.outputs_per_input].clone();
-            // let input_signal = input_signals[i / self.outputs_per_input].clone();
-
-            //so it is putting index 1 in all the slots first
-
-            //todo d
-            if tag_copy == "bus" {
-                println!("fetch_output_signals i: {} idx: {} input_signals.len() {} input_signal {:?}", i, idx, input_signals.len(), input_signal);
-            }
-
-            //TODO: The problem is that I am clearly storing the outputs in the order I am thinking of in
-            // my head where it goes a_0 b_1 c_2 etc... But I don't output them that way. I output them
-            // as a_0 b_0 c_0 etc...
-
-            //TODO: fix
-            // let input_signal =
-            //     if input_signal == NONE {
-            //         if let Some(signal) = self.pull_output.clone() {
-            //             signal
-            //         } else {
-            //             NONE
-            //         }
-            //     } else {
-            //         input_signal
-            //     };
+            let input_signal =
+                if input_signal == NONE {
+                    if let Some(signal) = self.pull_output.clone() {
+                        signal
+                    } else {
+                        NONE
+                    }
+                } else {
+                    input_signal
+                };
             match output {
                 GateOutputState::NotConnected(signal) => {
                     *signal = input_signal;
@@ -543,12 +514,6 @@ impl LogicGate for Splitter {
                     connected_output.throughput.signal = input_signal;
                 }
             }
-        }
-
-        //TODO: so right now index [0-7] are HIGH (8) and everything else is low.
-        //todo d
-        if tag_copy == "bus" {
-            // println!("output: {:#?}", self.members.output_states);
         }
 
         if self.members.should_print_output {
@@ -590,6 +555,10 @@ impl LogicGate for Splitter {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -650,6 +619,7 @@ impl LogicGate for ControlledBuffer {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+
         //When input index 0 is HIGH, allow the signal through, otherwise return NotConnected.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
         let enable_index = self.get_index_from_tag("E");
@@ -736,6 +706,10 @@ impl LogicGate for ControlledBuffer {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.members.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -1372,6 +1346,10 @@ mod tests {
 
             fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
                 self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+            }
+
+            fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+                self.complex_gate.remove_connected_input(input_index, connected_id);
             }
         }
 

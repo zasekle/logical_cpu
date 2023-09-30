@@ -186,6 +186,10 @@ impl LogicGate for VariableBitRegister {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
 }
 
 pub struct VariableDecoder {
@@ -349,6 +353,10 @@ impl LogicGate for VariableDecoder {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -593,6 +601,10 @@ impl LogicGate for SingleRAMCell {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -876,9 +888,9 @@ impl LogicGate for RAMUnit {
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         //todo d
-        if self.get_tag() == "ram" {
-            println!("input: {:?}", input);
-        }
+        // if self.get_tag() == "ram" {
+        //     println!("input: {:?}", input);
+        // }
         //ActiveLowSRLatch has an `invalid` state of LOW LOW. However, this is not being enforced by
         // assertions because it may be an intermediate state.
         self.complex_gate.update_input_signal(input)
@@ -942,6 +954,10 @@ impl LogicGate for RAMUnit {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
@@ -1108,6 +1124,10 @@ impl LogicGate for VariableBitBusOne {
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
         self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
+        self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 }
 
