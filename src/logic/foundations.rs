@@ -339,10 +339,6 @@ impl BasicGateMembers {
             tag: String::new(),
         };
 
-        if result.unique_id.id() == 2160 {
-            println!("id 2160 gate_type {} tag {}", result.gate_type, result.tag);
-        }
-
         let output_signal = if let Some(signal) = output_signal {
             signal
         } else {
@@ -431,7 +427,7 @@ impl BasicGateMembers {
 
     pub fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         let input_map = self.input_signals.get_mut(input_index).unwrap();
-        input_map
+        let returned_signal = input_map
             .remove(&connected_id)
             .expect(
                 format!(
@@ -441,6 +437,10 @@ impl BasicGateMembers {
                     self.tag
                 ).as_str()
             );
+
+        if input_map.is_empty() {
+            input_map.insert(UniqueID::zero_id(), returned_signal);
+        }
     }
 }
 
@@ -533,8 +533,8 @@ impl ComplexGateMembers {
             propagate_signal_through_circuit,
             &mut |clock_tick_inputs, output_gates| {
                 let clock_tick_number = get_clock_tick_number();
-                let input_string = format!("Gate {} id {} inputs for clock-tick #{}", self.simple_gate.gate_type, self.simple_gate.unique_id.id, clock_tick_number);
-                let output_string = format!("Gate {} id {} outputs for clock-tick #{}", self.simple_gate.gate_type, self.simple_gate.unique_id.id, clock_tick_number);
+                let input_string = format!("Gate {} id {} tag {} inputs for clock-tick #{}", self.simple_gate.gate_type, self.simple_gate.unique_id.id, self.simple_gate.tag, clock_tick_number);
+                let output_string = format!("Gate {} id {} tag {} outputs for clock-tick #{}", self.simple_gate.gate_type, self.simple_gate.unique_id.id, self.simple_gate.tag, clock_tick_number);
 
                 pretty_print_output(
                     self.simple_gate.should_print_output,

@@ -482,6 +482,20 @@ impl LogicGate for Splitter {
         // {
         //     println!("Splitter update_input_signal id {}\ninput {:#?}", self.members.unique_id.id(), input);
         // }
+
+        //todo: delete
+        if self.members.tag == "bus" {
+            //id 1134
+            // println!("bus update_input_signal id {}\ninput {:#?}", self.members.unique_id.id(), input);
+            // GateLogic::print_gate_output(
+            //     &self.members.gate_type,
+            //     &self.members.unique_id,
+            //     &self.members.tag,
+            //     &self.members.input_signals,
+            //     &self.members.output_states,
+            // );
+        }
+
         self.members.update_input_signal(input)
     }
 
@@ -1398,12 +1412,8 @@ mod tests {
         let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
         let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
 
-        //todo: fix
-        // let input_num = rand::thread_rng().gen_range(1..=16);
-        // let outputs_per_input = rand::thread_rng().gen_range(2..=16);
-
-        let input_num = 1;
-        let outputs_per_input = 2;
+        let input_num = rand::thread_rng().gen_range(1..=16);
+        let outputs_per_input = rand::thread_rng().gen_range(2..=16);
 
         let splitter = Splitter::new(input_num, outputs_per_input);
 
@@ -1417,7 +1427,11 @@ mod tests {
                 _ => NONE,
             };
             let input_tag = format!("IN_{}", i);
-            let input_gate = AutomaticInput::new(vec![signal.clone()], 1, input_tag.as_str());
+            let input_gate = AutomaticInput::new(
+                vec![signal.clone()],
+                1,
+                input_tag.as_str()
+            );
 
             println!("signal: {:?}", signal.clone());
 

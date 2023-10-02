@@ -18,9 +18,10 @@ use crate::run_circuit::start_clock;
 
 fn main() {
 
-    //TODO: The "END" output will go HIGH when it is time to stop, make sure to take this into account.
-    // Maybe make it a special case for the run_circuit, that if an output tag is "END" (make it a
-    // static) and it is high, then stop.
+    //TODO: Make toggle_output_printing turn off (or able to be turned off) for the really big gates
+    // in fetch. ComplexGateMembers.fetch_output_signals should have it. Can probably individually
+    // build it into the large gates like RAMUnit and ControlUnit. Would be nice to have a prettier
+    // way to print the bus too, but it is a Splitter, a simple gate.
 
     //TODO
     // Right now the way that it gets the memory is actually part of the circuit, might want to change

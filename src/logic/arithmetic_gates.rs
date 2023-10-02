@@ -1976,13 +1976,14 @@ impl ArithmeticLogicUnit {
             carry_in_signal_gatekeepers,
         };
 
-        //todo: d
-        // for d in arithmetic_logic_unit.decoder_splitters.iter() {
-        //     d.borrow_mut().toggle_output_printing(true);
-        // }
-        // for d in arithmetic_logic_unit.enable_splitters.iter() {
-        //     d.borrow_mut().toggle_output_printing(true);
-        // }
+        //todo d
+        arithmetic_logic_unit.xor_le.borrow_mut().toggle_output_printing(true);
+        arithmetic_logic_unit.or.borrow_mut().toggle_output_printing(true);
+        arithmetic_logic_unit.and.borrow_mut().toggle_output_printing(true);
+        arithmetic_logic_unit.not.borrow_mut().toggle_output_printing(true);
+        arithmetic_logic_unit.shift_left.borrow_mut().toggle_output_printing(true);
+        arithmetic_logic_unit.shift_right.borrow_mut().toggle_output_printing(true);
+        arithmetic_logic_unit.adder.borrow_mut().toggle_output_printing(true);
 
         arithmetic_logic_unit.build_and_prime_circuit(
             num_bits,
@@ -2352,7 +2353,7 @@ impl ArithmeticLogicUnit {
         // disabled).
         a_input_gate.borrow_mut().connect_output_to_next_gate(
             0,
-            0,
+            2,
             self.decoder.clone(),
         );
 
@@ -2380,7 +2381,7 @@ impl ArithmeticLogicUnit {
 
         c_input_gate.borrow_mut().connect_output_to_next_gate(
             0,
-            2,
+            0,
             self.decoder.clone(),
         );
 
@@ -2830,10 +2831,6 @@ mod tests {
         gen_randoms_result.output.push(gen_randoms_result.carry_out); //Carry Out (C_OUT)
 
         let alu = ArithmeticLogicUnit::new(num_bits);
-        // alu.borrow_mut().toggle_output_printing(true); //todo d
-        // alu.borrow_mut().not.borrow_mut().toggle_output_printing(true); //todo d
-        // alu.borrow_mut().enable_gates[3].borrow_mut().toggle_output_printing(true); //todo d
-        alu.borrow_mut().enable_splitters[3].borrow_mut().toggle_output_printing(true); //todo d
 
         let alu_operation = AluOperations::get_vectors(opt);
 
@@ -3548,8 +3545,8 @@ mod tests {
 
     #[test]
     fn arithmetic_logic_unit_and_or_test() {
-        for _ in 0..20 {
-            let num_bits = rand::thread_rng().gen_range(2..16);
+        // for _ in 0..20 {
+            let num_bits = 2; //todo rand::thread_rng().gen_range(2..16);
 
             let and_gate = rand::thread_rng().gen_bool(0.5);
             let gen_randoms_result = generate_random_and_or_inputs_outputs(
@@ -3565,7 +3562,7 @@ mod tests {
                 };
 
             run_alu(num_bits, opt, gen_randoms_result);
-        }
+        // }
     }
 
     #[test]

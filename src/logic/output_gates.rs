@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::globals::END_OUTPUT_GATE_TAG;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn, calculate_input_signal_from_single_inputs};
 
@@ -71,11 +70,6 @@ impl LogicGate for SimpleOutput {
             true
         };
 
-        //TODO: a
-        // if self.unique_id.id() == 89 {
-        //     println!("changed_count {} input_signal_updated {}\n{:#?}", changed_count_this_tick, input_signal_updated, self.output_state);
-        // }
-
         InputSignalReturn {
             changed_count_this_tick,
             input_signal_updated
@@ -120,9 +114,6 @@ impl LogicGate for SimpleOutput {
     }
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, _gate_input_index: usize, signal: Signal) {
-        if self.tag == END_OUTPUT_GATE_TAG {
-            println!("internal_update_index CALLED {} -> {}", sending_id.id(), self.unique_id.id());
-        }
         //Whenever an input is updated, remove the zero index. Even adding the zero index it will
         // simply be inserted immediately afterwards.
         self.output_state.remove(&UniqueID::zero_id());

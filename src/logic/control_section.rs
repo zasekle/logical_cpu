@@ -16,6 +16,7 @@ pub struct ControlSection {
     complex_gate: ComplexGateMembers,
     clk_and: Rc<RefCell<And>>,
     load_not: Rc<RefCell<Not>>,
+    reset_not: Rc<RefCell<Not>>,
     stepper: Rc<RefCell<VariableOutputStepper>>,
     stepper_splitters: Vec<Rc<RefCell<Splitter>>>,
     stepper_1_and: Rc<RefCell<And>>,
@@ -198,7 +199,7 @@ impl ControlSection {
         input_gates.push(SimpleInput::new(1, ControlSection::CLOCK));
         input_gates.push(SimpleInput::new(12, ControlSection::CLOCK_ENABLE));
         input_gates.push(SimpleInput::new(1, ControlSection::HIGH_LVL_MARS));
-        input_gates.push(SimpleInput::new(10, ControlSection::HIGH_LVL_RESET));
+        input_gates.push(SimpleInput::new(11, ControlSection::HIGH_LVL_RESET));
         input_gates.push(SimpleInput::new(2, ControlSection::HIGH_LVL_LOAD));
         input_gates.push(SimpleInput::new(1, ControlSection::C_IN));
         input_gates.push(SimpleInput::new(1, ControlSection::A_L));
@@ -247,11 +248,12 @@ impl ControlSection {
                 input_gates,
                 output_gates,
             ),
-            clk_and: And::new(2, 1),
+            clk_and: And::new(3, 1),
             load_not: Not::new(2),
+            reset_not: Not::new(2),
             stepper: VariableOutputStepper::new(6),
             stepper_splitters,
-            stepper_1_and: And::new(2, 4),
+            stepper_1_and: And::new(3, 4),
             bus_1_or: Or::new(4, 1),
             ram_e_and: And::new(2, 1),
             ram_e_or: Or::new(5, 1),
@@ -351,13 +353,9 @@ impl ControlSection {
             add_not: Not::new(1),
         };
 
-        //todo d
-        // control_section.load_not.borrow_mut().toggle_output_printing(true);
-        // control_section.clk_and.borrow_mut().toggle_output_printing(true);
-        // control_section.stepper.borrow_mut().toggle_output_printing(true);
-
         control_section.clk_and.borrow_mut().set_tag("clk_and");
         control_section.load_not.borrow_mut().set_tag("load_not");
+        control_section.reset_not.borrow_mut().set_tag("reset_not");
         control_section.stepper.borrow_mut().set_tag("stepper");
         control_section.stepper_splitters[0].borrow_mut().set_tag("stepper_splitters[0]");
         control_section.stepper_splitters[1].borrow_mut().set_tag("stepper_splitters[1]");
@@ -464,6 +462,9 @@ impl ControlSection {
         control_section.add_and.borrow_mut().set_tag("add_and");
         control_section.add_not.borrow_mut().set_tag("add_not");
 
+        //todo d
+        // control_section.stepper.borrow_mut().toggle_output_printing(true);
+
         control_section.build_and_prime_circuit(output_gates_logic);
 
         Rc::new(RefCell::new(control_section))
@@ -501,6 +502,7 @@ impl ControlSection {
         self.connect_stepper_to_splitter();
         self.clk_and_connect();
         self.load_not_connect();
+        self.reset_not_connect();
         self.stepper_splitters_1_connect();
         self.stepper_splitters_2_connect();
         self.stepper_splitters_3_connect();
@@ -1009,6 +1011,12 @@ impl ControlSection {
             0,
             self.r3_s_or.clone(),
         );
+
+        high_level_reset.borrow_mut().connect_output_to_next_gate(
+            10,
+            0,
+            self.reset_not.clone(),
+        );
     }
 
     fn connect_high_level_load_input(&mut self) {
@@ -1094,13 +1102,13 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            1,
+            0,
             self.r_e_reg_b_decoder.clone(),
         );
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             3,
-            1,
+            0,
             self.r_s_decoder.clone(),
         );
     }
@@ -1122,13 +1130,13 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            0,
+            1,
             self.r_e_reg_b_decoder.clone(),
         );
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             3,
-            0,
+            1,
             self.r_s_decoder.clone(),
         );
     }
@@ -1153,7 +1161,7 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            1,
+            0,
             self.r_e_reg_a_decoder.clone(),
         );
 
@@ -1192,7 +1200,7 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             3,
-            0,
+            1,
             self.r_e_reg_a_decoder.clone(),
         );
 
@@ -1226,7 +1234,7 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            2,
+            0,
             self.load_store_instr_decoder.clone(),
         );
 
@@ -1282,7 +1290,7 @@ impl ControlSection {
 
         input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            0,
+            2,
             self.load_store_instr_decoder.clone(),
         );
 
@@ -1364,6 +1372,20 @@ impl ControlSection {
         self.load_not.borrow_mut().connect_output_to_next_gate(
             1,
             0,
+            self.stepper_1_and.clone(),
+        );
+    }
+
+    fn reset_not_connect(&mut self) {
+        self.reset_not.borrow_mut().connect_output_to_next_gate(
+            0,
+            2,
+            self.clk_and.clone(),
+        );
+
+        self.reset_not.borrow_mut().connect_output_to_next_gate(
+            1,
+            2,
             self.stepper_1_and.clone(),
         );
     }

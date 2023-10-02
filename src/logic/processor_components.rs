@@ -266,8 +266,9 @@ impl VariableDecoder {
         let mut not_gate_index = vec![0; number_inputs];
 
         for i in 0..number_outputs {
-            //This will make a binary number formatted as a String with `number_inputs` digits.
-            let binary_number = format!("{:0width$b}", i, width = number_inputs);
+            //This will make a binary number formatted as a String with `number_inputs` digits. It
+            // must be reversed in order that input 0 stays as 0 and 1 stays as 1 etc...
+            let binary_number: String = format!("{:0width$b}", i, width = number_inputs).chars().rev().collect();
 
             for (j, c) in binary_number.chars().enumerate() {
                 if c == '0' { // '0' means connects from output.
@@ -650,8 +651,6 @@ impl RAMUnit {
         for i in 0..(decoder_input_size * 2) {
             let input_tag = format!("addr_{}", i);
             input_gates.push(SimpleInput::new(1, input_tag.as_str()));
-            //todo d
-            // input_gates.last().unwrap().borrow_mut().toggle_output_printing(true);
         }
 
         let set_address_input_gate = SimpleInput::new(1, "SA");
@@ -699,6 +698,13 @@ impl RAMUnit {
             controlled_buffer: ControlledBuffer::new(bus_size_in_bits),
             ram_cells,
         };
+
+        ram_cell.memory_address_register.borrow_mut().set_tag("memory_address_register");
+        ram_cell.horizontal_decoder.borrow_mut().set_tag("horizontal_decoder");
+        ram_cell.horizontal_decoder_splitter.borrow_mut().set_tag("horizontal_decoder_splitter");
+        ram_cell.vertical_decoder.borrow_mut().set_tag("vertical_decoder");
+        ram_cell.vertical_decoder_splitter.borrow_mut().set_tag("vertical_decoder_splitter");
+        ram_cell.controlled_buffer.borrow_mut().set_tag("controlled_buffer");
 
         ram_cell.build_and_prime_circuit(
             bus_size_in_bits,
@@ -755,6 +761,7 @@ impl RAMUnit {
             );
         }
 
+        println!("decoder_input_size {decoder_input_size}");
         for i in decoder_input_size..(2 * decoder_input_size) {
             self.memory_address_register.borrow_mut().connect_output_to_next_gate(
                 i,
@@ -887,10 +894,6 @@ impl LogicGate for RAMUnit {
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        //todo d
-        // if self.get_tag() == "ram" {
-        //     println!("input: {:?}", input);
-        // }
         //ActiveLowSRLatch has an `invalid` state of LOW LOW. However, this is not being enforced by
         // assertions because it may be an intermediate state.
         self.complex_gate.update_input_signal(input)
@@ -1266,7 +1269,7 @@ mod tests {
             let binary_input_number = format!("{:0width$b}", i, width = number_inputs);
 
             let mut i_vector = Vec::with_capacity(number_inputs);
-            for c in binary_input_number.chars() {
+            for c in binary_input_number.chars().rev() {
                 if c == '0' {
                     i_vector.push(LOW_);
                 } else {
@@ -1280,6 +1283,9 @@ mod tests {
 
             output_vector.push(o_vector);
         }
+
+        println!("inputs  {:?}", input_vector);
+        println!("outputs {:?}", output_vector);
 
         run_multi_input_output_logic_gate(
             input_vector,

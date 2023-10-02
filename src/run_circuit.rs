@@ -125,7 +125,6 @@ pub fn run_circuit<F>(
                 }
             }
 
-
             drop(gate);
             for output in gate_output.into_iter() {
                 match output {
@@ -133,11 +132,6 @@ pub fn run_circuit<F>(
 
                         if print_output {
                             println!("NOT_CONNECTED gate_tag {}", gate_cell.borrow_mut().get_tag());
-                        }
-
-                        //todo d
-                        if gate_cell.borrow_mut().get_tag() == END_OUTPUT_GATE_TAG {
-                            println!("NOT CONNECTED END OUTPUT FOUND, signal {:?}", signal.clone());
                         }
 
                         if gate_cell.borrow_mut().get_tag() == END_OUTPUT_GATE_TAG
@@ -162,10 +156,7 @@ pub fn run_circuit<F>(
 
                         let contains_id = next_gates_set.contains(&gate_id);
 
-                        //todo: fix
                         if print_output {
-                        // if mutable_next_gate.get_tag() == END_OUTPUT_GATE_TAG {
-                            println!("CONNECTED END OUTPUT FOUND");
                             println!("checking gate {} tag {} signal {:?}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag(), next_gate_info.throughput.signal.clone());
                             // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
                             println!("input_signal_updated: {input_signal_updated} propagate_signal_through_circuit: {propagate_signal_through_circuit} changed_count_this_tick {changed_count_this_tick} contains_id {contains_id}");
