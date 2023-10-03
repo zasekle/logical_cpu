@@ -2,6 +2,7 @@ use std::cell::{RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
 use crate::logic::foundations::{GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::foundations::Signal::{HIGH, LOW_};
@@ -299,8 +300,8 @@ pub fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cell
     automatic_inputs
 }
 
-pub fn collect_signals_from_cpu(cpu: &Rc<RefCell<VariableBitCPU>>) -> Vec<Signal> {
-    let cpu_output = cpu.borrow_mut().fetch_output_signals().unwrap();
+pub fn collect_signals_from_logic_gate(gate: Rc<RefCell<dyn LogicGate>>) -> Vec<Signal> {
+    let cpu_output = gate.borrow_mut().fetch_output_signals().unwrap();
     let mut collected_signals = Vec::new();
     for out in cpu_output.into_iter() {
         match out {
@@ -330,11 +331,15 @@ pub fn run_instructions(
 
     println!("Beginning to load values into RAM");
 
+    let start_load = Instant::now();
+
     load_values_into_ram(
         &cpu,
         binary_strings,
         num_ram_cells,
     );
+
+    let complete_load = Instant::now();
 
     let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
     let clock = Clock::new(1, "PRIMARY_CLOCK");
@@ -387,6 +392,12 @@ pub fn run_instructions(
 
         propagate_signal = false;
     }
+
+    let complete_run = Instant::now();
+
+    println!("Loading took {:?}", complete_load.duration_since(start_load));
+    println!("Run took {:?}", complete_run.duration_since(complete_load));
+    println!("Total took {:?}", complete_run.duration_since(start_load));
 
     cpu
 }
@@ -528,7 +539,7 @@ pub fn load_values_into_ram(
         }
     }
 
-    let collected_signals = collect_signals_from_cpu(&cpu);
+    let collected_signals = collect_signals_from_logic_gate(cpu.clone());
 
     let failed = compare_generate_and_collected_output(&cpu, generated_output, collected_signals);
 

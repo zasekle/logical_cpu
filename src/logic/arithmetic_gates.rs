@@ -1818,6 +1818,7 @@ impl LogicGate for VariableBitEnable {
     }
 }
 
+#[allow(dead_code)]
 enum AluOperations {
     None,
     XOrLe,
@@ -1829,12 +1830,14 @@ enum AluOperations {
     Adder,
 }
 
+#[allow(dead_code)]
 struct AluReturns {
     a: Vec<Signal>,
     b: Vec<Signal>,
     c: Vec<Signal>,
 }
 
+#[allow(dead_code)]
 impl AluReturns {
     fn new(a: Signal, b: Signal, c: Signal) -> Self {
         AluReturns { a: vec![a], b: vec![b], c: vec![c] }
@@ -1844,6 +1847,7 @@ impl AluReturns {
 //Rules for the ALU input/output.
 // idx 0 is the least significant bit
 // idx 7 is the most significant bit
+#[allow(dead_code)]
 impl AluOperations {
     fn get_vectors(alu_operation: AluOperations) -> AluReturns {
         match alu_operation {

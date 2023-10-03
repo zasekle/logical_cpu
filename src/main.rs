@@ -8,13 +8,11 @@ mod globals;
 mod build_circuit;
 mod test_stuff;
 
-use globals::get_clock_tick_number;
+use std::fs::File;
+use std::io::Read;
 
-use crate::logic::foundations::pretty_print_output;
-
-use build_circuit::build_simple_circuit;
-use crate::build_circuit::InputAndOutputGates;
-use crate::run_circuit::start_clock;
+use crate::run_circuit::{collect_signals_from_logic_gate, run_instructions};
+use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 fn main() {
 
@@ -54,36 +52,40 @@ fn main() {
     // second will keep the `Set` bit high and change the input values. The third will bring the
     // `Set` bit low without changing the inputs.
 
-    println!("Building circuit!");
+    let number_bits = 8;
+    let num_decoder_input = 4;
 
-    let InputAndOutputGates{input_gates, output_gates} =
-        build_simple_circuit();
+    let mut file = File::open("programs/code.ms").unwrap();
+    let mut content = String::new();
+    file.read_to_string(&mut content).unwrap();
 
-    println!("Running circuit!");
-
-    //TODO: I don't think the propagation needs to be done because it is done inside VariableBitCPU
-    // priming (it is done inside start_clock).
-    start_clock(
-        &input_gates,
-        &output_gates,
-        |clock_tick_inputs, output_gates| {
-
-            //NOTE FOR LATER: Make sure to make a match statement for the final output because there
-            // is more than LOW and HIGH that `Signal` can return.
-
-            let clock_tick_number = get_clock_tick_number();
-            let input_string = format!("Global inputs for clock-tick #{}", clock_tick_number);
-            let output_string = format!("Global outputs for clock-tick #{}", clock_tick_number);
-
-            pretty_print_output(
-                true,
-                clock_tick_inputs,
-                output_gates,
-                input_string.as_str(),
-                output_string.as_str(),
-            );
+    let mut machine_code = Vec::new();
+    for (i, line) in content.lines().enumerate() {
+        if line.bytes().len() != number_bits {
+            panic!("Failed to parse machine code. Line number {} is an invalid length.", i);
         }
+
+        for c in line.bytes() {
+            if c != b'0' && c != b'1' {
+                panic!("Invalid char of {} found on line number {} of machine code.", c as char, i)
+            }
+        }
+
+        machine_code.push(line);
+    }
+
+    let cpu = run_instructions(
+        number_bits,
+        num_decoder_input,
+        &machine_code,
     );
 
-    println!("Program Completed!");
+    let tags_sorted_by_index = extract_output_tags_sorted_by_index(&cpu.borrow_mut().get_complex_gate());
+    let collected_signals = collect_signals_from_logic_gate(cpu.clone());
+
+    assert_eq!(collected_signals.len(), tags_sorted_by_index.len());
+
+    for i in 0..tags_sorted_by_index.len() {
+        println!("{} {:?}", tags_sorted_by_index[i], collected_signals[i]);
+    }
 }

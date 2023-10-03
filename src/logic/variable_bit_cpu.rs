@@ -23,6 +23,7 @@ pub enum Register {
     R3,
 }
 
+#[allow(dead_code)]
 impl Register {
     fn binary(reg: Register) -> &'static str {
         match reg {
@@ -55,6 +56,7 @@ pub enum ALUInstruction {
     CMP,
 }
 
+#[allow(dead_code)]
 impl ALUInstruction {
     fn binary(opt: ALUInstruction) -> &'static str {
         match opt {
@@ -91,6 +93,7 @@ pub enum Instructions {
     ClearFlags, //Clears flags.
 }
 
+#[allow(dead_code)]
 impl Instructions {
     fn binary(instruction: Self) -> String {
         let binary_string =
@@ -1486,12 +1489,12 @@ mod tests {
     use std::rc::Rc;
     use std::time::Duration;
     use rand::Rng;
-    use crate::logic::foundations::{GateOutputState, LogicGate, Signal};
+    use crate::logic::foundations::{LogicGate, Signal};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::{AutomaticInput};
     use crate::logic::processor_components::RAMUnit;
     use crate::logic::variable_bit_cpu::{ALUInstruction, Instructions, Register, VariableBitCPU};
-    use crate::run_circuit::{collect_signals_from_cpu, compare_generate_and_collected_output, generate_default_output, load_values_into_ram, run_circuit, run_instructions};
+    use crate::run_circuit::{collect_signals_from_logic_gate, compare_generate_and_collected_output, generate_default_output, load_values_into_ram, run_circuit, run_instructions};
     use crate::test_stuff::{run_test_with_timeout};
 
     fn store_in_output(
@@ -1677,7 +1680,7 @@ mod tests {
             None,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let generated_output = generate_default_output(&cpu);
 
         let failed = compare_generate_and_collected_output(
@@ -1735,7 +1738,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let mut generated_signals = generate_basic_output(
             &cpu,
             number_bits,
@@ -1871,7 +1874,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let mut generated_signals = generate_basic_output(
             &cpu,
             number_bits,
@@ -1936,7 +1939,7 @@ mod tests {
     fn initialization() {
         let cpu = VariableBitCPU::new(8, 4);
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
 
         let generated_signals = generate_default_output(&cpu);
 
@@ -2018,7 +2021,7 @@ mod tests {
                     &binary_strings,
                 );
 
-                let collected_signals = collect_signals_from_cpu(&cpu);
+                let collected_signals = collect_signals_from_logic_gate(cpu.clone());
                 // let mut generated_signals = generate_default_output(&cpu);
 
                 let generated_signals = generate_basic_output(
@@ -2063,7 +2066,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
 
         let mut generated_signals = generate_basic_output(
             &cpu,
@@ -2129,7 +2132,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let mut generated_signals = generate_basic_output(
             &cpu,
             number_bits,
@@ -2214,7 +2217,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let mut generated_signals = generate_basic_output(
             &cpu,
             number_bits,
@@ -2448,7 +2451,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let mut generated_signals = generate_basic_output(
             &cpu,
             number_bits,
@@ -2508,7 +2511,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let generated_signals = generate_basic_output(
             &cpu,
             number_bits,
@@ -2683,7 +2686,7 @@ mod tests {
             &binary_strings,
         );
 
-        let collected_signals = collect_signals_from_cpu(&cpu);
+        let collected_signals = collect_signals_from_logic_gate(cpu.clone());
         let mut generated_signals = generate_basic_output(
             &cpu,
             number_bits,
@@ -2730,19 +2733,9 @@ mod tests {
 
         assert!(!failed);
 
-        let flags_output = cpu.borrow_mut().flags.borrow_mut().fetch_output_signals().unwrap();
-
-        let mut collected_signals = Vec::new();
-        for out in flags_output.into_iter() {
-            match out {
-                GateOutputState::NotConnected(signal) => {
-                    collected_signals.push(signal);
-                }
-                GateOutputState::Connected(connected_output) => {
-                    collected_signals.push(connected_output.throughput.signal);
-                }
-            }
-        }
+        let collected_signals = collect_signals_from_logic_gate(
+            cpu.borrow_mut().flags.clone()
+        );
 
         assert_eq!(
             collected_signals,
@@ -2750,4 +2743,3 @@ mod tests {
         )
     }
 }
-
