@@ -15,6 +15,7 @@ use crate::logic::memory_gates::{OneBitMemoryCell, VariableBitMemoryCell};
 use crate::logic::processor_components::{RAMUnit, VariableBitBusOne, VariableBitRegister};
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub enum Register {
     R0,
     R1,
@@ -29,6 +30,15 @@ impl Register {
             Register::R1 => "01",
             Register::R2 => "10",
             Register::R3 => "11",
+        }
+    }
+
+    fn get_variable_bit_tag(&self) -> &'static str {
+        match self {
+            Register::R0 => VariableBitCPU::R0,
+            Register::R1 => VariableBitCPU::R1,
+            Register::R2 => VariableBitCPU::R2,
+            Register::R3 => VariableBitCPU::R3,
         }
     }
 }
@@ -55,7 +65,7 @@ impl ALUInstruction {
             ALUInstruction::AND => "100",
             ALUInstruction::OR => "101",
             ALUInstruction::XOR => "110",
-            ALUInstruction::CMP => "111",
+            ALUInstruction::CMP => "111", //Not hooked up
         }
     }
 }
@@ -64,13 +74,20 @@ impl ALUInstruction {
 //8 bit instructions.
 pub enum Instructions {
     End,
-    ALU { opt: ALUInstruction, reg_a: Register, reg_b: Register }, // Load contents of register reg_b to RAM address inside reg_a.
-    Store { reg_a: Register, reg_b: Register }, // Store contents of register reg_b to RAM address inside reg_a.
-    Load { reg_a: Register, reg_b: Register }, // Loads contents of register reg_b to RAM address inside reg_a.
-    Data { reg: Register }, // Loads data at next RAM address into reg.
-    JumpRegister { reg: Register }, // Jumps to address inside reg.
-    JumpAddress, // Jumps to address inside next RAM cell.
-    JumpIf {carry: bool, a_larger: bool, equal: bool, zero: bool}, // Jumps to address inside next RAM cell if flags are true.
+    ALU { opt: ALUInstruction, reg_a: Register, reg_b: Register },
+    // Load contents of register reg_b to RAM address inside reg_a.
+    Store { reg_a: Register, reg_b: Register },
+    // Store contents of register reg_b to RAM address inside reg_a.
+    Load { reg_a: Register, reg_b: Register },
+    // Loads contents of register reg_b to RAM address inside reg_a.
+    Data { reg: Register },
+    // Loads data at next RAM address into reg.
+    JumpRegister { reg: Register },
+    // Jumps to address inside reg.
+    JumpAddress,
+    // Jumps to address inside next RAM cell.
+    JumpIf { carry: bool, a_larger: bool, equal: bool, zero: bool },
+    // Jumps to address inside next RAM cell if flags are true.
     ClearFlags, //Clears flags.
 }
 
@@ -79,25 +96,25 @@ impl Instructions {
         let binary_string =
             match instruction {
                 Instructions::End => "11001111".to_string(),
-                Instructions::Data{reg} => {
+                Instructions::Data { reg } => {
                     format!("001000{}", Register::binary(reg))
                 }
-                Instructions::ALU{opt, reg_a, reg_b} => {
+                Instructions::ALU { opt, reg_a, reg_b } => {
                     format!("1{}{}{}", ALUInstruction::binary(opt), Register::binary(reg_a), Register::binary(reg_b))
                 }
-                Instructions::Store{reg_a, reg_b} => {
+                Instructions::Store { reg_a, reg_b } => {
                     format!("0001{}{}", Register::binary(reg_a), Register::binary(reg_b))
                 }
-                Instructions::Load{reg_a, reg_b} => {
+                Instructions::Load { reg_a, reg_b } => {
                     format!("0000{}{}", Register::binary(reg_a), Register::binary(reg_b))
                 }
-                Instructions::JumpRegister{reg} => {
+                Instructions::JumpRegister { reg } => {
                     format!("001100{}", Register::binary(reg))
                 }
                 Instructions::JumpAddress => {
                     format!("01000000")
                 }
-                Instructions::JumpIf{carry, a_larger, equal, zero} => {
+                Instructions::JumpIf { carry, a_larger, equal, zero } => {
                     fn bool_char(b: bool) -> char {
                         match b {
                             true => '1',
@@ -492,7 +509,7 @@ impl VariableBitCPU {
         &mut self,
         output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
     ) {
-        let input_index = self.alu.borrow_mut().get_index_from_tag("A");
+        let input_index = self.alu.borrow_mut().get_index_from_tag("C");
         let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::ALU_0);
         self.control_section.borrow_mut().connect_output_to_next_gate(
             output_index,
@@ -508,7 +525,7 @@ impl VariableBitCPU {
             self.alu.clone(),
         );
 
-        let input_index = self.alu.borrow_mut().get_index_from_tag("C");
+        let input_index = self.alu.borrow_mut().get_index_from_tag("A");
         let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::ALU_2);
         self.control_section.borrow_mut().connect_output_to_next_gate(
             output_index,
@@ -1403,6 +1420,10 @@ impl VariableBitCPU {
             };
         clock.borrow_mut().set_clock_state(output_signal);
     }
+
+    pub fn get_complex_gate(&self) -> &ComplexGateMembers {
+        &self.complex_gate
+    }
 }
 
 impl LogicGate for VariableBitCPU {
@@ -1462,285 +1483,165 @@ impl LogicGate for VariableBitCPU {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
-    use std::collections::HashMap;
     use std::rc::Rc;
     use std::time::Duration;
-    use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number};
-    use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, Signal, UniqueID};
+    use rand::Rng;
+    use crate::logic::foundations::{GateOutputState, LogicGate, Signal};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
-    use crate::logic::input_gates::{AutomaticInput, Clock};
-    use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
+    use crate::logic::input_gates::{AutomaticInput};
     use crate::logic::processor_components::RAMUnit;
-    use crate::logic::variable_bit_cpu::{Instructions, Register, VariableBitCPU};
-    use crate::run_circuit::run_circuit;
-    use crate::test_stuff::{extract_output_tags_sorted_by_index, run_test_with_timeout};
+    use crate::logic::variable_bit_cpu::{ALUInstruction, Instructions, Register, VariableBitCPU};
+    use crate::run_circuit::{collect_signals_from_cpu, compare_generate_and_collected_output, generate_default_output, load_values_into_ram, run_circuit, run_instructions};
+    use crate::test_stuff::{run_test_with_timeout};
 
-    fn generate_default_output(cpu: &Rc<RefCell<VariableBitCPU>>) -> Vec<Signal> {
-
-        // Multi-bit outputs
-        // VariableBitCPU::R0
-        // VariableBitCPU::R1
-        // VariableBitCPU::R2
-        // VariableBitCPU::R3
-        // VariableBitCPU::IR
-        // VariableBitCPU::IAR
-        // VariableBitCPU::ACC
-        // VariableBitCPU::TMP
-        // VariableBitCPU::BUS
-        // RAM_registers (no constant)
-        //
-        // Single-bit outputs
-        // VariableBitCPU::CLK
-        // VariableBitCPU::CLKE
-        // VariableBitCPU::CLKS
-        // VariableBitCPU::IO
-        // VariableBitCPU::DA
-        // VariableBitCPU::END
-        // VariableBitCPU::IO_CLK_E
-        // VariableBitCPU::IO_CLK_S
-
-        let mut generated_signals = vec![LOW_; cpu.borrow_mut().complex_gate.output_gates.len()];
-        let clke_index = cpu.borrow_mut().complex_gate.gate_tags_to_index[VariableBitCPU::CLKE].index;
-        generated_signals[clke_index] = HIGH;
-        generated_signals
-    }
-
-    fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cells: usize) -> Vec<Rc<RefCell<AutomaticInput>>> {
-        assert_ne!(binary_strings.len(), 0);
-        assert!(binary_strings.len() <= num_ram_cells);
-
-        let mut ram_inputs = vec![vec![]; binary_strings.first().unwrap().len()];
-        for (i, string) in binary_strings.iter().enumerate() {
-            for (j, c) in string.chars().rev().enumerate() {
-                let signal =
-                    if c == '0' {
-                        LOW_
-                    } else {
-                        HIGH
-                    };
-
-                let num_pushes =
-                    if i != 0 {
-                        4
-                    } else {
-                        2
-                    };
-
-                for _ in 0..num_pushes {
-                    ram_inputs[j].push(signal.clone());
-                }
-            }
-        }
-
-        //The vector is filled up so that it runs for each ram cell. Then there are two extra inputs
-        // needed to put the clock from the end of LOAD to the starting clock state.
-        let num_extra_inputs = (num_ram_cells - binary_strings.len()) * 4 + 2;
-        for i in 0..ram_inputs.len() {
-            for _ in 0..num_extra_inputs {
-                ram_inputs[i].push(LOW_);
-            }
-        }
-
-        let mut automatic_inputs = Vec::new();
-        for (i, inp) in ram_inputs.iter().enumerate() {
-            let input_tag = format!("Input_bit_{}", i);
-            automatic_inputs.push(
-                AutomaticInput::new(inp.clone(), 1, input_tag.as_str())
-            );
-        }
-
-        automatic_inputs
-    }
-
-    fn collect_signals_from_cpu(cpu: &Rc<RefCell<VariableBitCPU>>) -> Vec<Signal> {
-        let cpu_output = cpu.borrow_mut().fetch_output_signals().unwrap();
-        let mut collected_signals = Vec::new();
-        for out in cpu_output.into_iter() {
-            match out {
-                GateOutputState::NotConnected(signal) => {
-                    collected_signals.push(signal);
-                }
-                GateOutputState::Connected(connected_output) => {
-                    collected_signals.push(connected_output.throughput.signal);
-                }
-            }
-        }
-        collected_signals
-    }
-
-    //This should leave the cpu in the same state as it started in. The only difference is that
-    // there will now be values loaded into RAM. It should be run without any inputs connected to
-    // the cpu itself.
-    fn load_values_into_ram(
+    fn store_in_output(
         cpu: &Rc<RefCell<VariableBitCPU>>,
-        binary_strings: Vec<&str>,
-        num_ram_cells: usize,
+        default_output: &mut Vec<Signal>,
+        i: usize,
+        signal: Signal,
+        tag: &str,
     ) {
-        let automatic_inputs = convert_binary_to_inputs_for_load(
-            binary_strings.clone(),
-            num_ram_cells,
-        );
+        let acc_tag = format!("{}_{}", tag, i);
 
-        let num_cycles = num_ram_cells * 4 - 2;
+        let acc_index = cpu.borrow_mut().get_index_from_tag(acc_tag.as_str());
 
-        //The last cycle is to advance the clock to the starting position. AND to get the splitter
-        // to the correct position.
-        let output_values = vec![HIGH; num_cycles + 1];
-
-        let load_automatic_input = AutomaticInput::new(
-            output_values.clone(),
-            1,
-            "LOAD",
-        );
-
-        let memory_address_register_automatic_input = AutomaticInput::new(
-            output_values,
-            1,
-            "MEMORY_ADDRESS_REGISTER",
-        );
-
-        let load_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::LOAD);
-        load_automatic_input.borrow_mut().connect_output_to_next_gate(
-            0,
-            load_index,
-            cpu.clone(),
-        );
-
-        let memory_address_register_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::MARS);
-        memory_address_register_automatic_input.borrow_mut().connect_output_to_next_gate(
-            0,
-            memory_address_register_index,
-            cpu.clone(),
-        );
-
-        let mut automatic_input_gates: Vec<Rc<RefCell<AutomaticInput>>> = Vec::new();
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let clock = Clock::new(1, "PRIMARY_CLOCK");
-        cpu.borrow_mut().get_clock_synced_with_cpu(&clock);
-
-        let clk_in_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_IN);
-        clock.borrow_mut().connect_output_to_next_gate(
-            0,
-            clk_in_index,
-            cpu.clone(),
-        );
-
-        input_gates.push(clock.clone());
-        input_gates.push(load_automatic_input.clone());
-        input_gates.push(memory_address_register_automatic_input.clone());
-        automatic_input_gates.push(load_automatic_input);
-        automatic_input_gates.push(memory_address_register_automatic_input);
-
-        for (i, input) in automatic_inputs.iter().enumerate() {
-            let ram_input_tag = format!("{}_{}", VariableBitCPU::RAM, i);
-            let ram_input_index = cpu.borrow_mut().get_index_from_tag(ram_input_tag.as_str());
-            input.borrow_mut().connect_output_to_next_gate(
-                0,
-                ram_input_index,
-                cpu.clone(),
-            );
-            input_gates.push(input.clone());
-            automatic_input_gates.push(input.clone());
-        }
-
-        let mut continue_load_operation = true;
-        let mut propagate_signal = true;
-        while continue_load_operation {
-            unsafe {
-                CLOCK_TICK_NUMBER += 1;
-            }
-            // println!("CLOCK TICK {}", get_clock_tick_number());
-
-            //todo fix
-            if get_clock_tick_number() > 25 {
-                break;
-            }
-
-            continue_load_operation = run_circuit(
-                &input_gates,
-                &Vec::new(),
-                propagate_signal,
-                &mut |_clock_tick_inputs, _output_gates| {},
-                None,
-            );
-
-            propagate_signal = false;
-        }
-
-        //Disconnect all inputs so that future connections can be made.
-        for automatic_input_gate in automatic_input_gates.into_iter() {
-            automatic_input_gate.borrow_mut().disconnect_gate(0);
-        }
-
-        clock.borrow_mut().disconnect_gate(0);
-
-        //LOAD and MAR_S must be tied back to LOW before completing. They have already been
-        // disconnected so the zero id is used.
-        cpu.borrow_mut().update_input_signal(
-            GateInput::new(
-                load_index,
-                LOW_,
-                UniqueID::zero_id(),
-            )
-        );
-
-        cpu.borrow_mut().update_input_signal(
-            GateInput::new(
-                memory_address_register_index,
-                LOW_,
-                UniqueID::zero_id(),
-            )
-        );
-
-        let mut generated_output = generate_default_output(&cpu);
-
-        for (i, binary_string) in binary_strings.iter().enumerate() {
-            for (j, c) in binary_string.chars().rev().enumerate() {
-                let output_tag = RAMUnit::get_ram_output_string(i, j);
-                let output_index = cpu.borrow_mut().complex_gate.gate_tags_to_index[&output_tag.to_string()].index;
-
-                let signal =
-                    if c == '0' {
-                        LOW_
-                    } else {
-                        HIGH
-                    };
-
-                generated_output[output_index] = signal.clone();
-            }
-        }
-
-        let collected_signals = collect_signals_from_cpu(&cpu);
-
-        let failed = compare_generate_and_collected_output(&cpu, generated_output, collected_signals);
-
-        assert!(!failed);
+        default_output[acc_index] = signal.clone();
     }
 
-    fn compare_generate_and_collected_output(
-        cpu: &Rc<RefCell<VariableBitCPU>>,
-        generated_output: Vec<Signal>,
-        collected_signals: Vec<Signal>,
-    ) -> bool {
-        let tags_sorted_by_index = extract_output_tags_sorted_by_index(&cpu.borrow_mut().complex_gate);
+    fn convert_bytes_to_signals<F>(byte_string: &str, mut task: F)
+        where
+            F: FnMut(usize, Signal),
+    {
+        let stored_data_bytes = byte_string.as_bytes().to_vec();
+        for (i, b) in stored_data_bytes.iter().rev().enumerate() {
+            let signal =
+                if *b == b'0' {
+                    LOW_
+                } else {
+                    HIGH
+                };
 
-        assert_eq!(collected_signals.len(), generated_output.len());
-        assert_eq!(collected_signals.len(), tags_sorted_by_index.len());
-
-        let mut failed = false;
-        for i in 0..collected_signals.len() {
-            let mut failed_map = HashMap::new();
-
-            if (tags_sorted_by_index[i].clone(), generated_output[i].clone()) != (tags_sorted_by_index[i].clone(), collected_signals[i].clone()) {
-                failed_map.insert(tags_sorted_by_index[i].clone(), (generated_output[i].clone(), collected_signals[i].clone()));
-                failed = true;
-            };
-
-            if !failed_map.is_empty() {
-                println!("E (passed, collected): {:?}", failed_map);
-            }
+            task(i, signal);
         }
-        failed
+    }
+
+    fn generate_ram_output(
+        cpu: &Rc<RefCell<VariableBitCPU>>,
+        binary_strings: &Vec<&str>,
+        output: &mut Vec<Signal>,
+    ) {
+        for (i, str) in binary_strings.iter().enumerate() {
+            convert_bytes_to_signals(
+                str,
+                |j, signal| {
+                    let mut ram_cell_string = RAMUnit::get_ram_output_string(i, 0);
+                    ram_cell_string.pop();
+                    ram_cell_string.pop();
+                    store_in_output(
+                        cpu,
+                        output,
+                        j,
+                        signal,
+                        ram_cell_string.as_str(),
+                    )
+                },
+            );
+        }
+    }
+
+    fn generate_end_output(
+        cpu: &Rc<RefCell<VariableBitCPU>>,
+        number_bits: usize,
+        end_instruction_ram_cell_index: usize,
+        output: &mut Vec<Signal>,
+    ) {
+        convert_bytes_to_signals(
+            Instructions::binary(Instructions::End).as_str(),
+            |i, signal| {
+                store_in_output(
+                    cpu,
+                    output,
+                    i,
+                    signal.clone(),
+                    VariableBitCPU::IR,
+                );
+
+                store_in_output(
+                    cpu,
+                    output,
+                    i,
+                    signal,
+                    VariableBitCPU::BUS,
+                );
+            },
+        );
+
+        convert_bytes_to_signals(
+            format!("{:0width$b}", end_instruction_ram_cell_index, width = number_bits).as_str(),
+            |i, signal| {
+                store_in_output(
+                    cpu,
+                    output,
+                    i,
+                    signal,
+                    VariableBitCPU::IAR,
+                );
+            },
+        );
+
+        let mut acc_number_binary_string = format!("{:0width$b}", end_instruction_ram_cell_index + 1, width = number_bits);
+        if acc_number_binary_string.len() > number_bits {
+            acc_number_binary_string.remove(0);
+        }
+
+        convert_bytes_to_signals(
+            acc_number_binary_string.as_str(),
+            |i, signal| {
+                store_in_output(
+                    cpu,
+                    output,
+                    i,
+                    signal,
+                    VariableBitCPU::ACC,
+                );
+            },
+        );
+
+        let clk_out_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_OUT);
+        let clks_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLKS);
+        let io_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::IO);
+        let da_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::DA);
+        let end_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::END);
+
+        output[clk_out_index] = HIGH;
+        output[clks_index] = HIGH;
+        output[io_index] = HIGH;
+        output[da_index] = HIGH;
+        output[end_index] = HIGH;
+    }
+
+    fn generate_basic_output(
+        cpu: &Rc<RefCell<VariableBitCPU>>,
+        number_bits: usize,
+        binary_strings: &Vec<&str>,
+        end_instruction_ram_cell_index: usize,
+    ) -> Vec<Signal> {
+        let mut default_output = generate_default_output(cpu);
+
+        generate_ram_output(
+            cpu,
+            binary_strings,
+            &mut default_output,
+        );
+
+        generate_end_output(
+            cpu,
+            number_bits,
+            end_instruction_ram_cell_index,
+            &mut default_output,
+        );
+
+        default_output
     }
 
     //TODO: Would be nice if this could guarantee that the stepper was in pos 1 and the clock was
@@ -1790,90 +1691,245 @@ mod tests {
         reset_input.borrow_mut().disconnect_gate(0);
     }
 
-    fn run_instructions(
+    fn run_alu_instruction(
         number_bits: usize,
-        decoder_input_size: usize,
-        binary_strings: Vec<&str>,
-    ) -> Rc<RefCell<VariableBitCPU>> {
-        let cpu = VariableBitCPU::new(number_bits, decoder_input_size);
+        a_num: usize,
+        b_num: usize,
+        result: usize,
+        opt: ALUInstruction,
+        reg_a: Register,
+        reg_b: Register,
+    ) {
+        let decoder_input_size = 2;
 
-        //todo d
-        // cpu.borrow_mut().four_cycle_clock_hookup.borrow_mut().toggle_output_printing(true);
-        // cpu.borrow_mut().alu.borrow_mut().toggle_output_printing(true);
-        // cpu.borrow_mut().bus_1.borrow_mut().toggle_output_printing(true);
-        // cpu.borrow_mut().alu.borrow_mut().toggle_output_printing(true);
-        // cpu.borrow_mut().acc.borrow_mut().toggle_output_printing(true);
+        let data_a_num = Instructions::binary(
+            Instructions::Data { reg: reg_a.clone() }
+        );
+        let a_num_data = format!("{:0width$b}", a_num, width = number_bits);
+        let data_b_num = Instructions::binary(
+            Instructions::Data { reg: reg_b.clone() }
+        );
+        let b_num_data = format!("{:0width$b}", b_num, width = number_bits);
+        let shift_right_instruction = Instructions::binary(
+            Instructions::ALU {
+                opt,
+                reg_a: reg_a.clone(),
+                reg_b: reg_b.clone(),
+            }
+        );
+        let end_instruction = Instructions::binary(Instructions::End);
 
-        let num_ram_cells = usize::pow(2, (decoder_input_size * 2) as u32);
-        assert!(binary_strings.len() <= num_ram_cells);
-        if !binary_strings.is_empty() {
-            assert_eq!(binary_strings[0].len(), number_bits);
-        }
+        let binary_strings = vec![
+            data_a_num.as_str(),
+            a_num_data.as_str(),
+            data_b_num.as_str(),
+            b_num_data.as_str(),
+            shift_right_instruction.as_str(),
+            end_instruction.as_str(),
+        ];
 
-        load_values_into_ram(
+        let end_instruction_index = binary_strings.len() - 1;
+        let cpu = run_instructions(
+            number_bits,
+            decoder_input_size,
+            &binary_strings,
+        );
+
+        let collected_signals = collect_signals_from_cpu(&cpu);
+        let mut generated_signals = generate_basic_output(
             &cpu,
-            binary_strings,
-            num_ram_cells,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
         );
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let clock = Clock::new(1, "PRIMARY_CLOCK");
-        let clk_in_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_IN);
-        cpu.borrow_mut().get_clock_synced_with_cpu(&clock);
+        let first_tag = reg_a.get_variable_bit_tag();
 
-        clock.borrow_mut().connect_output_to_next_gate(
-            0,
-            clk_in_index,
-            cpu.clone(),
+        convert_bytes_to_signals(
+            a_num_data.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    first_tag,
+                );
+            },
         );
 
-        input_gates.push(clock.clone());
-
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let end_output_gate = SimpleOutput::new(END_OUTPUT_GATE_TAG);
-
-        let cpu_end_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::END);
-        cpu.borrow_mut().connect_output_to_next_gate(
-            cpu_end_index,
-            0,
-            end_output_gate.clone(),
+        convert_bytes_to_signals(
+            b_num_data.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::TMP,
+                );
+            },
         );
 
-        output_gates.push(end_output_gate.clone());
-
-        println!("\n\nSTARTING RUNNING INSTRUCTIONS\n\n");
-        let mut continue_load_operation = true;
-        let mut propagate_signal = true;
-        while continue_load_operation {
-            unsafe {
-                CLOCK_TICK_NUMBER += 1;
-            }
-            println!("CLOCK TICK {}", get_clock_tick_number());
-
-            // cpu.borrow_mut().toggle_output_printing(true);
-            // cpu.borrow_mut().control_section.borrow_mut().toggle_output_printing(true);
-            // cpu.borrow_mut().alu.borrow_mut().toggle_output_printing(true);
-
-            //todo d
-            if get_clock_tick_number() > 24 {
-
-                // if get_clock_tick_number() > 45 {
-                    break;
-                // }
-            }
-
-            continue_load_operation = run_circuit(
-                &input_gates,
-                &output_gates,
-                propagate_signal,
-                &mut |_clock_tick_inputs, _output_gates| {},
-                None,
-            );
-
-            propagate_signal = false;
+        let second_tag = reg_b.get_variable_bit_tag();
+        let mut result_string = format!("{:0width$b}", result, width = number_bits);
+        //If result is larger, chop off leading digits.
+        while result_string.len() > number_bits {
+            result_string.remove(0);
         }
+        convert_bytes_to_signals(
+            result_string.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal.clone(),
+                    second_tag,
+                );
+            },
+        );
 
-        cpu
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
+
+        assert!(!failed);
+    }
+
+    fn run_jump_if_test(
+        number_bits: usize,
+        num_a: i32,
+        num_b: i32,
+        result: i32,
+        carry: bool,
+        a_larger: bool,
+        equal: bool,
+        zero: bool,
+        opt: ALUInstruction,
+        successful_jump: bool,
+    ) {
+        let decoder_input_size = 2;
+
+        let jump_to_address_num = 9;
+
+        let store_data_a_instruction = Instructions::binary(
+            Instructions::Data {
+                reg: Register::R0
+            }
+        );
+        let num_a_data = format!("{:0width$b}", num_a, width = number_bits);
+        let store_data_b_instruction = Instructions::binary(
+            Instructions::Data {
+                reg: Register::R1
+            }
+        );
+        let add_instruction = Instructions::binary(
+            Instructions::ALU {
+                opt,
+                reg_a: Register::R0,
+                reg_b: Register::R1,
+            }
+        );
+        let num_b_data = format!("{:0width$b}", num_b, width = number_bits);
+        let jump_if_carry_instruction = Instructions::binary(
+            Instructions::JumpIf {
+                carry,
+                a_larger,
+                equal,
+                zero,
+            }
+        );
+        let jump_to_address_data = format!("{:0width$b}", jump_to_address_num, width = number_bits);
+        let end_instruction = Instructions::binary(Instructions::End);
+
+        let binary_strings = vec![
+            store_data_a_instruction.as_str(), //0
+            num_a_data.as_str(), //1
+            store_data_b_instruction.as_str(), //2
+            num_b_data.as_str(), //3
+            add_instruction.as_str(), //4
+            jump_if_carry_instruction.as_str(), //5
+            jump_to_address_data.as_str(), //6
+            end_instruction.as_str(), //7
+            "00000000", //8 Dummy data
+            end_instruction.as_str(), //9
+        ];
+
+        let end_instruction_index =
+            if successful_jump {
+                binary_strings.len() - 1
+            } else {
+                binary_strings.len() - 3
+            };
+
+        let cpu = run_instructions(
+            number_bits,
+            decoder_input_size,
+            &binary_strings,
+        );
+
+        let collected_signals = collect_signals_from_cpu(&cpu);
+        let mut generated_signals = generate_basic_output(
+            &cpu,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
+        );
+
+        convert_bytes_to_signals(
+            num_a_data.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::R0,
+                );
+            },
+        );
+
+        convert_bytes_to_signals(
+            num_b_data.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::TMP,
+                );
+            },
+        );
+
+        let mut sum_string = format!("{:0width$b}", result, width = number_bits);
+        //If result is larger, chop off leading digits.
+        while sum_string.len() > number_bits {
+            sum_string.remove(0);
+        }
+        convert_bytes_to_signals(
+            sum_string.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal.clone(),
+                    VariableBitCPU::R1,
+                );
+            },
+        );
+
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
+
+        assert!(!failed);
     }
 
     #[test]
@@ -1892,20 +1948,13 @@ mod tests {
     #[test]
     fn load_to_ram() {
         let number_bits = 8;
-        let decoder_input_size = 2; //todo change to 1
+        let decoder_input_size = 2;
         let cpu = VariableBitCPU::new(number_bits, decoder_input_size);
 
-        //todo d
-        cpu.borrow_mut().ram.borrow_mut().toggle_output_printing(true);
-
-        //TODO: The way the decoders count it doesn't match up with the way the ram cells are stored
-        // inside the vector.
         let binary_strings = vec![
             "11110000",
             "00110011",
             "01010110",
-
-            //todo d
             "01110111",
             "01000011",
             "10011001",
@@ -1919,7 +1968,7 @@ mod tests {
 
         load_values_into_ram(
             &cpu,
-            binary_strings,
+            &binary_strings,
             num_ram_cells,
         );
     }
@@ -1942,7 +1991,7 @@ mod tests {
 
         load_values_into_ram(
             &cpu,
-            binary_strings,
+            &binary_strings,
             num_ram_cells,
         );
 
@@ -1962,52 +2011,28 @@ mod tests {
                     end_instruction.as_str(),
                 ];
 
+                let end_instruction_index = binary_strings.len() - 1;
                 let cpu = run_instructions(
                     number_bits,
                     decoder_input_size,
-                    binary_strings,
+                    &binary_strings,
                 );
 
                 let collected_signals = collect_signals_from_cpu(&cpu);
-                let mut generated_signals = generate_default_output(&cpu);
+                // let mut generated_signals = generate_default_output(&cpu);
 
-                let end_instruction_bytes = end_instruction.as_bytes().to_vec();
-                for i in 0..number_bits {
-                    let signal =
-                        if end_instruction_bytes[number_bits - i - 1] == b'0' {
-                            LOW_
-                        } else {
-                            HIGH
-                        };
+                let generated_signals = generate_basic_output(
+                    &cpu,
+                    number_bits,
+                    &binary_strings,
+                    end_instruction_index,
+                );
 
-                    let ir_tag = format!("{}_{}", VariableBitCPU::IR, i);
-                    let bus_tag = format!("{}_{}", VariableBitCPU::BUS, i);
-                    let ram_cell_tag = format!("cell_0_bit_{}", i);
-
-                    let ir_index = cpu.borrow_mut().get_index_from_tag(ir_tag.as_str());
-                    let bus_index = cpu.borrow_mut().get_index_from_tag(bus_tag.as_str());
-                    let ram_cell_index = cpu.borrow_mut().get_index_from_tag(ram_cell_tag.as_str());
-
-                    generated_signals[ir_index] = signal.clone();
-                    generated_signals[bus_index] = signal.clone();
-                    generated_signals[ram_cell_index] = signal.clone();
-                }
-
-                let clk_out_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_OUT);
-                let clks_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLKS);
-                let io_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::IO);
-                let da_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::DA);
-                let end_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::END);
-                let acc_0_index = cpu.borrow_mut().get_index_from_tag(format!("{}_0", VariableBitCPU::ACC).as_str());
-
-                generated_signals[clk_out_index] = HIGH;
-                generated_signals[clks_index] = HIGH;
-                generated_signals[io_index] = HIGH;
-                generated_signals[da_index] = HIGH;
-                generated_signals[end_index] = HIGH;
-                generated_signals[acc_0_index] = HIGH;
-
-                let failed = compare_generate_and_collected_output(&cpu, generated_signals, collected_signals);
+                let failed = compare_generate_and_collected_output(
+                    &cpu,
+                    generated_signals,
+                    collected_signals,
+                );
 
                 assert!(!failed);
             },
@@ -2020,7 +2045,7 @@ mod tests {
         let decoder_input_size = 1;
 
         let data_instruction = Instructions::binary(
-            Instructions::Data{reg: Register::R1}
+            Instructions::Data { reg: Register::R1 }
         );
         let stored_data = "11111010";
         let end_instruction = Instructions::binary(Instructions::End);
@@ -2031,96 +2056,40 @@ mod tests {
             end_instruction.as_str(),
         ];
 
+        let end_instruction_index = binary_strings.len() - 1;
         let cpu = run_instructions(
             number_bits,
             decoder_input_size,
-            binary_strings,
+            &binary_strings,
         );
 
         let collected_signals = collect_signals_from_cpu(&cpu);
-        let mut generated_signals = generate_default_output(&cpu);
 
-        let data_instruction_bytes = data_instruction.as_bytes().to_vec();
-        //TODO: probably extract these to functions
-        for i in 0..number_bits {
-            let signal =
-                if data_instruction_bytes[number_bits - i - 1] == b'0' {
-                    LOW_
-                } else {
-                    HIGH
-                };
+        let mut generated_signals = generate_basic_output(
+            &cpu,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
+        );
 
-            let ram_cell_tag = format!("cell_0_bit_{}", i);
+        convert_bytes_to_signals(
+            stored_data,
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::R1,
+                );
+            },
+        );
 
-            let ram_cell_index = cpu.borrow_mut().get_index_from_tag(ram_cell_tag.as_str());
-
-            generated_signals[ram_cell_index] = signal.clone();
-        }
-
-        let stored_data_bytes = stored_data.as_bytes().to_vec();
-        //TODO: probably extract these to functions
-        for i in 0..number_bits {
-            let signal =
-                if stored_data_bytes[number_bits - i - 1] == b'0' {
-                    LOW_
-                } else {
-                    HIGH
-                };
-
-            let r1_tag = format!("{}_{}", VariableBitCPU::R1, i);
-            let ram_cell_tag = format!("cell_1_bit_{}", i);
-
-            let r1_index = cpu.borrow_mut().get_index_from_tag(r1_tag.as_str());
-            let ram_cell_index = cpu.borrow_mut().get_index_from_tag(ram_cell_tag.as_str());
-
-            generated_signals[r1_index] = signal.clone();
-            generated_signals[ram_cell_index] = signal.clone();
-        }
-
-        let end_instruction_bytes = end_instruction.as_bytes().to_vec();
-        //TODO: probably extract these to functions
-        for i in 0..number_bits {
-            let signal =
-                if end_instruction_bytes[number_bits - i - 1] == b'0' {
-                    LOW_
-                } else {
-                    HIGH
-                };
-
-            let ir_tag = format!("{}_{}", VariableBitCPU::IR, i);
-            let bus_tag = format!("{}_{}", VariableBitCPU::BUS, i);
-            let ram_cell_tag = format!("cell_2_bit_{}", i);
-
-            let ir_index = cpu.borrow_mut().get_index_from_tag(ir_tag.as_str());
-            let bus_index = cpu.borrow_mut().get_index_from_tag(bus_tag.as_str());
-            let ram_cell_index = cpu.borrow_mut().get_index_from_tag(ram_cell_tag.as_str());
-
-            generated_signals[ir_index] = signal.clone();
-            generated_signals[bus_index] = signal.clone();
-            generated_signals[ram_cell_index] = signal.clone();
-        }
-
-        let clk_out_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_OUT);
-        let clks_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLKS);
-        let io_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::IO);
-        let da_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::DA);
-        let end_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::END);
-
-        let iar1_index = cpu.borrow_mut().get_index_from_tag(format!("{}_{}", VariableBitCPU::IAR, 1).as_str());
-        let acc0_index = cpu.borrow_mut().get_index_from_tag(format!("{}_{}", VariableBitCPU::ACC, 0).as_str());
-        let acc1_index = cpu.borrow_mut().get_index_from_tag(format!("{}_{}", VariableBitCPU::ACC, 1).as_str());
-
-        generated_signals[clk_out_index] = HIGH;
-        generated_signals[clks_index] = HIGH;
-        generated_signals[io_index] = HIGH;
-        generated_signals[da_index] = HIGH;
-        generated_signals[end_index] = HIGH;
-
-        generated_signals[iar1_index] = HIGH;
-        generated_signals[acc0_index] = HIGH;
-        generated_signals[acc1_index] = HIGH;
-
-        let failed = compare_generate_and_collected_output(&cpu, generated_signals, collected_signals);
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
 
         assert!(!failed);
     }
@@ -2131,15 +2100,15 @@ mod tests {
         let decoder_input_size = 2;
 
         let data_instruction_first = Instructions::binary(
-            Instructions::Data{reg: Register::R0}
+            Instructions::Data { reg: Register::R0 }
         );
-        let stored_data_address = "00000110"; //6
+        let stored_data_address = "00000110"; // 6
         let data_instruction_second = Instructions::binary(
-            Instructions::Data{reg: Register::R3}
+            Instructions::Data { reg: Register::R3 }
         );
         let stored_data_value = "11111010";
         let store_instruction = Instructions::binary(
-            Instructions::Store{reg_a: Register::R0, reg_b: Register::R3}
+            Instructions::Store { reg_a: Register::R0, reg_b: Register::R3 }
         );
         let end_instruction = Instructions::binary(Instructions::End);
 
@@ -2153,18 +2122,632 @@ mod tests {
             end_instruction.as_str(), //5
         ];
 
+        let end_instruction_index = binary_strings.len() - 1;
         let cpu = run_instructions(
             number_bits,
             decoder_input_size,
-            binary_strings,
+            &binary_strings,
         );
 
         let collected_signals = collect_signals_from_cpu(&cpu);
-        let mut generated_signals = generate_default_output(&cpu);
+        let mut generated_signals = generate_basic_output(
+            &cpu,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
+        );
 
-        let failed = compare_generate_and_collected_output(&cpu, generated_signals, collected_signals);
+        convert_bytes_to_signals(
+            stored_data_address,
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::R0,
+                );
+            },
+        );
+
+        convert_bytes_to_signals(
+            stored_data_value,
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal.clone(),
+                    VariableBitCPU::R3,
+                );
+
+                let mut output_tag = RAMUnit::get_ram_output_string(6, 0);
+                output_tag.pop();
+                output_tag.pop();
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    output_tag.as_str(),
+                );
+            },
+        );
+
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
 
         assert!(!failed);
     }
 
+    #[test]
+    fn load_instruction() {
+        let number_bits = 8;
+        let decoder_input_size = 2;
+
+        let data_instruction_first = Instructions::binary(
+            Instructions::Data { reg: Register::R1 }
+        );
+        let stored_data_address = "00000100"; // 4
+        let load_instruction = Instructions::binary(
+            Instructions::Load { reg_a: Register::R1, reg_b: Register::R2 }
+        );
+        let end_instruction = Instructions::binary(Instructions::End);
+        let stored_data_value = "10111010";
+
+        //This should store the stored_data_value to memory address 6 (stored_data_address).
+        let binary_strings = vec![
+            data_instruction_first.as_str(), //0
+            stored_data_address, //1
+            load_instruction.as_str(), //2
+            end_instruction.as_str(), //3
+            stored_data_value, //4
+        ];
+
+        let end_instruction_index = binary_strings.len() - 2;
+        let cpu = run_instructions(
+            number_bits,
+            decoder_input_size,
+            &binary_strings,
+        );
+
+        let collected_signals = collect_signals_from_cpu(&cpu);
+        let mut generated_signals = generate_basic_output(
+            &cpu,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
+        );
+
+        convert_bytes_to_signals(
+            stored_data_address,
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::R1,
+                );
+            },
+        );
+
+        convert_bytes_to_signals(
+            stored_data_value,
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal.clone(),
+                    VariableBitCPU::R2,
+                );
+
+                let mut output_tag = RAMUnit::get_ram_output_string(4, 0);
+                output_tag.pop();
+                output_tag.pop();
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    output_tag.as_str(),
+                );
+            },
+        );
+
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
+
+        assert!(!failed);
+    }
+
+    #[test]
+    fn add_instruction() {
+        let number_bits = 8;
+
+        let high_number_range = usize::pow(2, number_bits as u32);
+        let a_num = rand::thread_rng().gen_range(0..high_number_range);
+        let b_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let sum = a_num + b_num;
+
+        run_alu_instruction(
+            number_bits,
+            a_num,
+            b_num,
+            sum,
+            ALUInstruction::ADD,
+            Register::R0,
+            Register::R1,
+        );
+    }
+
+    #[test]
+    fn shift_right_instruction() {
+        let number_bits = 8;
+
+        let high_number_range = usize::pow(2, number_bits as u32);
+        let a_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let shift_result = a_num >> 1;
+
+        run_alu_instruction(
+            number_bits,
+            a_num,
+            0,
+            shift_result,
+            ALUInstruction::SHR,
+            Register::R0,
+            Register::R1,
+        );
+    }
+
+    #[test]
+    fn shift_left_instruction() {
+        let number_bits = 8;
+
+        let high_number_range = usize::pow(2, number_bits as u32);
+        let a_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let shift_result = a_num << 1;
+
+        run_alu_instruction(
+            number_bits,
+            a_num,
+            0,
+            shift_result,
+            ALUInstruction::SHL,
+            Register::R0,
+            Register::R1,
+        );
+    }
+
+    #[test]
+    fn not_instruction() {
+        let number_bits = 8;
+
+        let high_number_range = usize::pow(2, number_bits as u32);
+        let a_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let not_result = !a_num;
+
+        run_alu_instruction(
+            number_bits,
+            a_num,
+            0,
+            not_result,
+            ALUInstruction::NOT,
+            Register::R0,
+            Register::R1,
+        );
+    }
+
+    #[test]
+    fn and_instruction() {
+        let number_bits = 8;
+
+        let high_number_range = usize::pow(2, number_bits as u32);
+        let a_num = rand::thread_rng().gen_range(0..high_number_range);
+        let b_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let not_result = a_num & b_num;
+
+        run_alu_instruction(
+            number_bits,
+            a_num,
+            b_num,
+            not_result,
+            ALUInstruction::AND,
+            Register::R0,
+            Register::R1,
+        );
+    }
+
+    #[test]
+    fn or_instruction() {
+        let number_bits = 8;
+
+        let high_number_range = usize::pow(2, number_bits as u32);
+        let a_num = rand::thread_rng().gen_range(0..high_number_range);
+        let b_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let not_result = a_num | b_num;
+
+        run_alu_instruction(
+            number_bits,
+            a_num,
+            b_num,
+            not_result,
+            ALUInstruction::OR,
+            Register::R0,
+            Register::R1,
+        );
+    }
+
+    #[test]
+    fn xor_instruction() {
+        let number_bits = 8;
+
+        let high_number_range = usize::pow(2, number_bits as u32);
+        let a_num = rand::thread_rng().gen_range(0..high_number_range);
+        let b_num = rand::thread_rng().gen_range(0..high_number_range);
+
+        let not_result = a_num ^ b_num;
+
+        run_alu_instruction(
+            number_bits,
+            a_num,
+            b_num,
+            not_result,
+            ALUInstruction::XOR,
+            Register::R0,
+            Register::R1,
+        );
+    }
+
+    #[test]
+    fn jump_register_instruction() {
+        let number_bits = 8;
+        let decoder_input_size = 2;
+
+        //Jump past the end at address 3 and use the jump at address 5. If the jump fails and it
+        // ends early, the values in IAR and ACC will be wrong and the test will fail.
+        let address_to_jump_to_num = 5;
+
+        let data_a_num = Instructions::binary(
+            Instructions::Data { reg: Register::R0 }
+        );
+        let address_to_jump_to_data = format!("{:0width$b}", address_to_jump_to_num, width = number_bits);
+        let jump_register_instruction = Instructions::binary(
+            Instructions::JumpRegister {
+                reg: Register::R0,
+            }
+        );
+        let end_instruction = Instructions::binary(Instructions::End);
+
+        let binary_strings = vec![
+            data_a_num.as_str(), //0
+            address_to_jump_to_data.as_str(), //1
+            jump_register_instruction.as_str(), //2
+            end_instruction.as_str(), //3
+            "00000000", //dummy data 4
+            end_instruction.as_str(), //5
+        ];
+
+        let end_instruction_index = binary_strings.len() - 1;
+        let cpu = run_instructions(
+            number_bits,
+            decoder_input_size,
+            &binary_strings,
+        );
+
+        let collected_signals = collect_signals_from_cpu(&cpu);
+        let mut generated_signals = generate_basic_output(
+            &cpu,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
+        );
+
+        convert_bytes_to_signals(
+            address_to_jump_to_data.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::R0,
+                );
+            },
+        );
+
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
+
+        assert!(!failed);
+    }
+
+    #[test]
+    fn jump_address_instruction() {
+        let number_bits = 8;
+        let decoder_input_size = 2;
+
+        //Jump past the end at address 3 and use the jump at address 5. If the jump fails and it
+        // ends early, the values in IAR and ACC will be wrong and the test will fail.
+        let address_to_jump_to_num = 4;
+
+        let jump_address_instruction = Instructions::binary(
+            Instructions::JumpAddress
+        );
+        let address_to_jump_to_data = format!("{:0width$b}", address_to_jump_to_num, width = number_bits);
+        let end_instruction = Instructions::binary(Instructions::End);
+
+        let binary_strings = vec![
+            jump_address_instruction.as_str(), //0
+            address_to_jump_to_data.as_str(), //1
+            end_instruction.as_str(), //2
+            "00000000", //dummy data 3
+            end_instruction.as_str(), //4
+        ];
+
+        let end_instruction_index = binary_strings.len() - 1;
+        let cpu = run_instructions(
+            number_bits,
+            decoder_input_size,
+            &binary_strings,
+        );
+
+        let collected_signals = collect_signals_from_cpu(&cpu);
+        let generated_signals = generate_basic_output(
+            &cpu,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
+        );
+
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
+
+        assert!(!failed);
+    }
+
+    #[test]
+    fn jump_if_carry_instruction() {
+        let number_bits = 8;
+
+        //Want to make sure 3/4 of the flags are false.
+        let num_a = 254;
+        let num_b = 255;
+        let sum = num_a + num_b;
+
+        run_jump_if_test(
+            number_bits,
+            num_a,
+            num_b,
+            sum,
+            true,
+            false,
+            false,
+            false,
+            ALUInstruction::ADD,
+            true,
+        );
+    }
+
+    #[test]
+    fn jump_if_a_larger_instruction() {
+        let number_bits = 8;
+
+        //Want to make sure 3/4 of the flags are false.
+        let num_a = 2;
+        let num_b = 1;
+        let sum = num_a + num_b;
+
+        run_jump_if_test(
+            number_bits,
+            num_a,
+            num_b,
+            sum,
+            false,
+            true,
+            false,
+            false,
+            ALUInstruction::ADD,
+            true,
+        );
+    }
+
+    #[test]
+    fn jump_if_equal_instruction() {
+        let number_bits = 8;
+
+        //Want to make sure 3/4 of the flags are false.
+        let num_a = 1;
+        let num_b = 1;
+        let sum = num_a + num_b;
+
+        run_jump_if_test(
+            number_bits,
+            num_a,
+            num_b,
+            sum,
+            false,
+            false,
+            true,
+            false,
+            ALUInstruction::ADD,
+            true,
+        );
+    }
+
+    #[test]
+    fn jump_if_zero_instruction() {
+        let number_bits = 8;
+
+        //Want to make sure 3/4 of the flags are false.
+        let num_a = 15;
+        let num_b = 0;
+        let result = num_a & num_b;
+
+        run_jump_if_test(
+            number_bits,
+            num_a,
+            num_b,
+            result,
+            false,
+            false,
+            false,
+            true,
+            ALUInstruction::AND,
+            true,
+        );
+    }
+
+    #[test]
+    fn jump_if_none_instruction() {
+        let number_bits = 8;
+
+        //Want to make sure 3/4 of the flags are false.
+        let num_a = 254;
+        let num_b = 255;
+        let result = num_a | num_b;
+
+        run_jump_if_test(
+            number_bits,
+            num_a,
+            num_b,
+            result,
+            false,
+            false,
+            false,
+            false,
+            ALUInstruction::OR,
+            false,
+        );
+    }
+
+    #[test]
+    fn clear_flags_instruction() {
+        let number_bits = 8;
+
+        //Force a carry bit.
+        let num_a = 255;
+        let result = num_a << 1;
+
+        let decoder_input_size = 2;
+
+        let store_data_a_instruction = Instructions::binary(
+            Instructions::Data {
+                reg: Register::R0
+            }
+        );
+        let num_a_data = format!("{:0width$b}", num_a, width = number_bits);
+        let add_instruction = Instructions::binary(
+            Instructions::ALU {
+                opt: ALUInstruction::SHL,
+                reg_a: Register::R0,
+                reg_b: Register::R1,
+            }
+        );
+        let clear_flags = Instructions::binary(
+            Instructions::ClearFlags
+        );
+        let end_instruction = Instructions::binary(Instructions::End);
+
+        let binary_strings = vec![
+            store_data_a_instruction.as_str(),
+            num_a_data.as_str(),
+            add_instruction.as_str(),
+            clear_flags.as_str(),
+            end_instruction.as_str(),
+        ];
+
+        let end_instruction_index = binary_strings.len() - 1;
+        let cpu = run_instructions(
+            number_bits,
+            decoder_input_size,
+            &binary_strings,
+        );
+
+        let collected_signals = collect_signals_from_cpu(&cpu);
+        let mut generated_signals = generate_basic_output(
+            &cpu,
+            number_bits,
+            &binary_strings,
+            end_instruction_index,
+        );
+
+        convert_bytes_to_signals(
+            num_a_data.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal,
+                    VariableBitCPU::R0,
+                );
+            },
+        );
+
+        let mut sum_string = format!("{:0width$b}", result, width = number_bits);
+        //If result is larger, chop off leading digits.
+        while sum_string.len() > number_bits {
+            sum_string.remove(0);
+        }
+        convert_bytes_to_signals(
+            sum_string.as_str(),
+            |i, signal| {
+                store_in_output(
+                    &cpu,
+                    &mut generated_signals,
+                    i,
+                    signal.clone(),
+                    VariableBitCPU::R1,
+                );
+            },
+        );
+
+        let failed = compare_generate_and_collected_output(
+            &cpu,
+            generated_signals,
+            collected_signals,
+        );
+
+        assert!(!failed);
+
+        let flags_output = cpu.borrow_mut().flags.borrow_mut().fetch_output_signals().unwrap();
+
+        let mut collected_signals = Vec::new();
+        for out in flags_output.into_iter() {
+            match out {
+                GateOutputState::NotConnected(signal) => {
+                    collected_signals.push(signal);
+                }
+                GateOutputState::Connected(connected_output) => {
+                    collected_signals.push(connected_output.throughput.signal);
+                }
+            }
+        }
+
+        assert_eq!(
+            collected_signals,
+            vec![LOW_; 8],
+        )
+    }
 }
+

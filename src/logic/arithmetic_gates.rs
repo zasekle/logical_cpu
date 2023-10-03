@@ -1976,15 +1976,6 @@ impl ArithmeticLogicUnit {
             carry_in_signal_gatekeepers,
         };
 
-        //todo d
-        arithmetic_logic_unit.xor_le.borrow_mut().toggle_output_printing(true);
-        arithmetic_logic_unit.or.borrow_mut().toggle_output_printing(true);
-        arithmetic_logic_unit.and.borrow_mut().toggle_output_printing(true);
-        arithmetic_logic_unit.not.borrow_mut().toggle_output_printing(true);
-        arithmetic_logic_unit.shift_left.borrow_mut().toggle_output_printing(true);
-        arithmetic_logic_unit.shift_right.borrow_mut().toggle_output_printing(true);
-        arithmetic_logic_unit.adder.borrow_mut().toggle_output_printing(true);
-
         arithmetic_logic_unit.build_and_prime_circuit(
             num_bits,
             output_gates_logic,
@@ -3504,7 +3495,7 @@ mod tests {
         let b_input_signals = vec![LOW_; num_bits];
         let mut output = vec![LOW_; num_bits];
 
-        output.push(LOW_);  //A Larger  (A_L)
+        output.push(LOW_); //A Larger  (A_L)
         output.push(HIGH); //Equal     (EQ)
         output.push(HIGH); //Zero      (Z)
         output.push(NONE); //Carry Out (C_OUT)
@@ -3545,8 +3536,8 @@ mod tests {
 
     #[test]
     fn arithmetic_logic_unit_and_or_test() {
-        // for _ in 0..20 {
-            let num_bits = 2; //todo rand::thread_rng().gen_range(2..16);
+        for _ in 0..20 {
+            let num_bits = rand::thread_rng().gen_range(2..16);
 
             let and_gate = rand::thread_rng().gen_bool(0.5);
             let gen_randoms_result = generate_random_and_or_inputs_outputs(
@@ -3562,7 +3553,7 @@ mod tests {
                 };
 
             run_alu(num_bits, opt, gen_randoms_result);
-        // }
+        }
     }
 
     #[test]

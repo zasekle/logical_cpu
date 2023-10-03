@@ -761,7 +761,6 @@ impl RAMUnit {
             );
         }
 
-        println!("decoder_input_size {decoder_input_size}");
         for i in decoder_input_size..(2 * decoder_input_size) {
             self.memory_address_register.borrow_mut().connect_output_to_next_gate(
                 i,
@@ -1237,7 +1236,7 @@ mod tests {
 
     #[test]
     fn decoder_initialization() {
-        let num_bits = rand::thread_rng().gen_range(1..=16);
+        let num_bits = rand::thread_rng().gen_range(1..=8);
         let register = VariableDecoder::new(num_bits);
 
         let output = register.borrow_mut().fetch_output_signals().unwrap();

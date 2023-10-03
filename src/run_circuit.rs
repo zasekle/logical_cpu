@@ -1,11 +1,15 @@
 use std::cell::{RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
-use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, RUN_CIRCUIT_IS_HIGH_LEVEL};
-use crate::logic::foundations::{GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate};
-use crate::logic::foundations::Signal::HIGH;
-use crate::logic::output_gates::LogicGateAndOutputGate;
+use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
+use crate::logic::foundations::{GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::Signal::{HIGH, LOW_};
+use crate::logic::input_gates::{AutomaticInput, Clock};
+use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
+use crate::logic::processor_components::RAMUnit;
+use crate::logic::variable_bit_cpu::VariableBitCPU;
+use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 pub fn start_clock<F>(
     input_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
@@ -136,7 +140,7 @@ pub fn run_circuit<F>(
 
                         if gate_cell.borrow_mut().get_tag() == END_OUTPUT_GATE_TAG
                             && signal == HIGH {
-                            println!("End of program reached. Stopping execution.");
+                            println!("End of program reached on clock-tick {}. Stopping execution.", get_clock_tick_number());
                             continue_clock = false;
                         }
                         if print_output {
@@ -216,6 +220,345 @@ pub fn run_circuit<F>(
     );
 
     continue_clock
+}
+
+pub fn generate_default_output(cpu: &Rc<RefCell<VariableBitCPU>>) -> Vec<Signal> {
+
+    // Multi-bit outputs
+    // VariableBitCPU::R0
+    // VariableBitCPU::R1
+    // VariableBitCPU::R2
+    // VariableBitCPU::R3
+    // VariableBitCPU::IR
+    // VariableBitCPU::IAR
+    // VariableBitCPU::ACC
+    // VariableBitCPU::TMP
+    // VariableBitCPU::BUS
+    // RAM_registers (no constant)
+    //
+    // Single-bit outputs
+    // VariableBitCPU::CLK
+    // VariableBitCPU::CLKE
+    // VariableBitCPU::CLKS
+    // VariableBitCPU::IO
+    // VariableBitCPU::DA
+    // VariableBitCPU::END
+    // VariableBitCPU::IO_CLK_E
+    // VariableBitCPU::IO_CLK_S
+
+    let mut generated_signals = vec![LOW_; cpu.borrow_mut().get_complex_gate().output_gates.len()];
+    let clke_index = cpu.borrow_mut().get_complex_gate().gate_tags_to_index[VariableBitCPU::CLKE].index;
+    generated_signals[clke_index] = HIGH;
+    generated_signals
+}
+
+pub fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cells: usize) -> Vec<Rc<RefCell<AutomaticInput>>> {
+    assert_ne!(binary_strings.len(), 0);
+    assert!(binary_strings.len() <= num_ram_cells);
+
+    let mut ram_inputs = vec![vec![]; binary_strings.first().unwrap().len()];
+    for (i, string) in binary_strings.iter().enumerate() {
+        for (j, c) in string.chars().rev().enumerate() {
+            let signal =
+                if c == '0' {
+                    LOW_
+                } else {
+                    HIGH
+                };
+
+            let num_pushes =
+                if i != 0 {
+                    4
+                } else {
+                    2
+                };
+
+            for _ in 0..num_pushes {
+                ram_inputs[j].push(signal.clone());
+            }
+        }
+    }
+
+    //The vector is filled up so that it runs for each ram cell. Then there are two extra inputs
+    // needed to put the clock from the end of LOAD to the starting clock state.
+    let num_extra_inputs = (num_ram_cells - binary_strings.len()) * 4 + 2;
+    for i in 0..ram_inputs.len() {
+        for _ in 0..num_extra_inputs {
+            ram_inputs[i].push(LOW_);
+        }
+    }
+
+    let mut automatic_inputs = Vec::new();
+    for (i, inp) in ram_inputs.iter().enumerate() {
+        let input_tag = format!("Input_bit_{}", i);
+        automatic_inputs.push(
+            AutomaticInput::new(inp.clone(), 1, input_tag.as_str())
+        );
+    }
+
+    automatic_inputs
+}
+
+pub fn collect_signals_from_cpu(cpu: &Rc<RefCell<VariableBitCPU>>) -> Vec<Signal> {
+    let cpu_output = cpu.borrow_mut().fetch_output_signals().unwrap();
+    let mut collected_signals = Vec::new();
+    for out in cpu_output.into_iter() {
+        match out {
+            GateOutputState::NotConnected(signal) => {
+                collected_signals.push(signal);
+            }
+            GateOutputState::Connected(connected_output) => {
+                collected_signals.push(connected_output.throughput.signal);
+            }
+        }
+    }
+    collected_signals
+}
+
+pub fn run_instructions(
+    number_bits: usize,
+    decoder_input_size: usize,
+    binary_strings: &Vec<&str>,
+) -> Rc<RefCell<VariableBitCPU>> {
+    let cpu = VariableBitCPU::new(number_bits, decoder_input_size);
+
+    let num_ram_cells = usize::pow(2, (decoder_input_size * 2) as u32);
+    assert!(binary_strings.len() <= num_ram_cells);
+    if !binary_strings.is_empty() {
+        assert_eq!(binary_strings[0].len(), number_bits);
+    }
+
+    println!("Beginning to load values into RAM");
+
+    load_values_into_ram(
+        &cpu,
+        binary_strings,
+        num_ram_cells,
+    );
+
+    let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    let clock = Clock::new(1, "PRIMARY_CLOCK");
+    let clk_in_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_IN);
+    cpu.borrow_mut().get_clock_synced_with_cpu(&clock);
+
+    clock.borrow_mut().connect_output_to_next_gate(
+        0,
+        clk_in_index,
+        cpu.clone(),
+    );
+
+    input_gates.push(clock.clone());
+
+    let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+    let end_output_gate = SimpleOutput::new(END_OUTPUT_GATE_TAG);
+
+    let cpu_end_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::END);
+    cpu.borrow_mut().connect_output_to_next_gate(
+        cpu_end_index,
+        0,
+        end_output_gate.clone(),
+    );
+
+    output_gates.push(end_output_gate.clone());
+
+    println!("\nCompleted load in {} clock-ticks. Beginning program.\n", get_clock_tick_number());
+    unsafe {
+        CLOCK_TICK_NUMBER = 0;
+    }
+    let mut continue_load_operation = true;
+    let mut propagate_signal = true;
+    while continue_load_operation {
+        unsafe {
+            CLOCK_TICK_NUMBER += 1;
+        }
+        // println!("CLOCK TICK {}", get_clock_tick_number());
+
+        // cpu.borrow_mut().toggle_output_printing(true);
+        // cpu.borrow_mut().control_section.borrow_mut().toggle_output_printing(true);
+        // cpu.borrow_mut().alu.borrow_mut().toggle_output_printing(true);
+
+        continue_load_operation = run_circuit(
+            &input_gates,
+            &output_gates,
+            propagate_signal,
+            &mut |_clock_tick_inputs, _output_gates| {},
+            None,
+        );
+
+        propagate_signal = false;
+    }
+
+    cpu
+}
+
+//This should leave the cpu in the same state as it started in. The only difference is that
+// there will now be values loaded into RAM. It should be run without any inputs connected to
+// the cpu itself.
+pub fn load_values_into_ram(
+    cpu: &Rc<RefCell<VariableBitCPU>>,
+    binary_strings: &Vec<&str>,
+    num_ram_cells: usize,
+) {
+    let automatic_inputs = convert_binary_to_inputs_for_load(
+        binary_strings.clone(),
+        num_ram_cells,
+    );
+
+    let num_cycles = num_ram_cells * 4 - 2;
+
+    //The last cycle is to advance the clock to the starting position. AND to get the splitter
+    // to the correct position.
+    let output_values = vec![HIGH; num_cycles + 1];
+
+    let load_automatic_input = AutomaticInput::new(
+        output_values.clone(),
+        1,
+        "LOAD",
+    );
+
+    let memory_address_register_automatic_input = AutomaticInput::new(
+        output_values,
+        1,
+        "MEMORY_ADDRESS_REGISTER",
+    );
+
+    let load_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::LOAD);
+    load_automatic_input.borrow_mut().connect_output_to_next_gate(
+        0,
+        load_index,
+        cpu.clone(),
+    );
+
+    let memory_address_register_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::MARS);
+    memory_address_register_automatic_input.borrow_mut().connect_output_to_next_gate(
+        0,
+        memory_address_register_index,
+        cpu.clone(),
+    );
+
+    let mut automatic_input_gates: Vec<Rc<RefCell<AutomaticInput>>> = Vec::new();
+    let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    let clock = Clock::new(1, "PRIMARY_CLOCK");
+    cpu.borrow_mut().get_clock_synced_with_cpu(&clock);
+
+    let clk_in_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_IN);
+    clock.borrow_mut().connect_output_to_next_gate(
+        0,
+        clk_in_index,
+        cpu.clone(),
+    );
+
+    input_gates.push(clock.clone());
+    input_gates.push(load_automatic_input.clone());
+    input_gates.push(memory_address_register_automatic_input.clone());
+    automatic_input_gates.push(load_automatic_input);
+    automatic_input_gates.push(memory_address_register_automatic_input);
+
+    for (i, input) in automatic_inputs.iter().enumerate() {
+        let ram_input_tag = format!("{}_{}", VariableBitCPU::RAM, i);
+        let ram_input_index = cpu.borrow_mut().get_index_from_tag(ram_input_tag.as_str());
+        input.borrow_mut().connect_output_to_next_gate(
+            0,
+            ram_input_index,
+            cpu.clone(),
+        );
+        input_gates.push(input.clone());
+        automatic_input_gates.push(input.clone());
+    }
+
+    let mut continue_load_operation = true;
+    let mut propagate_signal = true;
+    while continue_load_operation {
+        unsafe {
+            CLOCK_TICK_NUMBER += 1;
+        }
+        // println!("CLOCK TICK {}", get_clock_tick_number());
+
+        continue_load_operation = run_circuit(
+            &input_gates,
+            &Vec::new(),
+            propagate_signal,
+            &mut |_clock_tick_inputs, _output_gates| {},
+            None,
+        );
+
+        propagate_signal = false;
+    }
+
+    //Disconnect all inputs so that future connections can be made.
+    for automatic_input_gate in automatic_input_gates.into_iter() {
+        automatic_input_gate.borrow_mut().disconnect_gate(0);
+    }
+
+    clock.borrow_mut().disconnect_gate(0);
+
+    //LOAD and MAR_S must be tied back to LOW before completing. They have already been
+    // disconnected so the zero id is used.
+    cpu.borrow_mut().update_input_signal(
+        GateInput::new(
+            load_index,
+            LOW_,
+            UniqueID::zero_id(),
+        )
+    );
+
+    cpu.borrow_mut().update_input_signal(
+        GateInput::new(
+            memory_address_register_index,
+            LOW_,
+            UniqueID::zero_id(),
+        )
+    );
+
+    let mut generated_output = generate_default_output(&cpu);
+
+    for (i, binary_string) in binary_strings.iter().enumerate() {
+        for (j, c) in binary_string.chars().rev().enumerate() {
+            let output_tag = RAMUnit::get_ram_output_string(i, j);
+            let output_index = cpu.borrow_mut().get_complex_gate().gate_tags_to_index[&output_tag.to_string()].index;
+
+            let signal =
+                if c == '0' {
+                    LOW_
+                } else {
+                    HIGH
+                };
+
+            generated_output[output_index] = signal.clone();
+        }
+    }
+
+    let collected_signals = collect_signals_from_cpu(&cpu);
+
+    let failed = compare_generate_and_collected_output(&cpu, generated_output, collected_signals);
+
+    assert!(!failed);
+}
+
+pub fn compare_generate_and_collected_output(
+    cpu: &Rc<RefCell<VariableBitCPU>>,
+    generated_output: Vec<Signal>,
+    collected_signals: Vec<Signal>,
+) -> bool {
+    let tags_sorted_by_index = extract_output_tags_sorted_by_index(&cpu.borrow_mut().get_complex_gate());
+
+    assert_eq!(collected_signals.len(), generated_output.len());
+    assert_eq!(collected_signals.len(), tags_sorted_by_index.len());
+
+    let mut failed = false;
+    for i in 0..collected_signals.len() {
+        let mut failed_map = HashMap::new();
+
+        if (tags_sorted_by_index[i].clone(), generated_output[i].clone()) != (tags_sorted_by_index[i].clone(), collected_signals[i].clone()) {
+            failed_map.insert(tags_sorted_by_index[i].clone(), (generated_output[i].clone(), collected_signals[i].clone()));
+            failed = true;
+        };
+
+        if !failed_map.is_empty() {
+            println!("E (passed, collected): {:?}", failed_map);
+        }
+    }
+    failed
 }
 
 #[cfg(test)]
