@@ -2,7 +2,7 @@ use std::cell::{RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
 use crate::logic::foundations::{GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::foundations::Signal::{HIGH, LOW_};
@@ -10,6 +10,7 @@ use crate::logic::input_gates::{AutomaticInput, Clock};
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::RAMUnit;
 use crate::logic::variable_bit_cpu::VariableBitCPU;
+use crate::{ALU_TIME, CONTROL_SECTION_TIME, RAM_TIME};
 use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 pub fn start_clock<F>(
@@ -87,20 +88,19 @@ pub fn run_circuit<F>(
         let mut num_invalid_gates: usize = 0;
 
         for gate_cell in gates.into_iter() {
-
             let mut gate = gate_cell.borrow_mut();
             let gate_output = gate.fetch_output_signals();
 
             let gate_output = if let Err(err) = gate_output {
                 match err {
                     GateLogicError::NoMoreAutomaticInputsRemaining => {
-                        return false
+                        return false;
                     }
                     GateLogicError::MultipleValidSignalsWhenCalculating => {
                         num_invalid_gates += 1;
                         drop(gate);
                         next_gates.push(gate_cell);
-                        continue
+                        continue;
                     }
                 };
             } else {
@@ -126,7 +126,7 @@ pub fn run_circuit<F>(
                         drop(gate);
                         gathered_gates.push(gate_cell);
                     }
-                    continue
+                    continue;
                 }
             }
 
@@ -134,7 +134,6 @@ pub fn run_circuit<F>(
             for output in gate_output.into_iter() {
                 match output {
                     GateOutputState::NotConnected(signal) => {
-
                         if print_output {
                             println!("NOT_CONNECTED gate_tag {}", gate_cell.borrow_mut().get_tag());
                         }
@@ -369,6 +368,9 @@ pub fn run_instructions(
     println!("\nCompleted load in {} clock-ticks. Beginning program.\n", get_clock_tick_number());
     unsafe {
         CLOCK_TICK_NUMBER = 0;
+        RAM_TIME = Duration::new(0, 0);
+        CONTROL_SECTION_TIME = Duration::new(0, 0);
+        ALU_TIME = Duration::new(0, 0);
     }
     let mut continue_load_operation = true;
     let mut propagate_signal = true;
@@ -376,11 +378,6 @@ pub fn run_instructions(
         unsafe {
             CLOCK_TICK_NUMBER += 1;
         }
-        // println!("CLOCK TICK {}", get_clock_tick_number());
-
-        // cpu.borrow_mut().toggle_output_printing(true);
-        // cpu.borrow_mut().control_section.borrow_mut().toggle_output_printing(true);
-        // cpu.borrow_mut().alu.borrow_mut().toggle_output_printing(true);
 
         continue_load_operation = run_circuit(
             &input_gates,
@@ -395,9 +392,18 @@ pub fn run_instructions(
 
     let complete_run = Instant::now();
 
+    let run_time = complete_run.duration_since(complete_load);
     println!("Loading took {:?}", complete_load.duration_since(start_load));
-    println!("Run took {:?}", complete_run.duration_since(complete_load));
+    println!("Run took {:?}", run_time);
     println!("Total took {:?}", complete_run.duration_since(start_load));
+    println!(
+        "CPU ran at {}Hz",
+        if run_time.as_secs() == 0 {
+            0
+        } else {
+            get_clock_tick_number() as u64 / complete_run.duration_since(complete_load).as_secs()
+        }
+    );
 
     cpu
 }

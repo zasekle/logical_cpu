@@ -10,29 +10,32 @@ mod test_stuff;
 
 use std::fs::File;
 use std::io::Read;
+use std::time::Duration;
+use crate::globals::get_clock_tick_number;
 
 use crate::run_circuit::{collect_signals_from_logic_gate, run_instructions};
 use crate::test_stuff::extract_output_tags_sorted_by_index;
 
+pub(crate) static mut RAM_TIME: Duration = Duration::new(0, 0);
+pub(crate) static mut CONTROL_SECTION_TIME: Duration = Duration::new(0, 0);
+pub(crate) static mut ALU_TIME: Duration = Duration::new(0, 0);
+
 fn main() {
 
+    //NOTE: This processor runs at ~54Hz. I was originally planning to attempt to simulate something
+    // more complex with it. But even a processor from the early 90s will run at ~20MHz which is
+    // something like 500,000x faster. So in order to make this processor able to do anything in
+    // a reasonable amount of time, I would probably need to re-write the entire simulation with
+    // dropping most of the logic gates themselves and this would defeat the purpose.
+
     //TODO
-    // Right now the way that it gets the memory is actually part of the circuit, might want to change
+    // Right now the way that it loads the memory is actually part of the circuit, might want to change
     // that so it is programmatically done instead. There isn't actually any need to do it the way
     // I currently am.
 
     //TODO: I can probably tie my SignalGatekeeper to the set values of a lot of other places. For
     // example the RAM, the registers, the memory etc... Otherwise, it will need to propagate through
     // the entire thing every time.
-
-    //TODO: may be worthwhile to change the way RAMUnit and VariableBitCPU work to take more than
-    // just the absolute size of a decoder and instead take more fine grained numbers.
-
-    //TODO: There are other gates I can probably tie together using run_circuit, although I don't
-    // know if it will matter. Any of the ones that have a Vec of gates inside them. However, I think
-    // it only matters if they have a variable number of inputs to the specific blocks inside of them
-    // to avoid the same block from being called twice. Might be worthwhile in the adder (or other ALU
-    // gates?)
 
     //TODO: With the way that I did run_circuit and grouping the gates before running them, it might
     // be possible to run them in a multithreaded way. Or maybe every time a signal splits I can
@@ -82,5 +85,12 @@ fn main() {
 
     for i in 0..tags_sorted_by_index.len() {
         println!("{} {:?}", tags_sorted_by_index[i], collected_signals[i]);
+    }
+
+
+    unsafe {
+        println!("RAM_TIME: {:?}", RAM_TIME);
+        println!("CONTROL_SECTION_TIME: {:?}", CONTROL_SECTION_TIME);
+        println!("ALU_TIME: {:?}", ALU_TIME);
     }
 }

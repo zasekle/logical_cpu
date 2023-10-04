@@ -1,5 +1,7 @@
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
+use std::time::Instant;
+use crate::ALU_TIME;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not, Or, Splitter, XOr};
 use crate::logic::complex_logic::SignalGatekeeper;
 
@@ -2699,10 +2701,18 @@ impl LogicGate for ArithmeticLogicUnit {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+        let start = Instant::now();
+
+        let result = self.complex_gate.fetch_output_signals(
             &self.get_tag(),
             Some(GateType::VariableBitEnableType),
-        )
+        );
+
+        unsafe {
+            ALU_TIME += start.elapsed();
+        }
+
+        result
     }
 
     fn get_gate_type(&self) -> GateType {

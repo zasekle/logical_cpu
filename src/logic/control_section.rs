@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
+use crate::CONTROL_SECTION_TIME;
 use crate::logic::basic_gates::{And, Not, Or, Splitter};
 use crate::logic::complex_logic::VariableOutputStepper;
 
@@ -2877,10 +2879,18 @@ impl LogicGate for ControlSection {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+        let start = Instant::now();
+
+        let result = self.complex_gate.fetch_output_signals(
             &self.get_tag(),
             None,
-        )
+        );
+
+        unsafe {
+            CONTROL_SECTION_TIME += start.elapsed();
+        }
+
+        result
     }
 
     fn get_gate_type(&self) -> GateType {

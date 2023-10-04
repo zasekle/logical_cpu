@@ -1380,7 +1380,7 @@ mod tests {
             }
 
             fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
-                self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+                self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
             }
         }
 

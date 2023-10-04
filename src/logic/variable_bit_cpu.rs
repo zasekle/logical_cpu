@@ -1664,11 +1664,6 @@ mod tests {
         default_output
     }
 
-    //TODO: Would be nice if this could guarantee that the stepper was in pos 1 and the clock was
-    // reset to the starting position as well. Also probably reset all the inputs and outputs
-    // (including the CLK_IN input) to LOW. The stepper actually has a reset inside it, can probably
-    // just drag it up and connect it directly to the reset pin. Is it a proper full reset though
-    // or does it need to go all the way to the end for the consistency of the memory cells.
     fn reset_cpu_values(cpu: &Rc<RefCell<VariableBitCPU>>) {
         let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
 

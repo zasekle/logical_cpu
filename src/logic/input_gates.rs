@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, InputSignalReturn, BasicGateMembers, ConnectedOutput};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, InputSignalReturn, BasicGateMembers, ConnectedOutput, set_all_gate_output_to_signal};
 use crate::logic::foundations::{Signal::{HIGH, LOW_}};
 
 pub struct Clock {
@@ -43,57 +43,28 @@ impl Clock {
         ]
     }
 
-    //todo: make this and the below one one function
     //Note that this function makes calls to borrow_mut(). Therefore it cannot be used while running
     // the circuit, only before or after.
     pub fn disconnect_gate(
         &mut self,
         current_output_index: usize,
     ) {
-        let next_gate_info: ConnectedOutput;
-        if let Some(output_state) = self.output_states.get(current_output_index) {
-            match output_state {
-                GateOutputState::NotConnected(_) => {
-                    panic!(
-                        "When attempting to disconnect a gate, the gate with type {} id {} tag {} was not connected.",
-                        self.gate_type,
-                        self.unique_id.id(),
-                        self.tag
-                    )
-                }
-                GateOutputState::Connected(connected_output) => {
-                    next_gate_info = connected_output.clone();
-                }
-            }
-        } else {
-            panic!(
-                "When attempting to disconnect a gate, the gate with type {} id {} tag {} was not connected.",
-                self.gate_type,
-                self.unique_id.id(),
-                self.tag
-            )
-        }
-
-        next_gate_info.gate.borrow_mut().remove_connected_input(
-            next_gate_info.throughput.input_index, self.unique_id
+        disconnect_gate(
+            current_output_index,
+            &mut self.output_states,
+            &self.gate_type,
+            self.unique_id.clone(),
+            self.tag.as_str(),
         );
-
-        self.output_states[current_output_index] = GateOutputState::NotConnected(next_gate_info.throughput.signal);
     }
 
     pub fn set_clock_state(&mut self, clock_signal: Signal) {
         self.previous_signal = clock_signal.clone();
 
-        for output in self.output_states.iter_mut() {
-            match output {
-                GateOutputState::NotConnected(signal) => {
-                    *signal = clock_signal.clone();
-                }
-                GateOutputState::Connected(connected_output) => {
-                    connected_output.throughput.signal = clock_signal.clone();
-                }
-            }
-        }
+        set_all_gate_output_to_signal(
+            &mut self.output_states,
+            clock_signal.clone(),
+        );
     }
 }
 
@@ -230,35 +201,13 @@ impl AutomaticInput {
         &mut self,
         current_output_index: usize,
     ) {
-        let next_gate_info: ConnectedOutput;
-        if let Some(output_state) = self.output_states.get(current_output_index) {
-            match output_state {
-                GateOutputState::NotConnected(_) => {
-                    panic!(
-                        "When attempting to disconnect a gate, the gate with type {} id {} tag {} was not connected.",
-                        self.gate_type,
-                        self.unique_id.id(),
-                        self.tag
-                    )
-                }
-                GateOutputState::Connected(connected_output) => {
-                    next_gate_info = connected_output.clone();
-                }
-            }
-        } else {
-            panic!(
-                "When attempting to disconnect a gate, the gate with type {} id {} tag {} was not connected.",
-                self.gate_type,
-                self.unique_id.id(),
-                self.tag
-            )
-        }
-
-        next_gate_info.gate.borrow_mut().remove_connected_input(
-            next_gate_info.throughput.input_index, self.unique_id
+        disconnect_gate(
+            current_output_index,
+            &mut self.output_states,
+            &self.gate_type,
+            self.unique_id.clone(),
+            self.tag.as_str(),
         );
-
-        self.output_states[current_output_index] = GateOutputState::NotConnected(next_gate_info.throughput.signal);
     }
 }
 
@@ -452,4 +401,43 @@ impl LogicGate for SimpleInput {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+}
+
+fn disconnect_gate(
+    current_output_index: usize,
+    output_states: &mut Vec<GateOutputState>,
+    gate_type: &GateType,
+    unique_id: UniqueID,
+    tag: &str,
+) {
+
+    let next_gate_info: ConnectedOutput;
+    if let Some(output_state) = output_states.get(current_output_index) {
+        match output_state {
+            GateOutputState::NotConnected(_) => {
+                panic!(
+                    "When attempting to disconnect a gate, the gate with type {} id {} tag {} was not connected.",
+                    gate_type,
+                    unique_id.id(),
+                    tag
+                )
+            }
+            GateOutputState::Connected(connected_output) => {
+                next_gate_info = connected_output.clone();
+            }
+        }
+    } else {
+        panic!(
+            "When attempting to disconnect a gate, the gate with type {} id {} tag {} was not connected.",
+            gate_type,
+            unique_id.id(),
+            tag
+        )
+    }
+
+    next_gate_info.gate.borrow_mut().remove_connected_input(
+        next_gate_info.throughput.input_index, unique_id
+    );
+
+    output_states[current_output_index] = GateOutputState::NotConnected(next_gate_info.throughput.signal);
 }

@@ -845,16 +845,9 @@ impl GateLogic {
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
         let output_signal = GateLogic::calculate_output_from_inputs(gate_type, input_signals)?;
 
-        output_states.iter_mut().for_each(
-            |f|
-                match f {
-                    GateOutputState::NotConnected(gate) => {
-                        *gate = output_signal.clone();
-                    }
-                    GateOutputState::Connected(output) => {
-                        output.throughput.signal = output_signal.clone();
-                    }
-                }
+        set_all_gate_output_to_signal(
+            output_states,
+            output_signal.clone(),
         );
 
         let output_clone = output_states.clone();
@@ -1149,5 +1142,21 @@ pub fn push_reg_outputs_to_output_gates(
         let reg_output_gate = SimpleOutput::new(reg_output_tag.as_str());
         output_gates.push(reg_output_gate.clone());
         output_gates_logic.push(reg_output_gate);
+    }
+}
+
+pub fn set_all_gate_output_to_signal(
+    output_states: &mut Vec<GateOutputState>,
+    new_signal: Signal
+) {
+    for output in output_states.iter_mut() {
+        match output {
+            GateOutputState::NotConnected(signal) => {
+                *signal = new_signal.clone();
+            }
+            GateOutputState::Connected(connected_output) => {
+                connected_output.throughput.signal = new_signal.clone();
+            }
+        }
     }
 }

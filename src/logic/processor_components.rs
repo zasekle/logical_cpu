@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not, Or, Splitter};
 use crate::logic::complex_logic::VariableBitCPUEnable;
 use crate::logic::foundations::{build_simple_inputs_and_outputs, build_simple_inputs_and_outputs_with_and, ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, push_reg_outputs_to_output_gates, Signal, UniqueID};
@@ -9,6 +10,7 @@ use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 #[allow(unused_imports)]
 use crate::logic::foundations::Signal::{LOW_, HIGH};
 use crate::logic::memory_gates::VariableBitMemoryCell;
+use crate::RAM_TIME;
 
 pub struct VariableBitRegister {
     complex_gate: ComplexGateMembers,
@@ -887,8 +889,10 @@ impl RAMUnit {
         }
 
         //Prime gates
+        //todo: fix
         self.complex_gate.calculate_output_from_inputs(
             true,
+            // None,
             Some(GateType::VariableSingleRAMCellType),
         );
     }
@@ -911,33 +915,20 @@ impl LogicGate for RAMUnit {
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        let ram_start = Instant::now();
+
         //The second gate_type parameter will guarantee that all Single RAM cells run on the same
         // clock tick for efficiency.
+        //todo: fix
         let result = self.complex_gate.fetch_output_signals(
             &self.get_tag(),
+            // None,
             Some(GateType::VariableSingleRAMCellType),
         );
 
-        // if self.simple_gate.should_print_output {
-        //     if tag.is_empty() {
-        //         println!(
-        //             "{} gate id {}\ninput is {:#?}\noutput is {:#?}",
-        //             gate_type,
-        //             unique_id.id(),
-        //             input,
-        //             output,
-        //         );
-        //     } else {
-        //         println!(
-        //             "{} gate tag {} id {}\ninput is {:#?}\noutput is {:#?}",
-        //             gate_type,
-        //             tag,
-        //             unique_id.id(),
-        //             input,
-        //             output,
-        //         );
-        //     }
-        // }
+        unsafe {
+            RAM_TIME += ram_start.elapsed();
+        }
 
         result
     }
