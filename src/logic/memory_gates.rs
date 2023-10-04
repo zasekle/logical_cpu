@@ -181,6 +181,10 @@ impl LogicGate for SRLatch {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct ActiveLowSRLatch {
@@ -353,6 +357,10 @@ impl LogicGate for ActiveLowSRLatch {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -571,6 +579,10 @@ impl LogicGate for OneBitMemoryCell {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct VariableBitMemoryCell {
@@ -730,6 +742,10 @@ impl LogicGate for VariableBitMemoryCell {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 

@@ -125,6 +125,9 @@ pub trait LogicGate {
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal);
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID);
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool);
+
 }
 
 #[derive(Debug, Clone)]
@@ -319,6 +322,7 @@ pub struct BasicGateMembers {
     pub unique_id: UniqueID,
     pub oscillation_detection: OscillationDetection,
     pub should_print_output: bool,
+    pub print_each_input_output_gate: bool,
     pub gate_type: GateType,
     pub tag: String,
 }
@@ -335,6 +339,7 @@ impl BasicGateMembers {
             unique_id: UniqueID::generate(),
             oscillation_detection: OscillationDetection::new(),
             should_print_output: false,
+            print_each_input_output_gate: true,
             gate_type,
             tag: String::new(),
         };
@@ -441,6 +446,10 @@ impl BasicGateMembers {
         if input_map.is_empty() {
             input_map.insert(UniqueID::zero_id(), returned_signal);
         }
+    }
+
+    pub fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.print_each_input_output_gate = print_each_input_output_gate;
     }
 }
 
@@ -684,15 +693,14 @@ impl ComplexGateMembers {
 
         let output_clone = self.simple_gate.output_states.clone();
 
-        if self.simple_gate.should_print_output {
-            //todo uncomment
-            // GateLogic::print_gate_output(
-            //     &self.simple_gate.gate_type,
-            //     &self.simple_gate.unique_id,
-            //     tag,
-            //     &self.simple_gate.input_signals,
-            //     &output_clone,
-            // );
+        if self.simple_gate.should_print_output && self.simple_gate.print_each_input_output_gate {
+            GateLogic::print_gate_output(
+                &self.simple_gate.gate_type,
+                &self.simple_gate.unique_id,
+                tag,
+                &self.simple_gate.input_signals,
+                &output_clone,
+            );
         }
 
         Ok(output_clone)
@@ -717,6 +725,10 @@ impl ComplexGateMembers {
             input_index,
             connected_id,
         );
+    }
+
+    pub fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.simple_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -817,6 +829,7 @@ impl GateLogic {
             &mut basic_gate.output_states,
             basic_gate.unique_id,
             basic_gate.should_print_output,
+            basic_gate.print_each_input_output_gate,
             basic_gate.tag.as_str(),
         )
     }
@@ -827,6 +840,7 @@ impl GateLogic {
         output_states: &mut Vec<GateOutputState>,
         unique_id: UniqueID,
         should_print_output: bool,
+        print_each_input_output_gate: bool,
         tag: &str,
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
         let output_signal = GateLogic::calculate_output_from_inputs(gate_type, input_signals)?;
@@ -845,7 +859,7 @@ impl GateLogic {
 
         let output_clone = output_states.clone();
 
-        if should_print_output {
+        if should_print_output && print_each_input_output_gate {
             GateLogic::print_gate_output(
                 gate_type,
                 &unique_id,

@@ -9,6 +9,7 @@ pub struct Clock {
     output_states: Vec<GateOutputState>,
     unique_id: UniqueID,
     should_print_output: bool,
+    print_each_input_output_gate: bool,
     gate_type: GateType,
     tag: String,
     previous_signal: Signal,
@@ -22,6 +23,7 @@ impl Clock {
             output_states: Vec::with_capacity(output_num),
             unique_id: UniqueID::generate(),
             should_print_output: false,
+            print_each_input_output_gate: true,
             gate_type: GateType::ClockType,
             tag: String::from(tag),
             previous_signal: LOW_,
@@ -41,6 +43,7 @@ impl Clock {
         ]
     }
 
+    //todo: make this and the below one one function
     //Note that this function makes calls to borrow_mut(). Therefore it cannot be used while running
     // the circuit, only before or after.
     pub fn disconnect_gate(
@@ -130,6 +133,7 @@ impl LogicGate for Clock {
             &mut self.output_states,
             self.unique_id,
             self.should_print_output,
+            self.print_each_input_output_gate,
             self.tag.as_str(),
         );
 
@@ -172,6 +176,10 @@ impl LogicGate for Clock {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         panic!("Clock never has any input. Passed id {}, passed index {}", connected_id.id(), input_index);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.print_each_input_output_gate = print_each_input_output_gate;
+    }
 }
 
 pub struct AutomaticInput {
@@ -179,6 +187,7 @@ pub struct AutomaticInput {
     output_states: Vec<GateOutputState>,
     unique_id: UniqueID,
     should_print_output: bool,
+    print_each_input_output_gate: bool,
     gate_type: GateType,
     tag: String,
 }
@@ -191,6 +200,7 @@ impl AutomaticInput {
             output_states: Vec::with_capacity(output_num),
             unique_id: UniqueID::generate(),
             should_print_output: false,
+            print_each_input_output_gate: true,
             gate_type: GateType::AutomaticInputType,
             tag: String::from(tag),
         };
@@ -295,6 +305,7 @@ impl LogicGate for AutomaticInput {
                 &mut self.output_states,
                 self.unique_id,
                 self.should_print_output,
+                self.print_each_input_output_gate,
                 self.tag.as_str(),
             );
 
@@ -335,6 +346,10 @@ impl LogicGate for AutomaticInput {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         panic!("AutomaticInput never has any input. Passed id {}, passed index {}", connected_id.id(), input_index);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.print_each_input_output_gate = print_each_input_output_gate;
     }
 }
 
@@ -395,6 +410,7 @@ impl LogicGate for SimpleInput {
             &mut self.members.output_states,
             self.members.unique_id,
             self.members.should_print_output,
+            self.members.print_each_input_output_gate,
             self.tag.as_str(),
         )
     }
@@ -431,5 +447,9 @@ impl LogicGate for SimpleInput {
         self.members.remove_connected_input(
             input_index, connected_id
         );
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }

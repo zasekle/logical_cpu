@@ -328,6 +328,10 @@ impl LogicGate for VariableOutputStepper {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct VariableBitCPUEnable {
@@ -462,6 +466,10 @@ impl LogicGate for VariableBitCPUEnable {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -610,6 +618,10 @@ impl LogicGate for SignalGatekeeper {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -911,6 +923,10 @@ impl LogicGate for MasterSlaveJKFlipFlop {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct FourCycleClockHookup {
@@ -1196,6 +1212,10 @@ impl LogicGate for FourCycleClockHookup {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct VariableBitMultiplexer {
@@ -1476,6 +1496,10 @@ impl LogicGate for VariableBitMultiplexer {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct VariableBitCounter {
@@ -1696,6 +1720,10 @@ impl LogicGate for VariableBitCounter {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 

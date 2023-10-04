@@ -70,6 +70,10 @@ impl LogicGate for Or {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct And {
@@ -137,6 +141,10 @@ impl LogicGate for And {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -206,6 +214,10 @@ impl LogicGate for Not {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct Nor {
@@ -273,6 +285,10 @@ impl LogicGate for Nor {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -342,6 +358,10 @@ impl LogicGate for Nand {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct XOr {
@@ -408,6 +428,10 @@ impl LogicGate for XOr {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -477,25 +501,6 @@ impl LogicGate for Splitter {
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        // if self.get_unique_id().id() == 27
-        //     || self.get_unique_id().id() == 87
-        // {
-        //     println!("Splitter update_input_signal id {}\ninput {:#?}", self.members.unique_id.id(), input);
-        // }
-
-        //todo: delete
-        if self.members.tag == "bus" {
-            //id 1134
-            // println!("bus update_input_signal id {}\ninput {:#?}", self.members.unique_id.id(), input);
-            // GateLogic::print_gate_output(
-            //     &self.members.gate_type,
-            //     &self.members.unique_id,
-            //     &self.members.tag,
-            //     &self.members.input_signals,
-            //     &self.members.output_states,
-            // );
-        }
-
         self.members.update_input_signal(input)
     }
 
@@ -573,6 +578,10 @@ impl LogicGate for Splitter {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -724,6 +733,10 @@ impl LogicGate for ControlledBuffer {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -1364,6 +1377,10 @@ mod tests {
 
             fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
                 self.complex_gate.remove_connected_input(input_index, connected_id);
+            }
+
+            fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+                self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
             }
         }
 

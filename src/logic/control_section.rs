@@ -462,8 +462,7 @@ impl ControlSection {
         control_section.add_and.borrow_mut().set_tag("add_and");
         control_section.add_not.borrow_mut().set_tag("add_not");
 
-        //todo d
-        // control_section.stepper.borrow_mut().toggle_output_printing(true);
+        control_section.stepper.borrow_mut().toggle_print_each_input_output_gate(false);
 
         control_section.build_and_prime_circuit(output_gates_logic);
 
@@ -2914,6 +2913,10 @@ impl LogicGate for ControlSection {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 

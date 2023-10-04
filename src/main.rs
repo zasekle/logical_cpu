@@ -16,11 +16,6 @@ use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 fn main() {
 
-    //TODO: Make toggle_output_printing turn off (or able to be turned off) for the really big gates
-    // in fetch. ComplexGateMembers.fetch_output_signals should have it. Can probably individually
-    // build it into the large gates like RAMUnit and ControlUnit. Would be nice to have a prettier
-    // way to print the bus too, but it is a Splitter, a simple gate.
-
     //TODO
     // Right now the way that it gets the memory is actually part of the circuit, might want to change
     // that so it is programmatically done instead. There isn't actually any need to do it the way
@@ -55,7 +50,7 @@ fn main() {
     let number_bits = 8;
     let num_decoder_input = 4;
 
-    let mut file = File::open("programs/code.ms").unwrap();
+    let mut file = File::open("programs/multiplication.ms").unwrap();
     let mut content = String::new();
     file.read_to_string(&mut content).unwrap();
 

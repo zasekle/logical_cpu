@@ -190,6 +190,10 @@ impl LogicGate for VariableBitRegister {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 pub struct VariableDecoder {
@@ -358,6 +362,10 @@ impl LogicGate for VariableDecoder {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -606,6 +614,10 @@ impl LogicGate for SingleRAMCell {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 
@@ -961,6 +973,10 @@ impl LogicGate for RAMUnit {
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
 }
 
 //This is a higher level thing for the CPU to connect to and add one.
@@ -1130,6 +1146,10 @@ impl LogicGate for VariableBitBusOne {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 

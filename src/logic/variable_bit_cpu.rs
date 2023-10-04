@@ -143,7 +143,6 @@ impl Instructions {
 
 pub struct VariableBitCPU {
     complex_gate: ComplexGateMembers,
-    // clock: Rc<RefCell<Clock>>,
     four_cycle_clock_hookup: Rc<RefCell<FourCycleClockHookup>>,
     four_cycle_clock_clk_splitter: Rc<RefCell<Splitter>>,
     four_cycle_clock_clke_splitter: Rc<RefCell<Splitter>>,
@@ -277,7 +276,6 @@ impl VariableBitCPU {
                 input_gates,
                 output_gates,
             ),
-            // clock: Clock::new(1, "PRIMARY_CLOCK"),
             four_cycle_clock_hookup: FourCycleClockHookup::new(),
             four_cycle_clock_clk_splitter: Splitter::new(1, 3),
             four_cycle_clock_clke_splitter: Splitter::new(1, 2),
@@ -340,6 +338,21 @@ impl VariableBitCPU {
         cpu.counter_controlled_buffer.borrow_mut().set_tag("counter_controlled_buffer");
         cpu.load_input_splitter.borrow_mut().set_tag("load_input_splitter");
         cpu.reset_controlled_buffer.borrow_mut().set_tag("reset_controlled_buffer");
+
+        cpu.four_cycle_clock_hookup.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.control_section.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.register_0.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.register_1.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.register_2.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.register_3.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.instruction_address_register.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.instruction_register.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.ram.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.alu.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.tmp.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.acc.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.flags.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.load_counter.borrow_mut().toggle_print_each_input_output_gate(false);
 
         cpu.build_and_prime_circuit(
             number_bits,
@@ -1480,6 +1493,10 @@ impl LogicGate for VariableBitCPU {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
 }
 

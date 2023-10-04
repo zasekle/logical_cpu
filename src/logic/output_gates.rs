@@ -17,6 +17,7 @@ pub struct SimpleOutput {
     unique_id: UniqueID,
     oscillation_detection: OscillationDetection,
     should_print_output: bool,
+    print_each_input_output_gate: bool,
     gate_type: GateType,
     tag: String,
 }
@@ -31,6 +32,7 @@ impl SimpleOutput {
                     unique_id: UniqueID::generate(),
                     oscillation_detection: OscillationDetection::new(),
                     should_print_output: false,
+                    print_each_input_output_gate: true,
                     gate_type: GateType::SimpleOutputType,
                     tag: String::from(tag),
                 }
@@ -72,7 +74,7 @@ impl LogicGate for SimpleOutput {
 
         InputSignalReturn {
             changed_count_this_tick,
-            input_signal_updated
+            input_signal_updated,
         }
     }
 
@@ -80,7 +82,7 @@ impl LogicGate for SimpleOutput {
         let output_clone = calculate_input_signal_from_single_inputs(&self.output_state)?;
         // println!("SimpleOutput id {} output_clone: {:#?}", self.unique_id.id() ,output_clone);
 
-        if self.should_print_output {
+        if self.should_print_output && self.print_each_input_output_gate {
             GateLogic::print_gate_output(
                 &self.gate_type,
                 &self.unique_id,
@@ -133,5 +135,9 @@ impl LogicGate for SimpleOutput {
                     self.tag
                 ).as_str()
             );
+    }
+
+    fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
+        self.print_each_input_output_gate = print_each_input_output_gate;
     }
 }
