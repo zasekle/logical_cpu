@@ -39,16 +39,11 @@ fn main() {
 
     //TODO: With the way that I did run_circuit and grouping the gates before running them, it might
     // be possible to run them in a multithreaded way. Or maybe every time a signal splits I can
-    // make a new thread (or a new task to pass into a thread pool at least). Or I could just make
-    // multiple processors connected to the same RAM and executing different instructions lol.
-    // Probably not the last one, while it would give me some insight into how to handle some of the
-    // multi-threaded problems, it would also make the simulation run the propagation of electricity
-    // on multiple CPUs.
+    // make a new thread (or a new task to pass into a thread pool at least).
 
-    //Remember that when running stuff in the registers, there is always the possibility that
-    // multiple clock ticks are needed. The first will do something like enable the `Set` bit. The
-    // second will keep the `Set` bit high and change the input values. The third will bring the
-    // `Set` bit low without changing the inputs.
+    //TODO: How to make this multithreaded.
+    // Lets say that I make it so that run_circuit has access to a global thread pool, each time an
+    // object is added the the queue inside run_circuit,
 
     let number_bits = 8;
     let num_decoder_input = 4;
@@ -86,7 +81,6 @@ fn main() {
     for i in 0..tags_sorted_by_index.len() {
         println!("{} {:?}", tags_sorted_by_index[i], collected_signals[i]);
     }
-
 
     unsafe {
         println!("RAM_TIME: {:?}", RAM_TIME);
