@@ -2,6 +2,7 @@ use std::cell::{RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
 use crate::logic::foundations::{GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
@@ -12,6 +13,48 @@ use crate::logic::processor_components::RAMUnit;
 use crate::logic::variable_bit_cpu::VariableBitCPU;
 use crate::{ALU_TIME, CONTROL_SECTION_TIME, RAM_TIME};
 use crate::test_stuff::extract_output_tags_sorted_by_index;
+
+type SharedMutex<T> = Arc<Mutex<T>>;
+
+pub struct RunCircuitThreadPool{
+    mutex: Mutex<()>,
+    processing_set: HashSet<UniqueID>,
+    waiting_to_be_processed_set: HashSet<UniqueID>,
+    gates: Vec<SharedMutex<dyn LogicGate>>,
+}
+
+//TODO: For now the goal here is to get a working interface. Performance can be improved upon later.
+impl RunCircuitThreadPool {
+    //TODO: This needs to actually be a thread pool too.
+    fn add_to_queue(
+        &mut self,
+        gate: SharedMutex<dyn LogicGate>,
+        gate_id: UniqueID,
+    ) {
+        let _guard = self.mutex.lock().expect("Mutex failed to lock.");
+
+        //TODO: If contained in currently_processing_set
+        // Interrupt the running thread that is doing it and have it restart
+        // Need to take into account that the interrupt could happen as the thread running it is
+        //  completing.
+
+        let inserted = self.waiting_to_be_processed_set.insert(
+            gate_id
+        );
+
+        if inserted {
+            //If the gate is already in the queue, but not being processed, no need to do anything.
+            return;
+        }
+
+        self.gates.push(gate);
+
+        //TODO: Will need to do something to activate the thread pool. If I use channels, I will
+        // have a 'gap' in between when the instance is retrieved from the thread pool and when the
+        // unique_id is moved from waiting to processing. So I probably need to use the same Mutex
+        // to protect the thread pool as I am using here and use the 'standard' thread pool design.
+    }
+}
 
 pub fn start_clock<F>(
     input_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
@@ -43,7 +86,6 @@ pub fn start_clock<F>(
         propagate_signal_through_circuit = false;
     }
 }
-
 
 //Returns true if the circuit has input remaining, false if it does not.
 //Note that elements must be ordered so that some of the undetermined gates such as SR latches can
