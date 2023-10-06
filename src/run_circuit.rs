@@ -1,8 +1,11 @@
 use std::cell::{RefCell};
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroUsize;
 use std::rc::Rc;
-use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
 use crate::logic::foundations::{GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
@@ -16,16 +19,110 @@ use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 type SharedMutex<T> = Arc<Mutex<T>>;
 
-pub struct RunCircuitThreadPool{
+struct CondvarWrapper {
+    cond: Condvar,
     mutex: Mutex<()>,
+}
+
+impl CondvarWrapper {
+    fn new() -> Self {
+        CondvarWrapper {
+            cond: Condvar::new(),
+            mutex: Mutex::new(()),
+        }
+    }
+
+    fn wait(&self) {
+        let guard = self.mutex.lock().unwrap();
+        let _unused_guard = self.cond.wait(guard).unwrap();
+    }
+}
+
+//TODO: maybe make the inner workings one item, then the thread pool have a vector of those items.
+pub struct RunCircuitThreadPool {
+    // mutex: Mutex<()>,
     processing_set: HashSet<UniqueID>,
     waiting_to_be_processed_set: HashSet<UniqueID>,
-    gates: Vec<SharedMutex<dyn LogicGate>>,
+    // gates: Vec<SharedMutex<dyn LogicGate>>,
+    gates: SharedMutex<Vec<SharedMutex<dyn LogicGate>>>,
+
+    threads: Vec::<JoinHandle<()>>,
+    shutdown: Arc<AtomicBool>,
+    condvar_wrapper: Arc<CondvarWrapper>,
 }
 
 //TODO: For now the goal here is to get a working interface. Performance can be improved upon later.
 impl RunCircuitThreadPool {
-    //TODO: This needs to actually be a thread pool too.
+
+    pub fn new(size: NonZeroUsize) -> Self {
+        let mut thread_pool = RunCircuitThreadPool {
+            processing_set: HashSet::new(),
+            waiting_to_be_processed_set: HashSet::new(),
+            gates: Arc::new(Mutex::new(Vec::new())),
+
+            threads: Vec::new(),
+            shutdown: Arc::new(AtomicBool::from(false)),
+            condvar_wrapper: Arc::new(CondvarWrapper::new()),
+        };
+
+        for i in 0..size.into() {
+            let shutdown_clone = thread_pool.shutdown.clone();
+            let tasks_clone = thread_pool.gates.clone();
+            let signal_clone = thread_pool.condvar_wrapper.clone();
+            thread_pool.threads.push(
+                thread::spawn(move || {
+                    println!("Thread {i} started");
+
+                    loop {
+                        if shutdown_clone.load(Ordering::Acquire) {
+                            println!("Thread {i} shutting down");
+                            break;
+                        }
+
+                        let task =
+                            {
+                                //The lock will be held as long as the MutexGuard is alive. So I
+                                // need to create a scope to make sure the lock is not held for the
+                                // duration of the task being run.
+                                let mut all_tasks = tasks_clone.lock().unwrap();
+
+                                all_tasks.pop()
+                            };
+
+                        if let Some(t) = task {
+                            println!("Thread {i} running task");
+                            // t();
+                        } else {
+                            println!("Thread {i} sleeping");
+                            signal_clone.wait();
+                        }
+                    }
+                })
+            );
+        }
+
+        thread_pool
+    }
+
+    //TODO: finish these
+    // pub fn add_task<F>(&mut self, job: F) where F: FnOnce() + 'static + Send {
+    //     {
+    //         let mut unlocked_tasks = self.tasks.lock().unwrap();
+    //         unlocked_tasks.push(Box::from(job));
+    //     }
+    //
+    //     self.condvar_wrapper.cond.notify_one();
+    // }
+
+    // pub fn shutdown(&mut self) {
+    //     {
+    //         let mut unlocked_tasks = self.tasks.lock().unwrap();
+    //         unlocked_tasks.clear();
+    //     }
+    //     self.shutdown.store(true, Ordering::Release);
+    //     self.condvar_wrapper.cond.notify_all();
+    // }
+
     fn add_to_queue(
         &mut self,
         gate: SharedMutex<dyn LogicGate>,
@@ -37,6 +134,17 @@ impl RunCircuitThreadPool {
         // Interrupt the running thread that is doing it and have it restart
         // Need to take into account that the interrupt could happen as the thread running it is
         //  completing.
+        // TODO: Maybe interrupting the smaller gates isn't a big deal, but should probably
+        //  somehow interrupt the bigger gates This would mean that they need to somehow
+        //   1) Add the larger gate to a queue (This needs to be done anyway in order to tell which
+        //    gates are currently being processed).
+        //   2) Pop them from the processed queue and if anything that is working on a small gate
+        //    doesn't find them, don't complete.
+        //  So I am thinking that there will be a distinction between simple and complex gates.
+        //   Simple gates will just be added to a queue and directly worked by the threads. Complex
+        //   Gates will be saved somewhere else. Then they can be either CANCELED or COMPLETED and
+        //   the threads running the internal simple gates for the complex gate will react
+        //   accordingly.
 
         let inserted = self.waiting_to_be_processed_set.insert(
             gate_id

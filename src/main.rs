@@ -89,9 +89,6 @@ fn main() {
     // Change all the Rc<RefCell<>> to Arc<Mutex<>>
 
 
-
-
-
     let number_bits = 8;
     let num_decoder_input = 4;
 
