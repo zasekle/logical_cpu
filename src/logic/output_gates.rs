@@ -1,8 +1,7 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn, calculate_input_signal_from_single_inputs};
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub trait OutputGate {
     fn get_output_tag(&self) -> String;
@@ -24,19 +23,17 @@ pub struct SimpleOutput {
 
 #[allow(dead_code)]
 impl SimpleOutput {
-    pub fn new(tag: &str) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                SimpleOutput {
-                    output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW_)]),
-                    unique_id: UniqueID::generate(),
-                    oscillation_detection: OscillationDetection::new(),
-                    should_print_output: false,
-                    print_each_input_output_gate: true,
-                    gate_type: GateType::SimpleOutputType,
-                    tag: String::from(tag),
-                }
-            )
+    pub fn new(tag: &str) -> SharedMutex<Self> {
+        new_shared_mutex(
+            SimpleOutput {
+                output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW_)]),
+                unique_id: UniqueID::generate(),
+                oscillation_detection: OscillationDetection::new(),
+                should_print_output: false,
+                print_each_input_output_gate: true,
+                gate_type: GateType::SimpleOutputType,
+                tag: String::from(tag),
+            }
         )
     }
 }
@@ -52,7 +49,7 @@ impl LogicGate for SimpleOutput {
         &mut self,
         _current_gate_output_key: usize,
         _next_gate_input_key: usize,
-        _next_gate: Rc<RefCell<dyn LogicGate>>,
+        _next_gate: SharedMutex<dyn LogicGate>,
     ) {
         panic!("An output gate should be the end of the circuit, it should never connect to another input.");
     }

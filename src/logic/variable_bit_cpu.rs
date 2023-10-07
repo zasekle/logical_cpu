@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::logic::arithmetic_gates::ArithmeticLogicUnit;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not, Splitter};
 use crate::logic::complex_logic::{FourCycleClockHookup, VariableBitCounter, VariableBitMultiplexer};
@@ -13,6 +11,7 @@ use crate::logic::foundations::Signal::{LOW_, HIGH};
 use crate::logic::input_gates::{Clock, SimpleInput};
 use crate::logic::memory_gates::{OneBitMemoryCell, VariableBitMemoryCell};
 use crate::logic::processor_components::{RAMUnit, VariableBitBusOne, VariableBitRegister};
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -143,36 +142,36 @@ impl Instructions {
 
 pub struct VariableBitCPU {
     complex_gate: ComplexGateMembers,
-    four_cycle_clock_hookup: Rc<RefCell<FourCycleClockHookup>>,
-    four_cycle_clock_clk_splitter: Rc<RefCell<Splitter>>,
-    four_cycle_clock_clke_splitter: Rc<RefCell<Splitter>>,
-    four_cycle_clock_clks_splitter: Rc<RefCell<Splitter>>,
-    control_section: Rc<RefCell<ControlSection>>,
-    temp_s_splitter: Rc<RefCell<Splitter>>,
-    bus: Rc<RefCell<Splitter>>,
-    register_0: Rc<RefCell<VariableBitRegister>>,
-    register_1: Rc<RefCell<VariableBitRegister>>,
-    register_2: Rc<RefCell<VariableBitRegister>>,
-    register_3: Rc<RefCell<VariableBitRegister>>,
-    instruction_address_register: Rc<RefCell<VariableBitRegister>>,
-    instruction_register: Rc<RefCell<VariableBitMemoryCell>>,
-    ram: Rc<RefCell<RAMUnit>>,
-    alu: Rc<RefCell<ArithmeticLogicUnit>>,
-    bus_1: Rc<RefCell<VariableBitBusOne>>,
-    tmp: Rc<RefCell<VariableBitMemoryCell>>,
-    c_tmp: Rc<RefCell<OneBitMemoryCell>>,
-    c_tmp_and: Rc<RefCell<And>>,
-    acc: Rc<RefCell<VariableBitRegister>>,
-    flags: Rc<RefCell<VariableBitMemoryCell>>,
-    flags_c_out_splitter: Rc<RefCell<Splitter>>,
-    end_input_and_gate: Rc<RefCell<And>>,
-    end_input_not_gate: Rc<RefCell<Not>>,
-    load_multiplexer: Rc<RefCell<VariableBitMultiplexer>>,
-    load_counter: Rc<RefCell<VariableBitCounter>>,
-    counter_controlled_buffer: Rc<RefCell<ControlledBuffer>>,
-    counter_and: Rc<RefCell<And>>,
-    load_input_splitter: Rc<RefCell<Splitter>>,
-    reset_controlled_buffer: Rc<RefCell<ControlledBuffer>>,
+    four_cycle_clock_hookup: SharedMutex<FourCycleClockHookup>,
+    four_cycle_clock_clk_splitter: SharedMutex<Splitter>,
+    four_cycle_clock_clke_splitter: SharedMutex<Splitter>,
+    four_cycle_clock_clks_splitter: SharedMutex<Splitter>,
+    control_section: SharedMutex<ControlSection>,
+    temp_s_splitter: SharedMutex<Splitter>,
+    bus: SharedMutex<Splitter>,
+    register_0: SharedMutex<VariableBitRegister>,
+    register_1: SharedMutex<VariableBitRegister>,
+    register_2: SharedMutex<VariableBitRegister>,
+    register_3: SharedMutex<VariableBitRegister>,
+    instruction_address_register: SharedMutex<VariableBitRegister>,
+    instruction_register: SharedMutex<VariableBitMemoryCell>,
+    ram: SharedMutex<RAMUnit>,
+    alu: SharedMutex<ArithmeticLogicUnit>,
+    bus_1: SharedMutex<VariableBitBusOne>,
+    tmp: SharedMutex<VariableBitMemoryCell>,
+    c_tmp: SharedMutex<OneBitMemoryCell>,
+    c_tmp_and: SharedMutex<And>,
+    acc: SharedMutex<VariableBitRegister>,
+    flags: SharedMutex<VariableBitMemoryCell>,
+    flags_c_out_splitter: SharedMutex<Splitter>,
+    end_input_and_gate: SharedMutex<And>,
+    end_input_not_gate: SharedMutex<Not>,
+    load_multiplexer: SharedMutex<VariableBitMultiplexer>,
+    load_counter: SharedMutex<VariableBitCounter>,
+    counter_controlled_buffer: SharedMutex<ControlledBuffer>,
+    counter_and: SharedMutex<And>,
+    load_input_splitter: SharedMutex<Splitter>,
+    reset_controlled_buffer: SharedMutex<ControlledBuffer>,
 }
 
 #[allow(dead_code)]
@@ -204,12 +203,12 @@ impl VariableBitCPU {
     pub const IO_CLK_E: &'static str = "IO_CLK_E";
     //RAM Cells as well RAMUnit::get_ram_output_string()
 
-    pub fn new(number_bits: usize, ram_cells_decoder_input: usize) -> Rc<RefCell<Self>> {
+    pub fn new(number_bits: usize, ram_cells_decoder_input: usize) -> SharedMutex<Self> {
         assert_ne!(number_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         for i in 0..number_bits {
             let input_tag = format!("{}_{}", Self::RAM, i);
@@ -308,51 +307,51 @@ impl VariableBitCPU {
             reset_controlled_buffer: ControlledBuffer::new(number_bits),
         };
 
-        cpu.four_cycle_clock_hookup.borrow_mut().set_tag("four_cycle_clock_hookup");
-        cpu.four_cycle_clock_clk_splitter.borrow_mut().set_tag("four_cycle_clock_clk_splitter");
-        cpu.four_cycle_clock_clke_splitter.borrow_mut().set_tag("four_cycle_clock_clke_splitter");
-        cpu.four_cycle_clock_clks_splitter.borrow_mut().set_tag("four_cycle_clock_clks_splitter");
-        cpu.control_section.borrow_mut().set_tag("control_section");
-        cpu.temp_s_splitter.borrow_mut().set_tag("temp_s_splitter");
-        cpu.bus.borrow_mut().set_tag("bus");
-        cpu.register_0.borrow_mut().set_tag("register_0");
-        cpu.register_1.borrow_mut().set_tag("register_1");
-        cpu.register_2.borrow_mut().set_tag("register_2");
-        cpu.register_3.borrow_mut().set_tag("register_3");
-        cpu.instruction_address_register.borrow_mut().set_tag("instruction_address_register");
-        cpu.instruction_register.borrow_mut().set_tag("instruction_register");
-        cpu.ram.borrow_mut().set_tag("ram");
-        cpu.alu.borrow_mut().set_tag("alu");
-        cpu.bus_1.borrow_mut().set_tag("bus_1");
-        cpu.tmp.borrow_mut().set_tag("tmp");
-        cpu.c_tmp.borrow_mut().set_tag("c_tmp");
-        cpu.c_tmp_and.borrow_mut().set_tag("c_tmp_and");
-        cpu.acc.borrow_mut().set_tag("acc");
-        cpu.flags.borrow_mut().set_tag("flags");
-        cpu.flags_c_out_splitter.borrow_mut().set_tag("flags_c_out_splitter");
-        cpu.end_input_and_gate.borrow_mut().set_tag("end_input_and_gate");
-        cpu.end_input_not_gate.borrow_mut().set_tag("end_input_not_gate");
-        cpu.load_multiplexer.borrow_mut().set_tag("load_multiplexer");
-        cpu.load_counter.borrow_mut().set_tag("load_counter");
-        cpu.counter_and.borrow_mut().set_tag("counter_and");
-        cpu.counter_controlled_buffer.borrow_mut().set_tag("counter_controlled_buffer");
-        cpu.load_input_splitter.borrow_mut().set_tag("load_input_splitter");
-        cpu.reset_controlled_buffer.borrow_mut().set_tag("reset_controlled_buffer");
+        cpu.four_cycle_clock_hookup.lock().unwrap().set_tag("four_cycle_clock_hookup");
+        cpu.four_cycle_clock_clk_splitter.lock().unwrap().set_tag("four_cycle_clock_clk_splitter");
+        cpu.four_cycle_clock_clke_splitter.lock().unwrap().set_tag("four_cycle_clock_clke_splitter");
+        cpu.four_cycle_clock_clks_splitter.lock().unwrap().set_tag("four_cycle_clock_clks_splitter");
+        cpu.control_section.lock().unwrap().set_tag("control_section");
+        cpu.temp_s_splitter.lock().unwrap().set_tag("temp_s_splitter");
+        cpu.bus.lock().unwrap().set_tag("bus");
+        cpu.register_0.lock().unwrap().set_tag("register_0");
+        cpu.register_1.lock().unwrap().set_tag("register_1");
+        cpu.register_2.lock().unwrap().set_tag("register_2");
+        cpu.register_3.lock().unwrap().set_tag("register_3");
+        cpu.instruction_address_register.lock().unwrap().set_tag("instruction_address_register");
+        cpu.instruction_register.lock().unwrap().set_tag("instruction_register");
+        cpu.ram.lock().unwrap().set_tag("ram");
+        cpu.alu.lock().unwrap().set_tag("alu");
+        cpu.bus_1.lock().unwrap().set_tag("bus_1");
+        cpu.tmp.lock().unwrap().set_tag("tmp");
+        cpu.c_tmp.lock().unwrap().set_tag("c_tmp");
+        cpu.c_tmp_and.lock().unwrap().set_tag("c_tmp_and");
+        cpu.acc.lock().unwrap().set_tag("acc");
+        cpu.flags.lock().unwrap().set_tag("flags");
+        cpu.flags_c_out_splitter.lock().unwrap().set_tag("flags_c_out_splitter");
+        cpu.end_input_and_gate.lock().unwrap().set_tag("end_input_and_gate");
+        cpu.end_input_not_gate.lock().unwrap().set_tag("end_input_not_gate");
+        cpu.load_multiplexer.lock().unwrap().set_tag("load_multiplexer");
+        cpu.load_counter.lock().unwrap().set_tag("load_counter");
+        cpu.counter_and.lock().unwrap().set_tag("counter_and");
+        cpu.counter_controlled_buffer.lock().unwrap().set_tag("counter_controlled_buffer");
+        cpu.load_input_splitter.lock().unwrap().set_tag("load_input_splitter");
+        cpu.reset_controlled_buffer.lock().unwrap().set_tag("reset_controlled_buffer");
 
-        cpu.four_cycle_clock_hookup.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.control_section.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.register_0.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.register_1.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.register_2.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.register_3.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.instruction_address_register.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.instruction_register.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.ram.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.alu.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.tmp.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.acc.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.flags.borrow_mut().toggle_print_each_input_output_gate(false);
-        cpu.load_counter.borrow_mut().toggle_print_each_input_output_gate(false);
+        cpu.four_cycle_clock_hookup.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.control_section.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.register_0.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.register_1.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.register_2.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.register_3.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.instruction_address_register.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.instruction_register.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.ram.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.alu.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.tmp.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.acc.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.flags.lock().unwrap().toggle_print_each_input_output_gate(false);
+        cpu.load_counter.lock().unwrap().toggle_print_each_input_output_gate(false);
 
         cpu.build_and_prime_circuit(
             number_bits,
@@ -361,7 +360,7 @@ impl VariableBitCPU {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(cpu))
+        new_shared_mutex(cpu)
     }
 
     fn build_and_prime_circuit(
@@ -369,7 +368,7 @@ impl VariableBitCPU {
         bus_size: usize,
         ram_cells_decoder_input: usize,
         num_ram_cells: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         self.connect_inputs(bus_size);
 
@@ -416,16 +415,16 @@ impl VariableBitCPU {
 
     fn connect_input_to_output(
         bus_size: usize,
-        start_gate: Rc<RefCell<dyn LogicGate>>,
-        end_gate: Rc<RefCell<dyn LogicGate>>,
+        start_gate: SharedMutex<dyn LogicGate>,
+        end_gate: SharedMutex<dyn LogicGate>,
         input_val: &str,
     ) {
         for i in 0..bus_size {
             let input_tag = format!("{}_{}", input_val, i);
             let output_tag = format!("o_{}", i);
-            let input_index = end_gate.borrow_mut().get_index_from_tag(input_tag.as_str());
-            let output_index = start_gate.borrow_mut().get_index_from_tag(output_tag.as_str());
-            start_gate.borrow_mut().connect_output_to_next_gate(
+            let input_index = end_gate.lock().unwrap().get_index_from_tag(input_tag.as_str());
+            let output_index = start_gate.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            start_gate.lock().unwrap().connect_output_to_next_gate(
                 output_index,
                 input_index,
                 end_gate.clone(),
@@ -436,16 +435,16 @@ impl VariableBitCPU {
     fn connect_multi_bit_output(
         &mut self,
         bus_size: usize,
-        start_gate: Rc<RefCell<dyn LogicGate>>,
+        start_gate: SharedMutex<dyn LogicGate>,
         input_val: &str,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         for i in 0..bus_size {
             let input_tag = format!("{}_{}", input_val, i);
             let output_tag = format!("reg_{}", i);
             let output_gate_index = self.get_index_from_tag(input_tag.as_str());
-            let output_index = start_gate.borrow_mut().get_index_from_tag(output_tag.as_str());
-            start_gate.borrow_mut().connect_output_to_next_gate(
+            let output_index = start_gate.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            start_gate.lock().unwrap().connect_output_to_next_gate(
                 output_index,
                 0,
                 output_gates[output_gate_index].clone(),
@@ -460,8 +459,8 @@ impl VariableBitCPU {
             let input_gate = self.complex_gate.input_gates[input_index].clone();
 
             let multiplexer_tag = format!("I_1_bit_{}", i);
-            let ram_input_index = self.load_multiplexer.borrow_mut().get_index_from_tag(multiplexer_tag.as_str());
-            input_gate.borrow_mut().connect_output_to_next_gate(
+            let ram_input_index = self.load_multiplexer.lock().unwrap().get_index_from_tag(multiplexer_tag.as_str());
+            input_gate.lock().unwrap().connect_output_to_next_gate(
                 0,
                 ram_input_index,
                 self.load_multiplexer.clone(),
@@ -471,22 +470,22 @@ impl VariableBitCPU {
         let reset_index = self.get_index_from_tag(VariableBitCPU::RESET);
         let reset_input_gate = self.complex_gate.input_gates[reset_index].clone();
 
-        let control_section_reset_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::HIGH_LVL_RESET);
-        reset_input_gate.borrow_mut().connect_output_to_next_gate(
+        let control_section_reset_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::HIGH_LVL_RESET);
+        reset_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             control_section_reset_index,
             self.control_section.clone(),
         );
 
-        let ram_reset = self.ram.borrow_mut().get_index_from_tag("R");
-        reset_input_gate.borrow_mut().connect_output_to_next_gate(
+        let ram_reset = self.ram.lock().unwrap().get_index_from_tag("R");
+        reset_input_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             ram_reset,
             self.ram.clone(),
         );
 
-        let controlled_buffer_enable = self.reset_controlled_buffer.borrow_mut().get_index_from_tag("E");
-        reset_input_gate.borrow_mut().connect_output_to_next_gate(
+        let controlled_buffer_enable = self.reset_controlled_buffer.lock().unwrap().get_index_from_tag("E");
+        reset_input_gate.lock().unwrap().connect_output_to_next_gate(
             2,
             controlled_buffer_enable,
             self.reset_controlled_buffer.clone(),
@@ -495,8 +494,8 @@ impl VariableBitCPU {
         let mars_index = self.get_index_from_tag(VariableBitCPU::MARS);
         let mars_input_gate = self.complex_gate.input_gates[mars_index].clone();
 
-        let control_section_mars_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::HIGH_LVL_MARS);
-        mars_input_gate.borrow_mut().connect_output_to_next_gate(
+        let control_section_mars_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::HIGH_LVL_MARS);
+        mars_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             control_section_mars_index,
             self.control_section.clone(),
@@ -505,7 +504,7 @@ impl VariableBitCPU {
         let load_index = self.get_index_from_tag(VariableBitCPU::LOAD);
         let load_input_gate = self.complex_gate.input_gates[load_index].clone();
 
-        load_input_gate.borrow_mut().connect_output_to_next_gate(
+        load_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.load_input_splitter.clone(),
@@ -514,7 +513,7 @@ impl VariableBitCPU {
         let clk_in_index = self.get_index_from_tag(VariableBitCPU::CLK_IN);
         let clk_in_input_gate = self.complex_gate.input_gates[clk_in_index].clone();
 
-        clk_in_input_gate.borrow_mut().connect_output_to_next_gate(
+        clk_in_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.end_input_and_gate.clone(),
@@ -523,241 +522,241 @@ impl VariableBitCPU {
 
     fn connect_control_section(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        let input_index = self.alu.borrow_mut().get_index_from_tag("C");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::ALU_0);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.alu.lock().unwrap().get_index_from_tag("C");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::ALU_0);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.alu.clone(),
         );
 
-        let input_index = self.alu.borrow_mut().get_index_from_tag("B");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::ALU_1);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.alu.lock().unwrap().get_index_from_tag("B");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::ALU_1);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.alu.clone(),
         );
 
-        let input_index = self.alu.borrow_mut().get_index_from_tag("A");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::ALU_2);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.alu.lock().unwrap().get_index_from_tag("A");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::ALU_2);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.alu.clone(),
         );
 
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::C_OUT);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::C_OUT);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             self.c_tmp_and.clone(),
         );
 
-        let input_index = self.flags.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::FLAG_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.flags.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::FLAG_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.flags.clone(),
         );
 
-        let input_index = self.acc.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::ACC_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.acc.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::ACC_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.acc.clone(),
         );
 
-        let input_index = self.acc.borrow_mut().get_index_from_tag("E");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::ACC_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.acc.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::ACC_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.acc.clone(),
         );
 
-        let input_index = self.instruction_address_register.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::IAR_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.instruction_address_register.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::IAR_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.instruction_address_register.clone(),
         );
 
-        let input_index = self.instruction_address_register.borrow_mut().get_index_from_tag("E");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::IAR_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.instruction_address_register.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::IAR_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.instruction_address_register.clone(),
         );
 
-        let input_index = self.instruction_register.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::IR_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.instruction_register.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::IR_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.instruction_register.clone(),
         );
 
-        let input_index = self.ram.borrow_mut().get_index_from_tag("E");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::RAM_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.ram.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::RAM_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.ram.clone(),
         );
 
-        let input_index = self.ram.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::RAM_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.ram.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::RAM_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.ram.clone(),
         );
 
-        let input_index = self.ram.borrow_mut().get_index_from_tag("SA");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::MAR_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.ram.lock().unwrap().get_index_from_tag("SA");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::MAR_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.ram.clone(),
         );
 
-        let input_index = self.register_0.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R0_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_0.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R0_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_0.clone(),
         );
 
-        let input_index = self.register_0.borrow_mut().get_index_from_tag("E");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R0_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_0.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R0_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_0.clone(),
         );
 
-        let input_index = self.register_1.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R1_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_1.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R1_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_1.clone(),
         );
 
-        let input_index = self.register_1.borrow_mut().get_index_from_tag("E");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R1_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_1.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R1_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_1.clone(),
         );
 
-        let input_index = self.register_2.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R2_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_2.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R2_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_2.clone(),
         );
 
-        let input_index = self.register_2.borrow_mut().get_index_from_tag("E");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R2_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_2.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R2_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_2.clone(),
         );
 
-        let input_index = self.register_3.borrow_mut().get_index_from_tag("S");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R3_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_3.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R3_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_3.clone(),
         );
 
-        let input_index = self.register_3.borrow_mut().get_index_from_tag("E");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::R3_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.register_3.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::R3_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.register_3.clone(),
         );
 
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::TMP_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::TMP_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             self.temp_s_splitter.clone(),
         );
 
-        let input_index = self.tmp.borrow_mut().get_index_from_tag("S");
-        let output_index = self.temp_s_splitter.borrow_mut().get_index_for_output(0, 0);
-        self.temp_s_splitter.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.tmp.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.temp_s_splitter.lock().unwrap().get_index_for_output(0, 0);
+        self.temp_s_splitter.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.tmp.clone(),
         );
 
-        let input_index = self.c_tmp.borrow_mut().get_index_from_tag("S");
-        let output_index = self.temp_s_splitter.borrow_mut().get_index_for_output(0, 1);
-        self.temp_s_splitter.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.c_tmp.lock().unwrap().get_index_from_tag("S");
+        let output_index = self.temp_s_splitter.lock().unwrap().get_index_for_output(0, 1);
+        self.temp_s_splitter.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.c_tmp.clone(),
         );
 
-        let input_index = self.bus_1.borrow_mut().get_index_from_tag("BUS_1");
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::BUS_1);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.bus_1.lock().unwrap().get_index_from_tag("BUS_1");
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::BUS_1);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.bus_1.clone(),
         );
 
         let output_gate_index = self.get_index_from_tag(VariableBitCPU::IO);
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::IO);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::IO);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             output_gates[output_gate_index].clone(),
         );
 
         let output_gate_index = self.get_index_from_tag(VariableBitCPU::DA);
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::DA);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::DA);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             output_gates[output_gate_index].clone(),
         );
 
         let output_gate_index = self.get_index_from_tag(VariableBitCPU::END);
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::END);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::END);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             output_gates[output_gate_index].clone(),
         );
 
         let output_gate_index = self.get_index_from_tag(VariableBitCPU::IO_CLK_E);
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::IO_CLK_E);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::IO_CLK_E);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             output_gates[output_gate_index].clone(),
         );
 
         let output_gate_index = self.get_index_from_tag(VariableBitCPU::IO_CLK_S);
-        let output_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::IO_CLK_S);
-        self.control_section.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::IO_CLK_S);
+        self.control_section.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             output_gates[output_gate_index].clone(),
@@ -765,22 +764,22 @@ impl VariableBitCPU {
     }
 
     fn connect_four_cycle_clock_hookup(&mut self) {
-        let cycle_block_output = self.four_cycle_clock_hookup.borrow_mut().get_index_from_tag(FourCycleClockHookup::CLK_OUT);
-        self.four_cycle_clock_hookup.borrow_mut().connect_output_to_next_gate(
+        let cycle_block_output = self.four_cycle_clock_hookup.lock().unwrap().get_index_from_tag(FourCycleClockHookup::CLK_OUT);
+        self.four_cycle_clock_hookup.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             0,
             self.four_cycle_clock_clk_splitter.clone(),
         );
 
-        let cycle_block_output = self.four_cycle_clock_hookup.borrow_mut().get_index_from_tag(FourCycleClockHookup::CLKE);
-        self.four_cycle_clock_hookup.borrow_mut().connect_output_to_next_gate(
+        let cycle_block_output = self.four_cycle_clock_hookup.lock().unwrap().get_index_from_tag(FourCycleClockHookup::CLKE);
+        self.four_cycle_clock_hookup.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             0,
             self.four_cycle_clock_clke_splitter.clone(),
         );
 
-        let cycle_block_output = self.four_cycle_clock_hookup.borrow_mut().get_index_from_tag(FourCycleClockHookup::CLKS);
-        self.four_cycle_clock_hookup.borrow_mut().connect_output_to_next_gate(
+        let cycle_block_output = self.four_cycle_clock_hookup.lock().unwrap().get_index_from_tag(FourCycleClockHookup::CLKS);
+        self.four_cycle_clock_hookup.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             0,
             self.four_cycle_clock_clks_splitter.clone(),
@@ -789,32 +788,32 @@ impl VariableBitCPU {
 
     fn connect_four_cycle_clock_clk_splitter(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        let cycle_block_output = self.four_cycle_clock_clk_splitter.borrow_mut().get_index_for_output(
+        let cycle_block_output = self.four_cycle_clock_clk_splitter.lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let clock_input = self.control_section.borrow_mut().get_index_from_tag(ControlSection::CLOCK);
-        self.four_cycle_clock_clk_splitter.borrow_mut().connect_output_to_next_gate(
+        let clock_input = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::CLOCK);
+        self.four_cycle_clock_clk_splitter.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             clock_input,
             self.control_section.clone(),
         );
 
-        let cycle_block_output = self.four_cycle_clock_clk_splitter.borrow_mut().get_index_for_output(
+        let cycle_block_output = self.four_cycle_clock_clk_splitter.lock().unwrap().get_index_for_output(
             0, 1,
         );
-        self.four_cycle_clock_clk_splitter.borrow_mut().connect_output_to_next_gate(
+        self.four_cycle_clock_clk_splitter.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             1,
             self.counter_and.clone(),
         );
 
         let output_index = self.get_index_from_tag(VariableBitCPU::CLK_OUT);
-        let cycle_block_output = self.four_cycle_clock_clk_splitter.borrow_mut().get_index_for_output(
+        let cycle_block_output = self.four_cycle_clock_clk_splitter.lock().unwrap().get_index_for_output(
             0, 2,
         );
-        self.four_cycle_clock_clk_splitter.borrow_mut().connect_output_to_next_gate(
+        self.four_cycle_clock_clk_splitter.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             0,
             output_gates[output_index].clone(),
@@ -823,23 +822,23 @@ impl VariableBitCPU {
 
     fn connect_four_cycle_clock_clke_splitter(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        let cycle_block_output = self.four_cycle_clock_clke_splitter.borrow_mut().get_index_for_output(
+        let cycle_block_output = self.four_cycle_clock_clke_splitter.lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let clock_enable_input = self.control_section.borrow_mut().get_index_from_tag(ControlSection::CLOCK_ENABLE);
-        self.four_cycle_clock_clke_splitter.borrow_mut().connect_output_to_next_gate(
+        let clock_enable_input = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::CLOCK_ENABLE);
+        self.four_cycle_clock_clke_splitter.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             clock_enable_input,
             self.control_section.clone(),
         );
 
         let output_index = self.get_index_from_tag(VariableBitCPU::CLKE);
-        let cycle_block_output = self.four_cycle_clock_clke_splitter.borrow_mut().get_index_for_output(
+        let cycle_block_output = self.four_cycle_clock_clke_splitter.lock().unwrap().get_index_for_output(
             0, 1,
         );
-        self.four_cycle_clock_clke_splitter.borrow_mut().connect_output_to_next_gate(
+        self.four_cycle_clock_clke_splitter.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             0,
             output_gates[output_index].clone(),
@@ -848,23 +847,23 @@ impl VariableBitCPU {
 
     fn connect_four_cycle_clock_clks_splitter(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        let cycle_block_output = self.four_cycle_clock_clks_splitter.borrow_mut().get_index_for_output(
+        let cycle_block_output = self.four_cycle_clock_clks_splitter.lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let clock_set_input = self.control_section.borrow_mut().get_index_from_tag(ControlSection::CLOCK_SET);
-        self.four_cycle_clock_clks_splitter.borrow_mut().connect_output_to_next_gate(
+        let clock_set_input = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::CLOCK_SET);
+        self.four_cycle_clock_clks_splitter.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             clock_set_input,
             self.control_section.clone(),
         );
 
         let output_index = self.get_index_from_tag(VariableBitCPU::CLKS);
-        let cycle_block_output = self.four_cycle_clock_clks_splitter.borrow_mut().get_index_for_output(
+        let cycle_block_output = self.four_cycle_clock_clks_splitter.lock().unwrap().get_index_for_output(
             0, 1,
         );
-        self.four_cycle_clock_clks_splitter.borrow_mut().connect_output_to_next_gate(
+        self.four_cycle_clock_clks_splitter.lock().unwrap().connect_output_to_next_gate(
             cycle_block_output,
             0,
             output_gates[output_index].clone(),
@@ -875,9 +874,9 @@ impl VariableBitCPU {
         &mut self,
         bus_size: usize,
         ram_cells_decoder_input: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        let mut mut_bus = self.bus.borrow_mut();
+        let mut mut_bus = self.bus.lock().unwrap();
 
         //This is here to help with the reset. In case the reset goes high and sets all the pins,
         // need to make sure NONE is not passed into any of the inputs.
@@ -888,7 +887,7 @@ impl VariableBitCPU {
 
             //reg_0
             let output_index = mut_bus.get_index_for_output(i, 0);
-            let input_index = self.register_0.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let input_index = self.register_0.lock().unwrap().get_index_from_tag(input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -897,7 +896,7 @@ impl VariableBitCPU {
 
             //reg_1
             let output_index = mut_bus.get_index_for_output(i, 1);
-            let input_index = self.register_1.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let input_index = self.register_1.lock().unwrap().get_index_from_tag(input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -906,7 +905,7 @@ impl VariableBitCPU {
 
             //reg_2
             let output_index = mut_bus.get_index_for_output(i, 2);
-            let input_index = self.register_2.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let input_index = self.register_2.lock().unwrap().get_index_from_tag(input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -915,7 +914,7 @@ impl VariableBitCPU {
 
             //reg_3
             let output_index = mut_bus.get_index_for_output(i, 3);
-            let input_index = self.register_3.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let input_index = self.register_3.lock().unwrap().get_index_from_tag(input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -926,7 +925,7 @@ impl VariableBitCPU {
             if i < ram_cells_decoder_input * 2 {
                 let address_input_tag = format!("addr_{}", i);
                 let output_index = mut_bus.get_index_for_output(i, 4);
-                let input_index = self.ram.borrow_mut().get_index_from_tag(address_input_tag.as_str());
+                let input_index = self.ram.lock().unwrap().get_index_from_tag(address_input_tag.as_str());
                 mut_bus.connect_output_to_next_gate(
                     output_index,
                     input_index,
@@ -937,7 +936,7 @@ impl VariableBitCPU {
             //ram input (multiplexer)
             let multiplexer_input_tag = format!("I_0_bit_{}", i);
             let output_index = mut_bus.get_index_for_output(i, 5);
-            let input_index = self.load_multiplexer.borrow_mut().get_index_from_tag(multiplexer_input_tag.as_str());
+            let input_index = self.load_multiplexer.lock().unwrap().get_index_from_tag(multiplexer_input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -946,7 +945,7 @@ impl VariableBitCPU {
 
             //ir
             let output_index = mut_bus.get_index_for_output(i, 6);
-            let input_index = self.instruction_register.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let input_index = self.instruction_register.lock().unwrap().get_index_from_tag(input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -955,7 +954,7 @@ impl VariableBitCPU {
 
             //iar
             let output_index = mut_bus.get_index_for_output(i, 7);
-            let input_index = self.instruction_address_register.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let input_index = self.instruction_address_register.lock().unwrap().get_index_from_tag(input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -964,7 +963,7 @@ impl VariableBitCPU {
 
             //tmp
             let output_index = mut_bus.get_index_for_output(i, 8);
-            let input_index = self.tmp.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let input_index = self.tmp.lock().unwrap().get_index_from_tag(input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -974,7 +973,7 @@ impl VariableBitCPU {
             //alu a
             let a_input_tag = format!("a_{}", i);
             let output_index = mut_bus.get_index_for_output(i, 9);
-            let input_index = self.alu.borrow_mut().get_index_from_tag(a_input_tag.as_str());
+            let input_index = self.alu.lock().unwrap().get_index_from_tag(a_input_tag.as_str());
             mut_bus.connect_output_to_next_gate(
                 output_index,
                 input_index,
@@ -995,7 +994,7 @@ impl VariableBitCPU {
     fn connect_register_0(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1015,7 +1014,7 @@ impl VariableBitCPU {
     fn connect_register_1(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1035,7 +1034,7 @@ impl VariableBitCPU {
     fn connect_register_2(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1055,7 +1054,7 @@ impl VariableBitCPU {
     fn connect_register_3(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1075,7 +1074,7 @@ impl VariableBitCPU {
     fn connect_instruction_address_register(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1095,7 +1094,7 @@ impl VariableBitCPU {
     fn connect_instruction_register(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1116,7 +1115,7 @@ impl VariableBitCPU {
         &mut self,
         bus_size: usize,
         num_ram_cells: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1129,8 +1128,8 @@ impl VariableBitCPU {
             for j in 0..bus_size {
                 let output_tag = RAMUnit::get_ram_output_string(i, j);
                 let output_index = self.get_index_from_tag(output_tag.as_str());
-                let ram_output_index = self.ram.borrow_mut().get_index_from_tag(output_tag.as_str());
-                self.ram.borrow_mut().connect_output_to_next_gate(
+                let ram_output_index = self.ram.lock().unwrap().get_index_from_tag(output_tag.as_str());
+                self.ram.lock().unwrap().connect_output_to_next_gate(
                     ram_output_index,
                     0,
                     output_gates[output_index].clone(),
@@ -1147,33 +1146,33 @@ impl VariableBitCPU {
             "i",
         );
 
-        let input_index = self.flags.borrow_mut().get_index_from_tag("i_0");
-        let output_index = self.alu.borrow_mut().get_index_from_tag("C_OUT");
-        self.alu.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.flags.lock().unwrap().get_index_from_tag("i_0");
+        let output_index = self.alu.lock().unwrap().get_index_from_tag("C_OUT");
+        self.alu.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.flags.clone(),
         );
 
-        let input_index = self.flags.borrow_mut().get_index_from_tag("i_1");
-        let output_index = self.alu.borrow_mut().get_index_from_tag("A_L");
-        self.alu.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.flags.lock().unwrap().get_index_from_tag("i_1");
+        let output_index = self.alu.lock().unwrap().get_index_from_tag("A_L");
+        self.alu.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.flags.clone(),
         );
 
-        let input_index = self.flags.borrow_mut().get_index_from_tag("i_2");
-        let output_index = self.alu.borrow_mut().get_index_from_tag("EQ");
-        self.alu.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.flags.lock().unwrap().get_index_from_tag("i_2");
+        let output_index = self.alu.lock().unwrap().get_index_from_tag("EQ");
+        self.alu.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.flags.clone(),
         );
 
-        let input_index = self.flags.borrow_mut().get_index_from_tag("i_3");
-        let output_index = self.alu.borrow_mut().get_index_from_tag("Z");
-        self.alu.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.flags.lock().unwrap().get_index_from_tag("i_3");
+        let output_index = self.alu.lock().unwrap().get_index_from_tag("Z");
+        self.alu.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.flags.clone(),
@@ -1192,7 +1191,7 @@ impl VariableBitCPU {
     fn connect_tmp(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1210,8 +1209,8 @@ impl VariableBitCPU {
     }
 
     fn connect_c_tmp(&mut self) {
-        let output_index = self.c_tmp.borrow_mut().get_index_from_tag("Q");
-        self.c_tmp.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.c_tmp.lock().unwrap().get_index_from_tag("Q");
+        self.c_tmp.lock().unwrap().connect_output_to_next_gate(
             output_index,
             1,
             self.c_tmp_and.clone(),
@@ -1219,8 +1218,8 @@ impl VariableBitCPU {
     }
 
     fn connect_c_tmp_and(&mut self) {
-        let input_index = self.alu.borrow_mut().get_index_from_tag("C_IN");
-        self.c_tmp_and.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.alu.lock().unwrap().get_index_from_tag("C_IN");
+        self.c_tmp_and.lock().unwrap().connect_output_to_next_gate(
             0,
             input_index,
             self.alu.clone(),
@@ -1230,7 +1229,7 @@ impl VariableBitCPU {
     fn connect_acc(
         &mut self,
         bus_size: usize,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         VariableBitCPU::connect_input_to_output(
             bus_size,
@@ -1248,48 +1247,48 @@ impl VariableBitCPU {
     }
 
     fn connect_flags(&mut self) {
-        let output_index = self.flags.borrow_mut().get_index_from_tag("o_0");
-        self.flags.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.flags.lock().unwrap().get_index_from_tag("o_0");
+        self.flags.lock().unwrap().connect_output_to_next_gate(
             output_index,
             0,
             self.flags_c_out_splitter.clone(),
         );
 
-        let input_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::C_IN);
-        let output_index = self.flags_c_out_splitter.borrow_mut().get_index_for_output(0, 0);
-        self.flags_c_out_splitter.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::C_IN);
+        let output_index = self.flags_c_out_splitter.lock().unwrap().get_index_for_output(0, 0);
+        self.flags_c_out_splitter.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.control_section.clone(),
         );
 
-        let input_index = self.c_tmp.borrow_mut().get_index_from_tag("E");
-        let output_index = self.flags_c_out_splitter.borrow_mut().get_index_for_output(0, 1);
-        self.flags_c_out_splitter.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.c_tmp.lock().unwrap().get_index_from_tag("E");
+        let output_index = self.flags_c_out_splitter.lock().unwrap().get_index_for_output(0, 1);
+        self.flags_c_out_splitter.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.c_tmp.clone(),
         );
 
-        let input_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::A_L);
-        let output_index = self.flags.borrow_mut().get_index_from_tag("o_1");
-        self.flags.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::A_L);
+        let output_index = self.flags.lock().unwrap().get_index_from_tag("o_1");
+        self.flags.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.control_section.clone(),
         );
 
-        let input_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::EQ);
-        let output_index = self.flags.borrow_mut().get_index_from_tag("o_2");
-        self.flags.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::EQ);
+        let output_index = self.flags.lock().unwrap().get_index_from_tag("o_2");
+        self.flags.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.control_section.clone(),
         );
 
-        let input_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::Z);
-        let output_index = self.flags.borrow_mut().get_index_from_tag("o_3");
-        self.flags.borrow_mut().connect_output_to_next_gate(
+        let input_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::Z);
+        let output_index = self.flags.lock().unwrap().get_index_from_tag("o_3");
+        self.flags.lock().unwrap().connect_output_to_next_gate(
             output_index,
             input_index,
             self.control_section.clone(),
@@ -1297,8 +1296,8 @@ impl VariableBitCPU {
     }
 
     fn connect_end_input_and_gate(&mut self) {
-        let clk_input_index = self.four_cycle_clock_hookup.borrow_mut().get_index_from_tag(FourCycleClockHookup::CLK_IN);
-        self.end_input_and_gate.borrow_mut().connect_output_to_next_gate(
+        let clk_input_index = self.four_cycle_clock_hookup.lock().unwrap().get_index_from_tag(FourCycleClockHookup::CLK_IN);
+        self.end_input_and_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             clk_input_index,
             self.four_cycle_clock_hookup.clone(),
@@ -1306,7 +1305,7 @@ impl VariableBitCPU {
     }
 
     fn connect_end_input_not_gate(&mut self) {
-        self.end_input_not_gate.borrow_mut().connect_output_to_next_gate(
+        self.end_input_not_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.end_input_and_gate.clone(),
@@ -1350,8 +1349,8 @@ impl VariableBitCPU {
     }
 
     fn connect_counter_and(&mut self) {
-        let clock_input = self.load_counter.borrow_mut().get_index_from_tag(VariableBitCounter::CLK_IN);
-        self.counter_and.borrow_mut().connect_output_to_next_gate(
+        let clock_input = self.load_counter.lock().unwrap().get_index_from_tag(VariableBitCounter::CLK_IN);
+        self.counter_and.lock().unwrap().connect_output_to_next_gate(
             0,
             clock_input,
             self.load_counter.clone(),
@@ -1359,40 +1358,40 @@ impl VariableBitCPU {
     }
 
     fn connect_load_input_splitter(&mut self) {
-        let splitter_output_index = self.load_input_splitter.borrow_mut().get_index_for_output(
+        let splitter_output_index = self.load_input_splitter.lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let load_input_index = self.control_section.borrow_mut().get_index_from_tag(ControlSection::HIGH_LVL_LOAD);
-        self.load_input_splitter.borrow_mut().connect_output_to_next_gate(
+        let load_input_index = self.control_section.lock().unwrap().get_index_from_tag(ControlSection::HIGH_LVL_LOAD);
+        self.load_input_splitter.lock().unwrap().connect_output_to_next_gate(
             splitter_output_index,
             load_input_index,
             self.control_section.clone(),
         );
 
-        let splitter_output_index = self.load_input_splitter.borrow_mut().get_index_for_output(
+        let splitter_output_index = self.load_input_splitter.lock().unwrap().get_index_for_output(
             0, 1,
         );
-        let enable_index = self.counter_controlled_buffer.borrow_mut().get_index_from_tag("E");
-        self.load_input_splitter.borrow_mut().connect_output_to_next_gate(
+        let enable_index = self.counter_controlled_buffer.lock().unwrap().get_index_from_tag("E");
+        self.load_input_splitter.lock().unwrap().connect_output_to_next_gate(
             splitter_output_index,
             enable_index,
             self.counter_controlled_buffer.clone(),
         );
 
-        let splitter_output_index = self.load_input_splitter.borrow_mut().get_index_for_output(
+        let splitter_output_index = self.load_input_splitter.lock().unwrap().get_index_for_output(
             0, 2,
         );
-        self.load_input_splitter.borrow_mut().connect_output_to_next_gate(
+        self.load_input_splitter.lock().unwrap().connect_output_to_next_gate(
             splitter_output_index,
             0,
             self.counter_and.clone(),
         );
 
-        let splitter_output_index = self.load_input_splitter.borrow_mut().get_index_for_output(
+        let splitter_output_index = self.load_input_splitter.lock().unwrap().get_index_for_output(
             0, 3,
         );
-        let multiplexed_control_index = self.load_multiplexer.borrow_mut().get_index_from_tag("C_0");
-        self.load_input_splitter.borrow_mut().connect_output_to_next_gate(
+        let multiplexed_control_index = self.load_multiplexer.lock().unwrap().get_index_from_tag("C_0");
+        self.load_input_splitter.lock().unwrap().connect_output_to_next_gate(
             splitter_output_index,
             multiplexed_control_index,
             self.load_multiplexer.clone(),
@@ -1402,8 +1401,8 @@ impl VariableBitCPU {
     fn connect_reset_controlled_buffer(&mut self, bus_size: usize) {
         for i in 0..bus_size {
             let input_tag = format!("i_{}", i);
-            let input_index = self.reset_controlled_buffer.borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.reset_controlled_buffer.borrow_mut().update_input_signal(
+            let input_index = self.reset_controlled_buffer.lock().unwrap().get_index_from_tag(input_tag.as_str());
+            self.reset_controlled_buffer.lock().unwrap().update_input_signal(
                 GateInput::new(
                     input_index,
                     LOW_,
@@ -1422,10 +1421,10 @@ impl VariableBitCPU {
 
     pub fn get_clock_synced_with_cpu(
         &self,
-        clock: &Rc<RefCell<Clock>>,
+        clock: &SharedMutex<Clock>,
     ) {
         let input_index = self.get_index_from_tag(VariableBitCPU::CLK_IN);
-        let output_signals = self.complex_gate.input_gates[input_index].borrow_mut().fetch_output_signals().unwrap();
+        let output_signals = self.complex_gate.input_gates[input_index].lock().unwrap().fetch_output_signals().unwrap();
         //SimpleInput outputs all have the same value.
         let output_signal =
             match output_signals.first().unwrap() {
@@ -1434,7 +1433,7 @@ impl VariableBitCPU {
                     connected_output.throughput.signal.clone()
                 }
             };
-        clock.borrow_mut().set_clock_state(output_signal);
+        clock.lock().unwrap().set_clock_state(output_signal);
     }
 
     pub fn get_complex_gate(&self) -> &ComplexGateMembers {
@@ -1443,7 +1442,7 @@ impl VariableBitCPU {
 }
 
 impl LogicGate for VariableBitCPU {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -1502,8 +1501,6 @@ impl LogicGate for VariableBitCPU {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::rc::Rc;
     use std::time::Duration;
     use rand::Rng;
     use crate::logic::foundations::{LogicGate, Signal};
@@ -1512,10 +1509,11 @@ mod tests {
     use crate::logic::processor_components::RAMUnit;
     use crate::logic::variable_bit_cpu::{ALUInstruction, Instructions, Register, VariableBitCPU};
     use crate::run_circuit::{collect_signals_from_logic_gate, compare_generate_and_collected_output, generate_default_output, load_values_into_ram, run_circuit, run_instructions};
+    use crate::shared_mutex::SharedMutex;
     use crate::test_stuff::{run_test_with_timeout};
 
     fn store_in_output(
-        cpu: &Rc<RefCell<VariableBitCPU>>,
+        cpu: &SharedMutex<VariableBitCPU>,
         default_output: &mut Vec<Signal>,
         i: usize,
         signal: Signal,
@@ -1523,7 +1521,7 @@ mod tests {
     ) {
         let acc_tag = format!("{}_{}", tag, i);
 
-        let acc_index = cpu.borrow_mut().get_index_from_tag(acc_tag.as_str());
+        let acc_index = cpu.lock().unwrap().get_index_from_tag(acc_tag.as_str());
 
         default_output[acc_index] = signal.clone();
     }
@@ -1546,7 +1544,7 @@ mod tests {
     }
 
     fn generate_ram_output(
-        cpu: &Rc<RefCell<VariableBitCPU>>,
+        cpu: &SharedMutex<VariableBitCPU>,
         binary_strings: &Vec<&str>,
         output: &mut Vec<Signal>,
     ) {
@@ -1570,7 +1568,7 @@ mod tests {
     }
 
     fn generate_end_output(
-        cpu: &Rc<RefCell<VariableBitCPU>>,
+        cpu: &SharedMutex<VariableBitCPU>,
         number_bits: usize,
         end_instruction_ram_cell_index: usize,
         output: &mut Vec<Signal>,
@@ -1627,11 +1625,11 @@ mod tests {
             },
         );
 
-        let clk_out_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_OUT);
-        let clks_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLKS);
-        let io_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::IO);
-        let da_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::DA);
-        let end_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::END);
+        let clk_out_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::CLK_OUT);
+        let clks_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::CLKS);
+        let io_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::IO);
+        let da_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::DA);
+        let end_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::END);
 
         output[clk_out_index] = HIGH;
         output[clks_index] = HIGH;
@@ -1641,7 +1639,7 @@ mod tests {
     }
 
     fn generate_basic_output(
-        cpu: &Rc<RefCell<VariableBitCPU>>,
+        cpu: &SharedMutex<VariableBitCPU>,
         number_bits: usize,
         binary_strings: &Vec<&str>,
         end_instruction_ram_cell_index: usize,
@@ -1664,8 +1662,8 @@ mod tests {
         default_output
     }
 
-    fn reset_cpu_values(cpu: &Rc<RefCell<VariableBitCPU>>) {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    fn reset_cpu_values(cpu: &SharedMutex<VariableBitCPU>) {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let reset_input = AutomaticInput::new(
             vec![HIGH],
@@ -1673,8 +1671,8 @@ mod tests {
             "RESET",
         );
 
-        let reset_cpu_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::RESET);
-        reset_input.borrow_mut().connect_output_to_next_gate(
+        let reset_cpu_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::RESET);
+        reset_input.lock().unwrap().connect_output_to_next_gate(
             0,
             reset_cpu_index,
             cpu.clone(),
@@ -1682,7 +1680,7 @@ mod tests {
 
         input_gates.push(reset_input.clone());
 
-        cpu.borrow_mut().bus.borrow_mut().toggle_output_printing(true);
+        cpu.lock().unwrap().bus.lock().unwrap().toggle_output_printing(true);
 
         run_circuit(
             &input_gates,
@@ -1703,7 +1701,7 @@ mod tests {
 
         assert!(!failed);
 
-        reset_input.borrow_mut().disconnect_gate(0);
+        reset_input.lock().unwrap().disconnect_gate(0);
     }
 
     fn run_alu_instruction(
@@ -2746,7 +2744,7 @@ mod tests {
         assert!(!failed);
 
         let collected_signals = collect_signals_from_logic_gate(
-            cpu.borrow_mut().flags.clone()
+            cpu.lock().unwrap().flags.clone()
         );
 
         assert_eq!(

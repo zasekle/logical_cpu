@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::logic::basic_gates::{Nand, Nor};
 use crate::logic::foundations::{ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, push_reg_outputs_to_output_gates, Signal, UniqueID};
 use crate::logic::input_gates::SimpleInput;
@@ -7,19 +5,20 @@ use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
 #[allow(unused_imports)]
 use crate::logic::foundations::Signal::{LOW_, HIGH};
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub struct SRLatch {
     complex_gate: ComplexGateMembers,
-    top_nor_gate: Rc<RefCell<Nor>>,
-    bottom_nor_gate: Rc<RefCell<Nor>>,
+    top_nor_gate: SharedMutex<Nor>,
+    bottom_nor_gate: SharedMutex<Nor>,
 }
 
 #[allow(dead_code)]
 impl SRLatch {
-    pub fn new() -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_clone: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new() -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_clone: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let reset_input_gate = SimpleInput::new(1, "R");
         let set_input_gate = SimpleInput::new(1, "S");
@@ -48,11 +47,11 @@ impl SRLatch {
                 2, 2),
         };
 
-        sr_latch.top_nor_gate.borrow_mut().set_tag("TOP_NOR_GATE");
-        sr_latch.bottom_nor_gate.borrow_mut().set_tag("BOTTOM_NOR_GATE");
+        sr_latch.top_nor_gate.lock().unwrap().set_tag("TOP_NOR_GATE");
+        sr_latch.bottom_nor_gate.lock().unwrap().set_tag("BOTTOM_NOR_GATE");
 
         //Force the ~Q to be low and Q to be high.
-        reset_input_gate.borrow_mut().update_input_signal(
+        reset_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -62,7 +61,7 @@ impl SRLatch {
 
         sr_latch.build_and_prime_circuit(output_gates_clone);
 
-        reset_input_gate.borrow_mut().update_input_signal(
+        reset_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 LOW_,
@@ -70,12 +69,12 @@ impl SRLatch {
             )
         );
 
-        Rc::new(RefCell::new(sr_latch))
+        new_shared_mutex(sr_latch)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("R")].clone();
         let s_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("S")].clone();
@@ -83,37 +82,37 @@ impl SRLatch {
         let q_output_gate = output_gates[self.get_index_from_tag("Q")].clone();
         let not_q_output_gate = output_gates[self.get_index_from_tag("~Q")].clone();
 
-        r_input_gate.borrow_mut().connect_output_to_next_gate(
+        r_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.top_nor_gate.clone(),
         );
 
-        s_input_gate.borrow_mut().connect_output_to_next_gate(
+        s_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.bottom_nor_gate.clone(),
         );
 
-        self.top_nor_gate.borrow_mut().connect_output_to_next_gate(
+        self.top_nor_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             q_output_gate.clone(),
         );
 
-        self.top_nor_gate.borrow_mut().connect_output_to_next_gate(
+        self.top_nor_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.bottom_nor_gate.clone(),
         );
 
-        self.bottom_nor_gate.borrow_mut().connect_output_to_next_gate(
+        self.bottom_nor_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             not_q_output_gate.clone(),
         );
 
-        self.bottom_nor_gate.borrow_mut().connect_output_to_next_gate(
+        self.bottom_nor_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             1,
             self.top_nor_gate.clone(),
@@ -128,7 +127,7 @@ impl SRLatch {
 }
 
 impl LogicGate for SRLatch {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -189,16 +188,16 @@ impl LogicGate for SRLatch {
 
 pub struct ActiveLowSRLatch {
     complex_gate: ComplexGateMembers,
-    top_nand_gate: Rc<RefCell<Nand>>,
-    bottom_nand_gate: Rc<RefCell<Nand>>,
+    top_nand_gate: SharedMutex<Nand>,
+    bottom_nand_gate: SharedMutex<Nand>,
 }
 
 #[allow(dead_code)]
 impl ActiveLowSRLatch {
-    pub fn new() -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_clone: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new() -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_clone: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let reset_input_gate = SimpleInput::new(1, "R");
         let set_input_gate = SimpleInput::new(1, "S");
@@ -247,12 +246,12 @@ impl ActiveLowSRLatch {
 
         sr_latch.build_and_prime_circuit(output_gates_clone);
 
-        Rc::new(RefCell::new(sr_latch))
+        new_shared_mutex(sr_latch)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("R")].clone();
         let s_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("S")].clone();
@@ -260,37 +259,37 @@ impl ActiveLowSRLatch {
         let q_output_gate = output_gates[self.get_index_from_tag("Q")].clone();
         let not_q_output_gate = output_gates[self.get_index_from_tag("~Q")].clone();
 
-        s_input_gate.borrow_mut().connect_output_to_next_gate(
+        s_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.top_nand_gate.clone(),
         );
 
-        r_input_gate.borrow_mut().connect_output_to_next_gate(
+        r_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.bottom_nand_gate.clone(),
         );
 
-        self.top_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.top_nand_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             q_output_gate.clone(),
         );
 
-        self.top_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.top_nand_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.bottom_nand_gate.clone(),
         );
 
-        self.bottom_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.bottom_nand_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             not_q_output_gate.clone(),
         );
 
-        self.bottom_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.bottom_nand_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             1,
             self.top_nand_gate.clone(),
@@ -305,7 +304,7 @@ impl ActiveLowSRLatch {
 }
 
 impl LogicGate for ActiveLowSRLatch {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -366,20 +365,20 @@ impl LogicGate for ActiveLowSRLatch {
 
 pub struct OneBitMemoryCell {
     complex_gate: ComplexGateMembers,
-    set_enable_nand_gate: Rc<RefCell<Nand>>,
-    enable_nand_gate: Rc<RefCell<Nand>>,
-    sr_top_nand_gate: Rc<RefCell<Nand>>,
-    sr_bottom_nand_gate: Rc<RefCell<Nand>>,
+    set_enable_nand_gate: SharedMutex<Nand>,
+    enable_nand_gate: SharedMutex<Nand>,
+    sr_top_nand_gate: SharedMutex<Nand>,
+    sr_bottom_nand_gate: SharedMutex<Nand>,
 }
 
 #[allow(dead_code)]
 impl OneBitMemoryCell {
-    pub fn new(output_num: usize) -> Rc<RefCell<Self>> {
+    pub fn new(output_num: usize) -> SharedMutex<Self> {
         assert_ne!(output_num, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let set_input_gate = SimpleInput::new(1, "S");
         let enable_input_gate = SimpleInput::new(2, "E");
@@ -422,7 +421,7 @@ impl OneBitMemoryCell {
         };
 
         //This will allow the circuit to be primed to the LOW output state.
-        enable_input_gate.borrow_mut().update_input_signal(
+        enable_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -435,7 +434,7 @@ impl OneBitMemoryCell {
             output_gates_logic,
         );
 
-        enable_input_gate.borrow_mut().update_input_signal(
+        enable_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 LOW_,
@@ -443,75 +442,75 @@ impl OneBitMemoryCell {
             )
         );
 
-        Rc::new(RefCell::new(one_bit_memory_cell))
+        new_shared_mutex(one_bit_memory_cell)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         output_num: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
 
         let s_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("S")].clone();
 
-        s_input_gate.borrow_mut().connect_output_to_next_gate(
+        s_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.set_enable_nand_gate.clone(),
         );
 
-        e_input_gate.borrow_mut().connect_output_to_next_gate(
+        e_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.set_enable_nand_gate.clone(),
         );
 
-        e_input_gate.borrow_mut().connect_output_to_next_gate(
+        e_input_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             1,
             self.enable_nand_gate.clone(),
         );
 
-        self.set_enable_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.set_enable_nand_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.sr_top_nand_gate.clone(),
         );
 
-        self.set_enable_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.set_enable_nand_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.enable_nand_gate.clone(),
         );
 
-        self.enable_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.enable_nand_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.sr_bottom_nand_gate.clone(),
         );
 
-        self.sr_top_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.sr_top_nand_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gates[0].clone(),
         );
 
-        self.sr_top_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.sr_top_nand_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.sr_bottom_nand_gate.clone(),
         );
 
         for i in 1..output_num {
-            self.sr_top_nand_gate.borrow_mut().connect_output_to_next_gate(
+            self.sr_top_nand_gate.lock().unwrap().connect_output_to_next_gate(
                 i + 1,
                 0,
                 output_gates[i].clone(),
             );
         }
 
-        self.sr_bottom_nand_gate.borrow_mut().connect_output_to_next_gate(
+        self.sr_bottom_nand_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.sr_top_nand_gate.clone(),
@@ -526,7 +525,7 @@ impl OneBitMemoryCell {
 }
 
 impl LogicGate for OneBitMemoryCell {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -587,18 +586,18 @@ impl LogicGate for OneBitMemoryCell {
 
 pub struct VariableBitMemoryCell {
     complex_gate: ComplexGateMembers,
-    one_bit_memory_cells: Vec<Rc<RefCell<OneBitMemoryCell>>>,
+    one_bit_memory_cells: Vec<SharedMutex<OneBitMemoryCell>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitMemoryCell {
-    pub fn new(number_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(number_bits: usize) -> SharedMutex<Self> {
         assert_ne!(number_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut one_bit_memory_cells: Vec<Rc<RefCell<OneBitMemoryCell>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut one_bit_memory_cells: Vec<SharedMutex<OneBitMemoryCell>> = Vec::new();
 
         for i in 0..number_bits {
             let input_tag = format!("i_{}", i);
@@ -638,33 +637,33 @@ impl VariableBitMemoryCell {
 
         one_bit_memory_cell.build_and_prime_circuit(number_bits, output_gates_logic);
 
-        Rc::new(RefCell::new(one_bit_memory_cell))
+        new_shared_mutex(one_bit_memory_cell)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         number_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let s_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("S")].clone();
 
         for i in 0..number_bits {
-            let enable_gate_index = self.one_bit_memory_cells[i].borrow_mut().get_index_from_tag("E");
-            let set_gate_index = self.one_bit_memory_cells[i].borrow_mut().get_index_from_tag("S");
+            let enable_gate_index = self.one_bit_memory_cells[i].lock().unwrap().get_index_from_tag("E");
+            let set_gate_index = self.one_bit_memory_cells[i].lock().unwrap().get_index_from_tag("S");
 
-            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
+            self.complex_gate.input_gates[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 set_gate_index,
                 self.one_bit_memory_cells[i].clone(),
             );
 
-            s_input_gate.borrow_mut().connect_output_to_next_gate(
+            s_input_gate.lock().unwrap().connect_output_to_next_gate(
                 i,
                 enable_gate_index,
                 self.one_bit_memory_cells[i].clone(),
             );
 
-            self.one_bit_memory_cells[i].borrow_mut().connect_output_to_next_gate(
+            self.one_bit_memory_cells[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 output_gates[i].clone(),
@@ -672,7 +671,7 @@ impl VariableBitMemoryCell {
 
             let reg_tag = format!("reg_{}", i);
             let reg_idx = self.get_index_from_tag(reg_tag.as_str());
-            self.one_bit_memory_cells[i].borrow_mut().connect_output_to_next_gate(
+            self.one_bit_memory_cells[i].lock().unwrap().connect_output_to_next_gate(
                 1,
                 0,
                 output_gates[reg_idx].clone(),
@@ -690,7 +689,7 @@ impl VariableBitMemoryCell {
 }
 
 impl LogicGate for VariableBitMemoryCell {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -767,7 +766,7 @@ mod tests {
         s_input_signal: Vec<Signal>,
         q_output_signal: Vec<Signal>,
         not_q_output_signal: Vec<Signal>,
-        sr_latch: Rc<RefCell<dyn LogicGate>>,
+        sr_latch: SharedMutex<dyn LogicGate>,
     ) {
         let r_input_gate = AutomaticInput::new(r_input_signal, 1, "Start_R");
         let s_input_gate = AutomaticInput::new(s_input_signal, 1, "Start_S");
@@ -775,37 +774,37 @@ mod tests {
         let q_output_gate = SimpleOutput::new("End_Q");
         let not_q_output_gate = SimpleOutput::new("End_~Q");
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         input_gates.push(r_input_gate.clone());
         input_gates.push(s_input_gate.clone());
         output_gates.push(q_output_gate.clone());
         output_gates.push(not_q_output_gate.clone());
 
-        let r_index = sr_latch.borrow_mut().get_index_from_tag("R");
-        r_input_gate.borrow_mut().connect_output_to_next_gate(
+        let r_index = sr_latch.lock().unwrap().get_index_from_tag("R");
+        r_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             r_index,
             sr_latch.clone(),
         );
 
-        let s_index = sr_latch.borrow_mut().get_index_from_tag("S");
-        s_input_gate.borrow_mut().connect_output_to_next_gate(
+        let s_index = sr_latch.lock().unwrap().get_index_from_tag("S");
+        s_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             s_index,
             sr_latch.clone(),
         );
 
-        let q_output_idx = sr_latch.borrow_mut().get_index_from_tag("Q");
-        sr_latch.borrow_mut().connect_output_to_next_gate(
+        let q_output_idx = sr_latch.lock().unwrap().get_index_from_tag("Q");
+        sr_latch.lock().unwrap().connect_output_to_next_gate(
             q_output_idx,
             0,
             q_output_gate.clone(),
         );
 
-        let not_q_output_idx = sr_latch.borrow_mut().get_index_from_tag("~Q");
-        sr_latch.borrow_mut().connect_output_to_next_gate(
+        let not_q_output_idx = sr_latch.lock().unwrap().get_index_from_tag("~Q");
+        sr_latch.lock().unwrap().connect_output_to_next_gate(
             not_q_output_idx,
             0,
             not_q_output_gate.clone(),
@@ -824,11 +823,11 @@ mod tests {
                 &input_gates,
                 &output_gates,
                 propagate_signal_through_circuit,
-                &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                     assert_eq!(output_gates.len(), 2);
 
-                    let mut q_output = output_gates[0].borrow_mut();
-                    let mut not_q_output = output_gates[1].borrow_mut();
+                    let mut q_output = output_gates[0].lock().unwrap();
+                    let mut not_q_output = output_gates[1].lock().unwrap();
 
                     let q_output = q_output.fetch_output_signals().unwrap();
                     let not_q_output = not_q_output.fetch_output_signals().unwrap();
@@ -874,8 +873,8 @@ mod tests {
         let q_output_gate = SimpleOutput::new("End_Q");
         let second_q_output_gate = SimpleOutput::new("End_Q_2");
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         input_gates.push(e_input_gate.clone());
         input_gates.push(s_input_gate.clone());
@@ -884,29 +883,29 @@ mod tests {
 
         let one_bit_memory_cell = OneBitMemoryCell::new(2);
 
-        let e_index = one_bit_memory_cell.borrow_mut().get_index_from_tag("E");
-        e_input_gate.borrow_mut().connect_output_to_next_gate(
+        let e_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag("E");
+        e_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             e_index,
             one_bit_memory_cell.clone(),
         );
 
-        let s_index = one_bit_memory_cell.borrow_mut().get_index_from_tag("S");
-        s_input_gate.borrow_mut().connect_output_to_next_gate(
+        let s_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag("S");
+        s_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             s_index,
             one_bit_memory_cell.clone(),
         );
 
-        let q_output_idx = one_bit_memory_cell.borrow_mut().get_index_from_tag("Q");
-        one_bit_memory_cell.borrow_mut().connect_output_to_next_gate(
+        let q_output_idx = one_bit_memory_cell.lock().unwrap().get_index_from_tag("Q");
+        one_bit_memory_cell.lock().unwrap().connect_output_to_next_gate(
             q_output_idx,
             0,
             q_output_gate.clone(),
         );
 
-        let second_q_output_idx = one_bit_memory_cell.borrow_mut().get_index_from_tag("Q_1");
-        one_bit_memory_cell.borrow_mut().connect_output_to_next_gate(
+        let second_q_output_idx = one_bit_memory_cell.lock().unwrap().get_index_from_tag("Q_1");
+        one_bit_memory_cell.lock().unwrap().connect_output_to_next_gate(
             second_q_output_idx,
             0,
             second_q_output_gate.clone(),
@@ -925,11 +924,11 @@ mod tests {
                 &input_gates,
                 &output_gates,
                 propagate_signal_through_circuit,
-                &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                     assert_eq!(output_gates.len(), 2);
 
                     for out in output_gates.iter() {
-                        let mut q_output = out.borrow_mut();
+                        let mut q_output = out.lock().unwrap();
 
                         let q_output = q_output.fetch_output_signals().unwrap();
 
@@ -961,9 +960,9 @@ mod tests {
 
     #[test]
     fn sr_gate_initialization() {
-        let sr_latch = SRLatch::new();
+        let mut sr_latch = SRLatch::new();
 
-        let output = sr_latch.borrow_mut().fetch_output_signals().unwrap();
+        let output = sr_latch.lock().unwrap().fetch_output_signals().unwrap();
 
         assert_eq!(output.len(), 2);
 
@@ -1040,7 +1039,7 @@ mod tests {
     fn active_low_sr_gate_initialization() {
         let sr_latch = ActiveLowSRLatch::new();
 
-        let output = sr_latch.borrow_mut().fetch_output_signals().unwrap();
+        let output = sr_latch.lock().unwrap().fetch_output_signals().unwrap();
 
         assert_eq!(output.len(), 2);
 
@@ -1118,7 +1117,7 @@ mod tests {
         //initialization
         let one_bit_memory_cell = OneBitMemoryCell::new(1);
 
-        let output = one_bit_memory_cell.borrow_mut().fetch_output_signals().unwrap();
+        let output = one_bit_memory_cell.lock().unwrap().fetch_output_signals().unwrap();
 
         assert_eq!(output.len(), 1);
 
@@ -1216,7 +1215,7 @@ mod tests {
         let num_bits = rand::thread_rng().gen_range(2..=16);
         let variable_bit_memory_cell = VariableBitMemoryCell::new(num_bits);
 
-        let output = variable_bit_memory_cell.borrow_mut().fetch_output_signals().unwrap();
+        let output = variable_bit_memory_cell.lock().unwrap().fetch_output_signals().unwrap();
 
         assert_eq!(output.len(), 2 * num_bits);
         for out in output {

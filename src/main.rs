@@ -7,11 +7,11 @@ mod run_circuit;
 mod globals;
 mod build_circuit;
 mod test_stuff;
+mod shared_mutex;
 
 use std::fs::File;
 use std::io::Read;
 use std::time::Duration;
-use crate::globals::get_clock_tick_number;
 
 use crate::run_circuit::{collect_signals_from_logic_gate, run_instructions};
 use crate::test_stuff::extract_output_tags_sorted_by_index;
@@ -117,7 +117,7 @@ fn main() {
         &machine_code,
     );
 
-    let tags_sorted_by_index = extract_output_tags_sorted_by_index(&cpu.borrow_mut().get_complex_gate());
+    let tags_sorted_by_index = extract_output_tags_sorted_by_index(&cpu.lock().unwrap().get_complex_gate());
     let collected_signals = collect_signals_from_logic_gate(cpu.clone());
 
     assert_eq!(collected_signals.len(), tags_sorted_by_index.len());

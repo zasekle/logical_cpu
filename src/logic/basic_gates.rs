@@ -1,8 +1,6 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn, ConnectedOutput, calculate_input_signals_from_all_inputs, Signal, calculate_input_signal_from_single_inputs};
 use crate::logic::foundations::Signal::{HIGH, LOW_, NONE};
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub struct Or {
     pub members: BasicGateMembers,
@@ -10,24 +8,22 @@ pub struct Or {
 
 #[allow(dead_code)]
 impl Or {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Or {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::OrType,
-                        None,
-                    )
-                }
-            )
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        new_shared_mutex(
+            Or {
+                members: BasicGateMembers::new(
+                    input_num,
+                    output_num,
+                    GateType::OrType,
+                    None,
+                )
+            }
         )
     }
 }
 
 impl LogicGate for Or {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.members.connect_output_to_next_gate(
             current_gate_output_key,
             next_gate_input_key,
@@ -82,24 +78,22 @@ pub struct And {
 
 #[allow(dead_code)]
 impl And {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                And {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::AndType,
-                        None,
-                    )
-                }
-            )
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        new_shared_mutex(
+            And {
+                members: BasicGateMembers::new(
+                    input_num,
+                    output_num,
+                    GateType::AndType,
+                    None,
+                )
+            }
         )
     }
 }
 
 impl LogicGate for And {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.members.connect_output_to_next_gate(
             current_gate_output_key,
             next_gate_input_key,
@@ -154,24 +148,22 @@ pub struct Not {
 
 #[allow(dead_code)]
 impl Not {
-    pub fn new(output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Not {
-                    members: BasicGateMembers::new(
-                        1,
-                        output_num,
-                        GateType::NotType,
-                        None,
-                    )
-                }
-            )
+    pub fn new(output_num: usize) -> SharedMutex<Self> {
+        new_shared_mutex(
+            Not {
+                members: BasicGateMembers::new(
+                    1,
+                    output_num,
+                    GateType::NotType,
+                    None,
+                )
+            }
         )
     }
 }
 
 impl LogicGate for Not {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.members.connect_output_to_next_gate(
             current_gate_output_key,
             next_gate_input_key,
@@ -226,24 +218,22 @@ pub struct Nor {
 
 #[allow(dead_code)]
 impl Nor {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Nor {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::NorType,
-                        None,
-                    )
-                }
-            )
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        new_shared_mutex(
+            Nor {
+                members: BasicGateMembers::new(
+                    input_num,
+                    output_num,
+                    GateType::NorType,
+                    None,
+                )
+            }
         )
     }
 }
 
 impl LogicGate for Nor {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.members.connect_output_to_next_gate(
             current_gate_output_key,
             next_gate_input_key,
@@ -298,24 +288,22 @@ pub struct Nand {
 
 #[allow(dead_code)]
 impl Nand {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Nand {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::NandType,
-                        None,
-                    )
-                }
-            )
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        new_shared_mutex(
+            Nand {
+                members: BasicGateMembers::new(
+                    input_num,
+                    output_num,
+                    GateType::NandType,
+                    None,
+                )
+            }
         )
     }
 }
 
 impl LogicGate for Nand {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.members.connect_output_to_next_gate(
             current_gate_output_key,
             next_gate_input_key,
@@ -369,24 +357,22 @@ pub struct XOr {
 }
 
 impl XOr {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                XOr {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::XOrType,
-                        None,
-                    )
-                }
-            )
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        new_shared_mutex(
+            XOr {
+                members: BasicGateMembers::new(
+                    input_num,
+                    output_num,
+                    GateType::XOrType,
+                    None,
+                )
+            }
         )
     }
 }
 
 impl LogicGate for XOr {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.members.connect_output_to_next_gate(
             current_gate_output_key,
             next_gate_input_key,
@@ -443,21 +429,19 @@ pub struct Splitter {
 
 #[allow(dead_code)]
 impl Splitter {
-    pub fn new(input_num: usize, outputs_per_input: usize) -> Rc<RefCell<Self>> {
+    pub fn new(input_num: usize, outputs_per_input: usize) -> SharedMutex<Self> {
         assert_ne!(outputs_per_input, 0);
-        Rc::new(
-            RefCell::new(
-                Splitter {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        input_num * outputs_per_input,
-                        GateType::SplitterType,
-                        Some(LOW_),
-                    ),
-                    outputs_per_input,
-                    pull_output: None,
-                }
-            )
+        new_shared_mutex(
+            Splitter {
+                members: BasicGateMembers::new(
+                    input_num,
+                    input_num * outputs_per_input,
+                    GateType::SplitterType,
+                    Some(LOW_),
+                ),
+                outputs_per_input,
+                pull_output: None,
+            }
         )
     }
 
@@ -479,7 +463,7 @@ impl LogicGate for Splitter {
         &mut self,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
-        next_gate: Rc<RefCell<dyn LogicGate>>,
+        next_gate: SharedMutex<dyn LogicGate>,
     ) {
         //When gates are being connected, there should be no issues with this error.
         let output_signal = calculate_input_signal_from_single_inputs(
@@ -591,18 +575,16 @@ pub struct ControlledBuffer {
 
 #[allow(dead_code)]
 impl ControlledBuffer {
-    pub fn new(input_output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                ControlledBuffer {
-                    members: BasicGateMembers::new(
-                        input_output_num + 1,
-                        input_output_num,
-                        GateType::ControlledBufferType,
-                        Some(NONE),
-                    )
-                }
-            )
+    pub fn new(input_output_num: usize) -> SharedMutex<Self> {
+        new_shared_mutex(
+            ControlledBuffer {
+                members: BasicGateMembers::new(
+                    input_output_num + 1,
+                    input_output_num,
+                    GateType::ControlledBufferType,
+                    Some(NONE),
+                )
+            }
         )
     }
 }
@@ -612,7 +594,7 @@ impl LogicGate for ControlledBuffer {
         &mut self,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
-        next_gate: Rc<RefCell<dyn LogicGate>>,
+        next_gate: SharedMutex<dyn LogicGate>,
     ) {
         let enable_index = self.get_index_from_tag("E");
         //When gates are being connected, there should be no issues with this error.
@@ -758,13 +740,13 @@ mod tests {
         let output_gate = SimpleOutput::new("OUT");
         let controlled_buffer = ControlledBuffer::new(1);
 
-        controlled_buffer.borrow_mut().connect_output_to_next_gate(
+        controlled_buffer.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gate.clone(),
         );
 
-        controlled_buffer.borrow_mut().update_input_signal(
+        controlled_buffer.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 signal.clone(),
@@ -772,8 +754,8 @@ mod tests {
             )
         );
 
-        let enable_index = controlled_buffer.borrow_mut().get_index_from_tag("E");
-        controlled_buffer.borrow_mut().update_input_signal(
+        let enable_index = controlled_buffer.lock().unwrap().get_index_from_tag("E");
+        controlled_buffer.lock().unwrap().update_input_signal(
             GateInput::new(
                 enable_index,
                 HIGH,
@@ -781,22 +763,22 @@ mod tests {
             )
         );
 
-        let output = controlled_buffer.borrow_mut().fetch_output_signals().unwrap();
+        let output = controlled_buffer.lock().unwrap().fetch_output_signals().unwrap();
 
         for gate_output_state in output {
             match gate_output_state {
                 GateOutputState::NotConnected(_) => panic!("Output should be connected when pin is low."),
                 GateOutputState::Connected(connected_output) => {
                     assert_eq!(connected_output.throughput.signal, signal);
-                    let connected_id = connected_output.gate.borrow_mut().get_unique_id().id();
-                    let output_id = output_gate.borrow_mut().get_unique_id().id();
+                    let connected_id = connected_output.gate.lock().unwrap().get_unique_id().id();
+                    let output_id = output_gate.lock().unwrap().get_unique_id().id();
                     assert_eq!(connected_id, output_id);
                 }
             }
         }
     }
 
-    fn collect_output_for_run_circuit(collected_output: &mut Vec<Vec<Signal>>, output_gates: &&Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>) {
+    fn collect_output_for_run_circuit(collected_output: &mut Vec<Vec<Signal>>, output_gates: &&Vec<SharedMutex<dyn LogicGateAndOutputGate>>) {
         assert_eq!(output_gates.len(), 1);
 
         let mut single_collected_output = Vec::new();
@@ -1073,7 +1055,7 @@ mod tests {
     fn test_controlled_buffer_initialization() {
         let output_gate = SimpleOutput::new("OUT");
         let controlled_buffer = ControlledBuffer::new(1);
-        let mut mut_controlled_buffer = controlled_buffer.borrow_mut();
+        let mut mut_controlled_buffer = controlled_buffer.lock().unwrap();
         mut_controlled_buffer.connect_output_to_next_gate(
             0,
             0,
@@ -1112,8 +1094,8 @@ mod tests {
 
     #[test]
     fn test_none_signal_working() {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let num_gates = rand::thread_rng().gen_range(2..=16);
         let throughput_gate_index = rand::thread_rng().gen_range(0..num_gates);
@@ -1136,21 +1118,21 @@ mod tests {
 
             let controlled_buffer = ControlledBuffer::new(1);
 
-            input_gate.borrow_mut().connect_output_to_next_gate(
+            input_gate.lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 controlled_buffer.clone(),
             );
 
-            controlled_buffer.borrow_mut().connect_output_to_next_gate(
+            controlled_buffer.lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 output_gate.clone(),
             );
 
-            let enable_index = controlled_buffer.borrow_mut().get_index_from_tag("E");
+            let enable_index = controlled_buffer.lock().unwrap().get_index_from_tag("E");
             if i == throughput_gate_index {
-                single_enable_input_gate.borrow_mut().connect_output_to_next_gate(
+                single_enable_input_gate.lock().unwrap().connect_output_to_next_gate(
                     0,
                     enable_index,
                     controlled_buffer.clone(),
@@ -1162,7 +1144,7 @@ mod tests {
                     } else {
                         i
                     };
-                other_enable_input_gates.borrow_mut().connect_output_to_next_gate(
+                other_enable_input_gates.lock().unwrap().connect_output_to_next_gate(
                     next_index,
                     enable_index,
                     controlled_buffer.clone(),
@@ -1189,7 +1171,7 @@ mod tests {
                 &input_gates,
                 &output_gates,
                 propagate_signal_through_circuit,
-                &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                     collect_output_for_run_circuit(&mut collected_output, &output_gates);
                 },
                 None,
@@ -1204,32 +1186,32 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_controlled_buffer_multiple_inputs() {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let enable_input_gate = AutomaticInput::new(vec![HIGH], 2, "Enable_Inputs");
         let input_gate = AutomaticInput::new(vec![HIGH], 2, "Inputs");
         let output_gate = SimpleOutput::new("OUT");
 
-        let controlled_buffers: [Rc<RefCell<ControlledBuffer>>; 2] = [ControlledBuffer::new(1), ControlledBuffer::new(1)];
+        let controlled_buffers: [SharedMutex<ControlledBuffer>; 2] = [ControlledBuffer::new(1), ControlledBuffer::new(1)];
 
         let output_signal: Vec<Vec<Signal>> = Vec::new();
 
         for i in 0..2 {
-            input_gate.borrow_mut().connect_output_to_next_gate(
+            input_gate.lock().unwrap().connect_output_to_next_gate(
                 i,
                 0,
                 controlled_buffers[i].clone(),
             );
 
-            let enable_index = controlled_buffers[i].borrow_mut().get_index_from_tag("E");
-            enable_input_gate.borrow_mut().connect_output_to_next_gate(
+            let enable_index = controlled_buffers[i].lock().unwrap().get_index_from_tag("E");
+            enable_input_gate.lock().unwrap().connect_output_to_next_gate(
                 i,
                 enable_index,
                 controlled_buffers[i].clone(),
             );
 
-            controlled_buffers[i].borrow_mut().connect_output_to_next_gate(
+            controlled_buffers[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 output_gate.clone(),
@@ -1246,7 +1228,7 @@ mod tests {
             &input_gates,
             &output_gates,
             false,
-            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
             None,
@@ -1259,14 +1241,14 @@ mod tests {
     fn test_controlled_buffer_nested_in_complex_gate() {
         struct ControlledBufferWrapper {
             complex_gate: ComplexGateMembers,
-            controlled_buffer: Rc<RefCell<ControlledBuffer>>,
+            controlled_buffer: SharedMutex<ControlledBuffer>,
         }
 
         impl ControlledBufferWrapper {
-            pub fn new() -> Rc<RefCell<Self>> {
-                let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-                let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-                let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+            pub fn new() -> SharedMutex<Self> {
+                let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+                let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+                let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
                 let output_gate = SimpleOutput::new("Output");
 
@@ -1287,30 +1269,30 @@ mod tests {
 
                 gate.build_and_prime_circuit(output_gates_logic);
 
-                Rc::new(RefCell::new(gate))
+                new_shared_mutex(gate)
             }
 
             fn build_and_prime_circuit(
                 &mut self,
-                output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+                output_gates: Vec<SharedMutex<dyn LogicGate>>,
             ) {
                 self.complex_gate.input_gates[self.get_index_from_tag("Input")]
-                    .borrow_mut()
+                    .lock().unwrap()
                     .connect_output_to_next_gate(
                         0,
                         0,
                         self.controlled_buffer.clone(),
                     );
 
-                self.controlled_buffer.borrow_mut().connect_output_to_next_gate(
+                self.controlled_buffer.lock().unwrap().connect_output_to_next_gate(
                     0,
                     0,
                     output_gates[0].clone(),
                 );
 
                 //Force the enable to low so that NONE is always returned.
-                let enable_index = self.controlled_buffer.borrow_mut().get_index_from_tag("E");
-                self.controlled_buffer.borrow_mut().update_input_signal(
+                let enable_index = self.controlled_buffer.lock().unwrap().get_index_from_tag("E");
+                self.controlled_buffer.lock().unwrap().update_input_signal(
                     GateInput::new(
                         enable_index,
                         LOW_,
@@ -1327,7 +1309,7 @@ mod tests {
         }
 
         impl LogicGate for ControlledBufferWrapper {
-            fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+            fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
                 self.complex_gate.connect_output_to_next_gate(
                     self.get_unique_id(),
                     current_gate_output_key,
@@ -1384,8 +1366,8 @@ mod tests {
             }
         }
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let input_gate = AutomaticInput::new(vec![HIGH], 2, "Inputs");
         let output_gate = SimpleOutput::new("OUT");
@@ -1394,13 +1376,13 @@ mod tests {
 
         let output_signal = vec![[NONE]];
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             wrapper.clone(),
         );
 
-        wrapper.borrow_mut().connect_output_to_next_gate(
+        wrapper.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gate.clone(),
@@ -1415,7 +1397,7 @@ mod tests {
             &input_gates,
             &output_gates,
             false,
-            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
             None,
@@ -1426,8 +1408,8 @@ mod tests {
 
     #[test]
     fn splitter_properly_splits() {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let input_num = rand::thread_rng().gen_range(1..=16);
         let outputs_per_input = rand::thread_rng().gen_range(2..=16);
@@ -1447,7 +1429,7 @@ mod tests {
             let input_gate = AutomaticInput::new(
                 vec![signal.clone()],
                 1,
-                input_tag.as_str()
+                input_tag.as_str(),
             );
 
             println!("signal: {:?}", signal.clone());
@@ -1456,7 +1438,7 @@ mod tests {
                 single_turn_output.push(signal.clone());
             }
 
-            input_gate.borrow_mut().connect_output_to_next_gate(
+            input_gate.lock().unwrap().connect_output_to_next_gate(
                 0,
                 i,
                 splitter.clone(),
@@ -1471,9 +1453,9 @@ mod tests {
             for j in 0..outputs_per_input {
                 let output_tag = format!("OUT_{}", i);
                 let output_gate = SimpleOutput::new(output_tag.as_str());
-                let splitter_output = splitter.borrow_mut().get_index_for_output(i, j);
+                let splitter_output = splitter.lock().unwrap().get_index_for_output(i, j);
                 println!("i {i} j {j} splitter_output {splitter_output}");
-                splitter.borrow_mut().connect_output_to_next_gate(
+                splitter.lock().unwrap().connect_output_to_next_gate(
                     splitter_output,
                     0,
                     output_gate.clone(),
@@ -1489,7 +1471,7 @@ mod tests {
             &input_gates,
             &output_gates,
             false,
-            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 assert_eq!(output_gates.len(), input_num * outputs_per_input);
 
                 let mut single_collected_output = Vec::new();

@@ -1,7 +1,5 @@
-use std::cell::{RefCell};
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
@@ -15,9 +13,8 @@ use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::RAMUnit;
 use crate::logic::variable_bit_cpu::VariableBitCPU;
 use crate::{ALU_TIME, CONTROL_SECTION_TIME, RAM_TIME};
+use crate::shared_mutex::SharedMutex;
 use crate::test_stuff::extract_output_tags_sorted_by_index;
-
-type SharedMutex<T> = Arc<Mutex<T>>;
 
 struct CondvarWrapper {
     cond: Condvar,
@@ -46,7 +43,7 @@ pub struct RunCircuitThreadPool {
     // gates: Vec<SharedMutex<dyn LogicGate>>,
     gates: SharedMutex<Vec<SharedMutex<dyn LogicGate>>>,
 
-    threads: Vec::<JoinHandle<()>>,
+    threads: Vec<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
     condvar_wrapper: Arc<CondvarWrapper>,
 }
@@ -89,7 +86,7 @@ impl RunCircuitThreadPool {
                                 all_tasks.pop()
                             };
 
-                        if let Some(t) = task {
+                        if let Some(_t) = task {
                             println!("Thread {i} running task");
                             // t();
                         } else {
@@ -128,48 +125,48 @@ impl RunCircuitThreadPool {
         gate: SharedMutex<dyn LogicGate>,
         gate_id: UniqueID,
     ) {
-        let _guard = self.mutex.lock().expect("Mutex failed to lock.");
-
-        //TODO: If contained in currently_processing_set
-        // Interrupt the running thread that is doing it and have it restart
-        // Need to take into account that the interrupt could happen as the thread running it is
-        //  completing.
-        // TODO: Maybe interrupting the smaller gates isn't a big deal, but should probably
-        //  somehow interrupt the bigger gates This would mean that they need to somehow
-        //   1) Add the larger gate to a queue (This needs to be done anyway in order to tell which
-        //    gates are currently being processed).
-        //   2) Pop them from the processed queue and if anything that is working on a small gate
-        //    doesn't find them, don't complete.
-        //  So I am thinking that there will be a distinction between simple and complex gates.
-        //   Simple gates will just be added to a queue and directly worked by the threads. Complex
-        //   Gates will be saved somewhere else. Then they can be either CANCELED or COMPLETED and
-        //   the threads running the internal simple gates for the complex gate will react
-        //   accordingly.
-
-        let inserted = self.waiting_to_be_processed_set.insert(
-            gate_id
-        );
-
-        if inserted {
-            //If the gate is already in the queue, but not being processed, no need to do anything.
-            return;
-        }
-
-        self.gates.push(gate);
-
-        //TODO: Will need to do something to activate the thread pool. If I use channels, I will
-        // have a 'gap' in between when the instance is retrieved from the thread pool and when the
-        // unique_id is moved from waiting to processing. So I probably need to use the same Mutex
-        // to protect the thread pool as I am using here and use the 'standard' thread pool design.
+        // let _guard = self.mutex.lock().expect("Mutex failed to lock.");
+        //
+        // //TODO: If contained in currently_processing_set
+        // // Interrupt the running thread that is doing it and have it restart
+        // // Need to take into account that the interrupt could happen as the thread running it is
+        // //  completing.
+        // // TODO: Maybe interrupting the smaller gates isn't a big deal, but should probably
+        // //  somehow interrupt the bigger gates This would mean that they need to somehow
+        // //   1) Add the larger gate to a queue (This needs to be done anyway in order to tell which
+        // //    gates are currently being processed).
+        // //   2) Pop them from the processed queue and if anything that is working on a small gate
+        // //    doesn't find them, don't complete.
+        // //  So I am thinking that there will be a distinction between simple and complex gates.
+        // //   Simple gates will just be added to a queue and directly worked by the threads. Complex
+        // //   Gates will be saved somewhere else. Then they can be either CANCELED or COMPLETED and
+        // //   the threads running the internal simple gates for the complex gate will react
+        // //   accordingly.
+        //
+        // let inserted = self.waiting_to_be_processed_set.insert(
+        //     gate_id
+        // );
+        //
+        // if inserted {
+        //     //If the gate is already in the queue, but not being processed, no need to do anything.
+        //     return;
+        // }
+        //
+        // self.gates.push(gate);
+        //
+        // //TODO: Will need to do something to activate the thread pool. If I use channels, I will
+        // // have a 'gap' in between when the instance is retrieved from the thread pool and when the
+        // // unique_id is moved from waiting to processing. So I probably need to use the same Mutex
+        // // to protect the thread pool as I am using here and use the 'standard' thread pool design.
     }
 }
 
 pub fn start_clock<F>(
-    input_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
-    output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    input_gates: &Vec<SharedMutex<dyn LogicGate>>,
+    output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>,
     mut handle_output: F,
 ) where
-    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>)
+    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<SharedMutex<dyn LogicGateAndOutputGate>>)
 {
     assert!(!input_gates.is_empty());
     assert!(!output_gates.is_empty());
@@ -200,13 +197,13 @@ pub fn start_clock<F>(
 // have a defined starting state. Therefore, vectors are used even though they must be iterated
 // through to guarantee uniqueness.
 pub fn run_circuit<F>(
-    input_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
-    output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    input_gates: &Vec<SharedMutex<dyn LogicGate>>,
+    output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>,
     propagate_signal_through_circuit: bool,
     handle_output: &mut F,
     gate_type_to_run_together: Option<GateType>,
 ) -> bool where
-    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>)
+    F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<SharedMutex<dyn LogicGateAndOutputGate>>)
 {
     let mut continue_clock = true;
 
@@ -219,11 +216,11 @@ pub fn run_circuit<F>(
         };
 
     let mut clock_tick_inputs = Vec::new();
-    let mut next_gates: Vec<Rc<RefCell<dyn LogicGate>>> = input_gates.clone();
+    let mut next_gates: Vec<SharedMutex<dyn LogicGate>> = input_gates.clone();
 
     let mut gathering_gates_to_run = true;
     let mut gathered_gates_set = HashSet::new();
-    let mut gathered_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    let mut gathered_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
     if print_output {
         println!("run_circuit");
@@ -238,7 +235,7 @@ pub fn run_circuit<F>(
         let mut num_invalid_gates: usize = 0;
 
         for gate_cell in gates.into_iter() {
-            let mut gate = gate_cell.borrow_mut();
+            let mut gate = gate_cell.lock().unwrap();
             let gate_output = gate.fetch_output_signals();
 
             let gate_output = if let Err(err) = gate_output {
@@ -285,10 +282,10 @@ pub fn run_circuit<F>(
                 match output {
                     GateOutputState::NotConnected(signal) => {
                         if print_output {
-                            println!("NOT_CONNECTED gate_tag {}", gate_cell.borrow_mut().get_tag());
+                            println!("NOT_CONNECTED gate_tag {}", gate_cell.lock().unwrap().get_tag());
                         }
 
-                        if gate_cell.borrow_mut().get_tag() == END_OUTPUT_GATE_TAG
+                        if gate_cell.lock().unwrap().get_tag() == END_OUTPUT_GATE_TAG
                             && signal == HIGH {
                             println!("End of program reached on clock-tick {}. Stopping execution.", get_clock_tick_number());
                             continue_clock = false;
@@ -301,8 +298,8 @@ pub fn run_circuit<F>(
                         if print_output {
                             println!("Connected(gate_output): {:?}", next_gate_info);
                         }
-                        let next_gate = Rc::clone(&next_gate_info.gate);
-                        let mut mutable_next_gate = next_gate.borrow_mut();
+                        let next_gate = Arc::clone(&next_gate_info.gate);
+                        let mut mutable_next_gate = next_gate.lock().unwrap();
 
                         let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
                             mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
@@ -347,7 +344,7 @@ pub fn run_circuit<F>(
         if num_invalid_gates > 0 && num_invalid_gates == next_gates.len() {
             let mut gates = Vec::new();
             for gate in next_gates {
-                let mut_gate = gate.borrow_mut();
+                let mut_gate = gate.lock().unwrap();
                 gates.push(
                     format!("Gate {} id {} with tag {}.", mut_gate.get_gate_type(), mut_gate.get_unique_id().id(), mut_gate.get_tag())
                 );
@@ -372,7 +369,7 @@ pub fn run_circuit<F>(
     continue_clock
 }
 
-pub fn generate_default_output(cpu: &Rc<RefCell<VariableBitCPU>>) -> Vec<Signal> {
+pub fn generate_default_output(cpu: &SharedMutex<VariableBitCPU>) -> Vec<Signal> {
 
     // Multi-bit outputs
     // VariableBitCPU::R0
@@ -396,13 +393,13 @@ pub fn generate_default_output(cpu: &Rc<RefCell<VariableBitCPU>>) -> Vec<Signal>
     // VariableBitCPU::IO_CLK_E
     // VariableBitCPU::IO_CLK_S
 
-    let mut generated_signals = vec![LOW_; cpu.borrow_mut().get_complex_gate().output_gates.len()];
-    let clke_index = cpu.borrow_mut().get_complex_gate().gate_tags_to_index[VariableBitCPU::CLKE].index;
+    let mut generated_signals = vec![LOW_; cpu.lock().unwrap().get_complex_gate().output_gates.len()];
+    let clke_index = cpu.lock().unwrap().get_complex_gate().gate_tags_to_index[VariableBitCPU::CLKE].index;
     generated_signals[clke_index] = HIGH;
     generated_signals
 }
 
-pub fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cells: usize) -> Vec<Rc<RefCell<AutomaticInput>>> {
+pub fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cells: usize) -> Vec<SharedMutex<AutomaticInput>> {
     assert_ne!(binary_strings.len(), 0);
     assert!(binary_strings.len() <= num_ram_cells);
 
@@ -449,8 +446,8 @@ pub fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cell
     automatic_inputs
 }
 
-pub fn collect_signals_from_logic_gate(gate: Rc<RefCell<dyn LogicGate>>) -> Vec<Signal> {
-    let cpu_output = gate.borrow_mut().fetch_output_signals().unwrap();
+pub fn collect_signals_from_logic_gate(gate: SharedMutex<dyn LogicGate>) -> Vec<Signal> {
+    let cpu_output = gate.lock().unwrap().fetch_output_signals().unwrap();
     let mut collected_signals = Vec::new();
     for out in cpu_output.into_iter() {
         match out {
@@ -469,7 +466,7 @@ pub fn run_instructions(
     number_bits: usize,
     decoder_input_size: usize,
     binary_strings: &Vec<&str>,
-) -> Rc<RefCell<VariableBitCPU>> {
+) -> SharedMutex<VariableBitCPU> {
     let cpu = VariableBitCPU::new(number_bits, decoder_input_size);
 
     let num_ram_cells = usize::pow(2, (decoder_input_size * 2) as u32);
@@ -490,12 +487,12 @@ pub fn run_instructions(
 
     let complete_load = Instant::now();
 
-    let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
     let clock = Clock::new(1, "PRIMARY_CLOCK");
-    let clk_in_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_IN);
-    cpu.borrow_mut().get_clock_synced_with_cpu(&clock);
+    let clk_in_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::CLK_IN);
+    cpu.lock().unwrap().get_clock_synced_with_cpu(&clock);
 
-    clock.borrow_mut().connect_output_to_next_gate(
+    clock.lock().unwrap().connect_output_to_next_gate(
         0,
         clk_in_index,
         cpu.clone(),
@@ -503,11 +500,11 @@ pub fn run_instructions(
 
     input_gates.push(clock.clone());
 
-    let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+    let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
     let end_output_gate = SimpleOutput::new(END_OUTPUT_GATE_TAG);
 
-    let cpu_end_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::END);
-    cpu.borrow_mut().connect_output_to_next_gate(
+    let cpu_end_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::END);
+    cpu.lock().unwrap().connect_output_to_next_gate(
         cpu_end_index,
         0,
         end_output_gate.clone(),
@@ -562,7 +559,7 @@ pub fn run_instructions(
 // there will now be values loaded into RAM. It should be run without any inputs connected to
 // the cpu itself.
 pub fn load_values_into_ram(
-    cpu: &Rc<RefCell<VariableBitCPU>>,
+    cpu: &SharedMutex<VariableBitCPU>,
     binary_strings: &Vec<&str>,
     num_ram_cells: usize,
 ) {
@@ -589,27 +586,27 @@ pub fn load_values_into_ram(
         "MEMORY_ADDRESS_REGISTER",
     );
 
-    let load_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::LOAD);
-    load_automatic_input.borrow_mut().connect_output_to_next_gate(
+    let load_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::LOAD);
+    load_automatic_input.lock().unwrap().connect_output_to_next_gate(
         0,
         load_index,
         cpu.clone(),
     );
 
-    let memory_address_register_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::MARS);
-    memory_address_register_automatic_input.borrow_mut().connect_output_to_next_gate(
+    let memory_address_register_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::MARS);
+    memory_address_register_automatic_input.lock().unwrap().connect_output_to_next_gate(
         0,
         memory_address_register_index,
         cpu.clone(),
     );
 
-    let mut automatic_input_gates: Vec<Rc<RefCell<AutomaticInput>>> = Vec::new();
-    let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    let mut automatic_input_gates: Vec<SharedMutex<AutomaticInput>> = Vec::new();
+    let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
     let clock = Clock::new(1, "PRIMARY_CLOCK");
-    cpu.borrow_mut().get_clock_synced_with_cpu(&clock);
+    cpu.lock().unwrap().get_clock_synced_with_cpu(&clock);
 
-    let clk_in_index = cpu.borrow_mut().get_index_from_tag(VariableBitCPU::CLK_IN);
-    clock.borrow_mut().connect_output_to_next_gate(
+    let clk_in_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::CLK_IN);
+    clock.lock().unwrap().connect_output_to_next_gate(
         0,
         clk_in_index,
         cpu.clone(),
@@ -623,8 +620,8 @@ pub fn load_values_into_ram(
 
     for (i, input) in automatic_inputs.iter().enumerate() {
         let ram_input_tag = format!("{}_{}", VariableBitCPU::RAM, i);
-        let ram_input_index = cpu.borrow_mut().get_index_from_tag(ram_input_tag.as_str());
-        input.borrow_mut().connect_output_to_next_gate(
+        let ram_input_index = cpu.lock().unwrap().get_index_from_tag(ram_input_tag.as_str());
+        input.lock().unwrap().connect_output_to_next_gate(
             0,
             ram_input_index,
             cpu.clone(),
@@ -654,14 +651,14 @@ pub fn load_values_into_ram(
 
     //Disconnect all inputs so that future connections can be made.
     for automatic_input_gate in automatic_input_gates.into_iter() {
-        automatic_input_gate.borrow_mut().disconnect_gate(0);
+        automatic_input_gate.lock().unwrap().disconnect_gate(0);
     }
 
-    clock.borrow_mut().disconnect_gate(0);
+    clock.lock().unwrap().disconnect_gate(0);
 
     //LOAD and MAR_S must be tied back to LOW before completing. They have already been
     // disconnected so the zero id is used.
-    cpu.borrow_mut().update_input_signal(
+    cpu.lock().unwrap().update_input_signal(
         GateInput::new(
             load_index,
             LOW_,
@@ -669,7 +666,7 @@ pub fn load_values_into_ram(
         )
     );
 
-    cpu.borrow_mut().update_input_signal(
+    cpu.lock().unwrap().update_input_signal(
         GateInput::new(
             memory_address_register_index,
             LOW_,
@@ -682,7 +679,7 @@ pub fn load_values_into_ram(
     for (i, binary_string) in binary_strings.iter().enumerate() {
         for (j, c) in binary_string.chars().rev().enumerate() {
             let output_tag = RAMUnit::get_ram_output_string(i, j);
-            let output_index = cpu.borrow_mut().get_complex_gate().gate_tags_to_index[&output_tag.to_string()].index;
+            let output_index = cpu.lock().unwrap().get_complex_gate().gate_tags_to_index[&output_tag.to_string()].index;
 
             let signal =
                 if c == '0' {
@@ -703,11 +700,11 @@ pub fn load_values_into_ram(
 }
 
 pub fn compare_generate_and_collected_output(
-    cpu: &Rc<RefCell<VariableBitCPU>>,
+    cpu: &SharedMutex<VariableBitCPU>,
     generated_output: Vec<Signal>,
     collected_signals: Vec<Signal>,
 ) -> bool {
-    let tags_sorted_by_index = extract_output_tags_sorted_by_index(&cpu.borrow_mut().get_complex_gate());
+    let tags_sorted_by_index = extract_output_tags_sorted_by_index(&cpu.lock().unwrap().get_complex_gate());
 
     assert_eq!(collected_signals.len(), generated_output.len());
     assert_eq!(collected_signals.len(), tags_sorted_by_index.len());
@@ -744,13 +741,13 @@ mod tests {
         let input_gate = AutomaticInput::new(vec![HIGH], 1, "");
         let output_gate = SimpleOutput::new("");
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         input_gates.push(input_gate.clone());
         output_gates.push(output_gate.clone());
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gate.clone(),
@@ -777,26 +774,26 @@ mod tests {
                 let output_gate = SimpleOutput::new("");
                 let not_gate = Not::new(2);
 
-                let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-                let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+                let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+                let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
                 input_gates.push(input_gate.clone());
                 output_gates.push(output_gate.clone());
 
-                input_gate.borrow_mut().connect_output_to_next_gate(
+                input_gate.lock().unwrap().connect_output_to_next_gate(
                     0,
                     0,
                     not_gate.clone(),
                 );
 
-                not_gate.borrow_mut().connect_output_to_next_gate(
+                not_gate.lock().unwrap().connect_output_to_next_gate(
                     0,
                     0,
                     output_gate.clone(),
                 );
 
                 //Create a loop.
-                not_gate.borrow_mut().connect_output_to_next_gate(
+                not_gate.lock().unwrap().connect_output_to_next_gate(
                     1,
                     0,
                     not_gate.clone(),
@@ -827,26 +824,26 @@ mod tests {
                 let output_gate = SimpleOutput::new("");
                 let or_gate = Or::new(2, 2);
 
-                let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-                let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+                let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+                let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
                 input_gates.push(input_gate.clone());
                 output_gates.push(output_gate.clone());
 
-                input_gate.borrow_mut().connect_output_to_next_gate(
+                input_gate.lock().unwrap().connect_output_to_next_gate(
                     0,
                     0,
                     or_gate.clone(),
                 );
 
-                or_gate.borrow_mut().connect_output_to_next_gate(
+                or_gate.lock().unwrap().connect_output_to_next_gate(
                     0,
                     0,
                     output_gate.clone(),
                 );
 
                 //Create a loop.
-                or_gate.borrow_mut().connect_output_to_next_gate(
+                or_gate.lock().unwrap().connect_output_to_next_gate(
                     1,
                     1,
                     or_gate.clone(),
@@ -875,19 +872,19 @@ mod tests {
         let output_gate = SimpleOutput::new("");
         let not_gate = Not::new(1);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         input_gates.push(input_gate.clone());
         output_gates.push(output_gate.clone());
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             not_gate.clone(),
         );
 
-        not_gate.borrow_mut().connect_output_to_next_gate(
+        not_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gate.clone(),
@@ -896,7 +893,7 @@ mod tests {
         start_clock(
             &input_gates,
             &output_gates,
-            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 check_for_single_element_signal(output_gates, HIGH);
             },
         );
@@ -908,19 +905,19 @@ mod tests {
         let output_gate = SimpleOutput::new("");
         let not_gate = Not::new(1);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         input_gates.push(input_gate.clone());
         output_gates.push(output_gate.clone());
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             not_gate.clone(),
         );
 
-        not_gate.borrow_mut().connect_output_to_next_gate(
+        not_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gate.clone(),
@@ -932,12 +929,12 @@ mod tests {
         start_clock(
             &input_gates,
             &output_gates,
-            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 assert!(current_index < expected_outputs.len());
                 assert_eq!(output_gates.len(), 1);
 
                 let value = output_gates.into_iter().next().unwrap();
-                let mut value = value.borrow_mut();
+                let mut value = value.lock().unwrap();
                 let output_signals = value.fetch_output_signals().unwrap();
 
                 assert_eq!(output_signals.len(), 1);

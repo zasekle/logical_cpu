@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::logic::basic_gates::{And, Nand, Not, Or, Splitter};
 
 #[allow(unused_imports)]
@@ -12,30 +10,31 @@ use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 #[allow(unused_imports)]
 use crate::logic::foundations::Signal::{LOW_, HIGH};
 use crate::logic::memory_gates::OneBitMemoryCell;
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub struct VariableOutputStepper {
     pub complex_gate: ComplexGateMembers,
-    mem_cells: Vec<Rc<RefCell<OneBitMemoryCell>>>,
-    output_and_gates: Vec<Rc<RefCell<And>>>,
-    output_not_gates: Vec<Rc<RefCell<Not>>>,
-    output_or_gate: Rc<RefCell<Or>>,
-    clk_top_or_gate: Rc<RefCell<Or>>,
-    clk_bottom_or_gate: Rc<RefCell<Or>>,
-    clk_bottom_not_gate: Rc<RefCell<Not>>,
-    mem_one_not_gate: Rc<RefCell<Not>>,
+    mem_cells: Vec<SharedMutex<OneBitMemoryCell>>,
+    output_and_gates: Vec<SharedMutex<And>>,
+    output_not_gates: Vec<SharedMutex<Not>>,
+    output_or_gate: SharedMutex<Or>,
+    clk_top_or_gate: SharedMutex<Or>,
+    clk_bottom_or_gate: SharedMutex<Or>,
+    clk_bottom_not_gate: SharedMutex<Not>,
+    mem_one_not_gate: SharedMutex<Not>,
 }
 
 #[allow(dead_code)]
 impl VariableOutputStepper {
-    pub fn new(number_outputs: usize) -> Rc<RefCell<Self>> {
+    pub fn new(number_outputs: usize) -> SharedMutex<Self> {
         assert_ne!(number_outputs, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_and_gates: Vec<Rc<RefCell<And>>> = Vec::new();
-        let mut output_not_gates: Vec<Rc<RefCell<Not>>> = Vec::new();
-        let mut mem_cells: Vec<Rc<RefCell<OneBitMemoryCell>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_and_gates: Vec<SharedMutex<And>> = Vec::new();
+        let mut output_not_gates: Vec<SharedMutex<Not>> = Vec::new();
+        let mut mem_cells: Vec<SharedMutex<OneBitMemoryCell>> = Vec::new();
 
         for i in 0..number_outputs {
             let output_tag = format!("o_{}", i);
@@ -98,15 +97,15 @@ impl VariableOutputStepper {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_output_stepper))
+        new_shared_mutex(variable_output_stepper)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         number_outputs: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        self.output_or_gate.borrow_mut().update_input_signal(
+        self.output_or_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 1,
                 HIGH,
@@ -116,26 +115,26 @@ impl VariableOutputStepper {
 
         let clk_input = self.complex_gate.input_gates[self.get_index_from_tag("CLK")].clone();
 
-        clk_input.borrow_mut().connect_output_to_next_gate(
+        clk_input.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.clk_top_or_gate.clone(),
         );
 
-        clk_input.borrow_mut().connect_output_to_next_gate(
+        clk_input.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.clk_bottom_not_gate.clone(),
         );
 
-        self.clk_bottom_not_gate.borrow_mut().connect_output_to_next_gate(
+        self.clk_bottom_not_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.clk_bottom_or_gate.clone(),
         );
 
-        let mem_cell_set_index = self.mem_cells[0].borrow_mut().get_index_from_tag("S");
-        self.mem_one_not_gate.borrow_mut().connect_output_to_next_gate(
+        let mem_cell_set_index = self.mem_cells[0].lock().unwrap().get_index_from_tag("S");
+        self.mem_one_not_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             mem_cell_set_index,
             self.mem_cells[0].clone(),
@@ -143,48 +142,48 @@ impl VariableOutputStepper {
 
         let skip_last_mem_gate = number_outputs * 2 - 1;
         for i in 0..skip_last_mem_gate {
-            let mem_cell_output_index = self.mem_cells[i].borrow_mut().get_index_from_tag("Q");
-            let mem_cell_set_index = self.mem_cells[i + 1].borrow_mut().get_index_from_tag("S");
-            self.mem_cells[i].borrow_mut().connect_output_to_next_gate(
+            let mem_cell_output_index = self.mem_cells[i].lock().unwrap().get_index_from_tag("Q");
+            let mem_cell_set_index = self.mem_cells[i + 1].lock().unwrap().get_index_from_tag("S");
+            self.mem_cells[i].lock().unwrap().connect_output_to_next_gate(
                 mem_cell_output_index,
                 mem_cell_set_index,
                 self.mem_cells[i + 1].clone(),
             );
 
             if i % 2 == 0 {
-                let mem_cell_enable_index = self.mem_cells[i].borrow_mut().get_index_from_tag("E");
-                self.clk_top_or_gate.borrow_mut().connect_output_to_next_gate(
+                let mem_cell_enable_index = self.mem_cells[i].lock().unwrap().get_index_from_tag("E");
+                self.clk_top_or_gate.lock().unwrap().connect_output_to_next_gate(
                     i / 2,
                     mem_cell_enable_index,
                     self.mem_cells[i].clone(),
                 );
             } else {
                 let idx = i / 2;
-                let mem_cell_enable_index = self.mem_cells[i].borrow_mut().get_index_from_tag("E");
-                self.clk_bottom_or_gate.borrow_mut().connect_output_to_next_gate(
+                let mem_cell_enable_index = self.mem_cells[i].lock().unwrap().get_index_from_tag("E");
+                self.clk_bottom_or_gate.lock().unwrap().connect_output_to_next_gate(
                     idx,
                     mem_cell_enable_index,
                     self.mem_cells[i].clone(),
                 );
 
-                let mem_cell_output_index = self.mem_cells[i].borrow_mut().get_index_from_tag("Q_1");
-                self.mem_cells[i].borrow_mut().connect_output_to_next_gate(
+                let mem_cell_output_index = self.mem_cells[i].lock().unwrap().get_index_from_tag("Q_1");
+                self.mem_cells[i].lock().unwrap().connect_output_to_next_gate(
                     mem_cell_output_index,
                     0,
                     self.output_not_gates[idx].clone(),
                 );
 
-                let mem_cell_output_index = self.mem_cells[i].borrow_mut().get_index_from_tag("Q_2");
-                self.mem_cells[i].borrow_mut().connect_output_to_next_gate(
+                let mem_cell_output_index = self.mem_cells[i].lock().unwrap().get_index_from_tag("Q_2");
+                self.mem_cells[i].lock().unwrap().connect_output_to_next_gate(
                     mem_cell_output_index,
                     0,
                     self.output_and_gates[idx].clone(),
                 );
 
-                let next_gate: Rc<RefCell<dyn LogicGate>> =
+                let next_gate: SharedMutex<dyn LogicGate> =
                     if idx == 0 {
                         let or_gate = self.output_or_gate.clone();
-                        or_gate.borrow_mut().connect_output_to_next_gate(
+                        or_gate.lock().unwrap().connect_output_to_next_gate(
                             0,
                             0,
                             output_gates[idx].clone(),
@@ -192,7 +191,7 @@ impl VariableOutputStepper {
                         or_gate
                     } else {
                         let and_gate = self.output_and_gates[idx - 1].clone();
-                        and_gate.borrow_mut().connect_output_to_next_gate(
+                        and_gate.lock().unwrap().connect_output_to_next_gate(
                             0,
                             0,
                             output_gates[idx].clone(),
@@ -200,7 +199,7 @@ impl VariableOutputStepper {
                         and_gate
                     };
 
-                self.output_not_gates[idx].borrow_mut().connect_output_to_next_gate(
+                self.output_not_gates[idx].lock().unwrap().connect_output_to_next_gate(
                     0,
                     1,
                     next_gate,
@@ -212,55 +211,55 @@ impl VariableOutputStepper {
         let final_not_idx = self.output_not_gates.len() - 1;
         let final_and_idx = self.output_and_gates.len() - 1;
 
-        self.output_and_gates[final_and_idx].borrow_mut().connect_output_to_next_gate(
+        self.output_and_gates[final_and_idx].lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gates[number_outputs - 1].clone(),
         );
 
-        self.output_not_gates[final_not_idx].borrow_mut().connect_output_to_next_gate(
+        self.output_not_gates[final_not_idx].lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.output_and_gates[final_and_idx].clone(),
         );
 
-        let mem_cell_enable_index = self.mem_cells[final_mem_cell_idx].borrow_mut().get_index_from_tag("E");
-        self.clk_bottom_or_gate.borrow_mut().connect_output_to_next_gate(
+        let mem_cell_enable_index = self.mem_cells[final_mem_cell_idx].lock().unwrap().get_index_from_tag("E");
+        self.clk_bottom_or_gate.lock().unwrap().connect_output_to_next_gate(
             number_outputs - 1,
             mem_cell_enable_index,
             self.mem_cells[final_mem_cell_idx].clone(),
         );
 
-        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].borrow_mut().get_index_from_tag("Q");
-        self.mem_cells[final_mem_cell_idx].borrow_mut().connect_output_to_next_gate(
+        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].lock().unwrap().get_index_from_tag("Q");
+        self.mem_cells[final_mem_cell_idx].lock().unwrap().connect_output_to_next_gate(
             mem_cell_output_index,
             0,
             self.output_not_gates[final_not_idx].clone(),
         );
 
-        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].borrow_mut().get_index_from_tag("Q_1");
-        self.mem_cells[final_mem_cell_idx].borrow_mut().connect_output_to_next_gate(
+        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].lock().unwrap().get_index_from_tag("Q_1");
+        self.mem_cells[final_mem_cell_idx].lock().unwrap().connect_output_to_next_gate(
             mem_cell_output_index,
             0,
             self.output_or_gate.clone(),
         );
 
-        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].borrow_mut().get_index_from_tag("Q_2");
-        self.mem_cells[final_mem_cell_idx].borrow_mut().connect_output_to_next_gate(
+        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].lock().unwrap().get_index_from_tag("Q_2");
+        self.mem_cells[final_mem_cell_idx].lock().unwrap().connect_output_to_next_gate(
             mem_cell_output_index,
             0,
             self.mem_one_not_gate.clone(),
         );
 
-        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].borrow_mut().get_index_from_tag("Q_3");
-        self.mem_cells[final_mem_cell_idx].borrow_mut().connect_output_to_next_gate(
+        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].lock().unwrap().get_index_from_tag("Q_3");
+        self.mem_cells[final_mem_cell_idx].lock().unwrap().connect_output_to_next_gate(
             mem_cell_output_index,
             0,
             self.clk_top_or_gate.clone(),
         );
 
-        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].borrow_mut().get_index_from_tag("Q_4");
-        self.mem_cells[final_mem_cell_idx].borrow_mut().connect_output_to_next_gate(
+        let mem_cell_output_index = self.mem_cells[final_mem_cell_idx].lock().unwrap().get_index_from_tag("Q_4");
+        self.mem_cells[final_mem_cell_idx].lock().unwrap().connect_output_to_next_gate(
             mem_cell_output_index,
             0,
             self.clk_bottom_or_gate.clone(),
@@ -275,7 +274,7 @@ impl VariableOutputStepper {
 }
 
 impl LogicGate for VariableOutputStepper {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -336,18 +335,18 @@ impl LogicGate for VariableOutputStepper {
 
 pub struct VariableBitCPUEnable {
     complex_gate: ComplexGateMembers,
-    and_gates: Vec<Rc<RefCell<And>>>,
+    and_gates: Vec<SharedMutex<And>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitCPUEnable {
-    pub fn new(number_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(number_bits: usize) -> SharedMutex<Self> {
         assert_ne!(number_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut one_bit_memory_cells: Vec<Rc<RefCell<And>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut one_bit_memory_cells: Vec<SharedMutex<And>> = Vec::new();
 
         build_simple_inputs_and_outputs_with_and(
             number_bits,
@@ -375,30 +374,30 @@ impl VariableBitCPUEnable {
 
         one_bit_memory_cell.build_and_prime_circuit(number_bits, output_gates_logic);
 
-        Rc::new(RefCell::new(one_bit_memory_cell))
+        new_shared_mutex(one_bit_memory_cell)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         number_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
 
         for i in 0..number_bits {
-            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
+            self.complex_gate.input_gates[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 self.and_gates[i].clone(),
             );
 
-            e_input_gate.borrow_mut().connect_output_to_next_gate(
+            e_input_gate.lock().unwrap().connect_output_to_next_gate(
                 i,
                 1,
                 self.and_gates[i].clone(),
             );
 
-            self.and_gates[i].borrow_mut().connect_output_to_next_gate(
+            self.and_gates[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 output_gates[i].clone(),
@@ -414,7 +413,7 @@ impl VariableBitCPUEnable {
 }
 
 impl LogicGate for VariableBitCPUEnable {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -481,12 +480,12 @@ pub struct SignalGatekeeper {
 
 #[allow(dead_code)]
 impl SignalGatekeeper {
-    pub fn new(number_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(number_bits: usize) -> SharedMutex<Self> {
         assert_ne!(number_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         build_simple_inputs_and_outputs(
             number_bits,
@@ -515,16 +514,16 @@ impl SignalGatekeeper {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(single_gate_keeper))
+        new_shared_mutex(single_gate_keeper)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         number_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         for i in 0..number_bits {
-            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
+            self.complex_gate.input_gates[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 output_gates[i].clone(),
@@ -540,7 +539,7 @@ impl SignalGatekeeper {
 }
 
 impl LogicGate for SignalGatekeeper {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -558,7 +557,7 @@ impl LogicGate for SignalGatekeeper {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
 
-        let e_output = e_input_gate.borrow_mut().fetch_output_signals()?;
+        let e_output = e_input_gate.lock().unwrap().fetch_output_signals()?;
 
         //The SimpleInput only has one output.
         let output = e_output.first().unwrap();
@@ -627,15 +626,15 @@ impl LogicGate for SignalGatekeeper {
 
 pub struct MasterSlaveJKFlipFlop {
     complex_gate: ComplexGateMembers,
-    j_input_nand: Rc<RefCell<Nand>>,
-    k_input_nand: Rc<RefCell<Nand>>,
-    q1_output_nand: Rc<RefCell<Nand>>,
-    q1_not_output_nand: Rc<RefCell<Nand>>,
-    q1_input_nand: Rc<RefCell<Nand>>,
-    q1_not_input_nand: Rc<RefCell<Nand>>,
-    q_output_nand: Rc<RefCell<Nand>>,
-    q_not_output_nand: Rc<RefCell<Nand>>,
-    not_gate: Rc<RefCell<Not>>,
+    j_input_nand: SharedMutex<Nand>,
+    k_input_nand: SharedMutex<Nand>,
+    q1_output_nand: SharedMutex<Nand>,
+    q1_not_output_nand: SharedMutex<Nand>,
+    q1_input_nand: SharedMutex<Nand>,
+    q1_not_input_nand: SharedMutex<Nand>,
+    q_output_nand: SharedMutex<Nand>,
+    q_not_output_nand: SharedMutex<Nand>,
+    not_gate: SharedMutex<Not>,
 }
 
 #[allow(dead_code)]
@@ -649,16 +648,16 @@ impl MasterSlaveJKFlipFlop {
     pub const Q: &'static str = "Q";
     pub const NOT_Q: &'static str = "NOT_Q";
 
-    pub fn new() -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new() -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         input_gates.push(SimpleInput::new(1, MasterSlaveJKFlipFlop::J));
         input_gates.push(SimpleInput::new(3, MasterSlaveJKFlipFlop::CLK_IN));
         input_gates.push(SimpleInput::new(1, MasterSlaveJKFlipFlop::K));
 
-        let mut store_output = |gate: Rc<RefCell<SimpleOutput>>| {
+        let mut store_output = |gate: SharedMutex<SimpleOutput>| {
             output_gates.push(gate.clone());
             output_gates_logic.push(gate.clone());
         };
@@ -687,43 +686,43 @@ impl MasterSlaveJKFlipFlop {
             not_gate: Not::new(2),
         };
 
-        flip_flop.j_input_nand.borrow_mut().set_tag("j_input_nand");
-        flip_flop.k_input_nand.borrow_mut().set_tag("k_input_nand");
-        flip_flop.q1_output_nand.borrow_mut().set_tag("q1_output_nand");
-        flip_flop.q1_not_output_nand.borrow_mut().set_tag("q1_not_output_nand");
-        flip_flop.q1_input_nand.borrow_mut().set_tag("q1_input_nand");
-        flip_flop.q1_not_input_nand.borrow_mut().set_tag("q1_not_input_nand");
-        flip_flop.q_output_nand.borrow_mut().set_tag("q_output_nand");
-        flip_flop.q_not_output_nand.borrow_mut().set_tag("q_not_output_nand");
-        flip_flop.not_gate.borrow_mut().set_tag("not_gate");
+        flip_flop.j_input_nand.lock().unwrap().set_tag("j_input_nand");
+        flip_flop.k_input_nand.lock().unwrap().set_tag("k_input_nand");
+        flip_flop.q1_output_nand.lock().unwrap().set_tag("q1_output_nand");
+        flip_flop.q1_not_output_nand.lock().unwrap().set_tag("q1_not_output_nand");
+        flip_flop.q1_input_nand.lock().unwrap().set_tag("q1_input_nand");
+        flip_flop.q1_not_input_nand.lock().unwrap().set_tag("q1_not_input_nand");
+        flip_flop.q_output_nand.lock().unwrap().set_tag("q_output_nand");
+        flip_flop.q_not_output_nand.lock().unwrap().set_tag("q_not_output_nand");
+        flip_flop.not_gate.lock().unwrap().set_tag("not_gate");
 
         flip_flop.build_and_prime_circuit(output_gates_logic);
 
-        Rc::new(RefCell::new(flip_flop))
+        new_shared_mutex(flip_flop)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
 
         //CLK_IN input
         let clk_input_index = self.get_index_from_tag(MasterSlaveJKFlipFlop::CLK_IN);
         let clk_input_gate = self.complex_gate.input_gates[clk_input_index].clone();
 
-        clk_input_gate.borrow_mut().connect_output_to_next_gate(
+        clk_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             2,
             self.j_input_nand.clone(),
         );
 
-        clk_input_gate.borrow_mut().connect_output_to_next_gate(
+        clk_input_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.k_input_nand.clone(),
         );
 
-        clk_input_gate.borrow_mut().connect_output_to_next_gate(
+        clk_input_gate.lock().unwrap().connect_output_to_next_gate(
             2,
             0,
             self.not_gate.clone(),
@@ -733,7 +732,7 @@ impl MasterSlaveJKFlipFlop {
         let j_input_index = self.get_index_from_tag(MasterSlaveJKFlipFlop::J);
         let j_input_gate = self.complex_gate.input_gates[j_input_index].clone();
 
-        j_input_gate.borrow_mut().connect_output_to_next_gate(
+        j_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.j_input_nand.clone(),
@@ -743,72 +742,72 @@ impl MasterSlaveJKFlipFlop {
         let k_input_index = self.get_index_from_tag(MasterSlaveJKFlipFlop::K);
         let k_input_gate = self.complex_gate.input_gates[k_input_index].clone();
 
-        k_input_gate.borrow_mut().connect_output_to_next_gate(
+        k_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.k_input_nand.clone(),
         );
 
-        self.j_input_nand.borrow_mut().connect_output_to_next_gate(
+        self.j_input_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.q1_output_nand.clone(),
         );
 
-        self.k_input_nand.borrow_mut().connect_output_to_next_gate(
+        self.k_input_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.q1_not_output_nand.clone(),
         );
 
         //q1 output nand
-        self.q1_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q1_output_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.q1_input_nand.clone(),
         );
 
-        self.q1_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q1_output_nand.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.q1_not_output_nand.clone(),
         );
 
         //q1 not output nand
-        self.q1_not_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q1_not_output_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.q1_not_input_nand.clone(),
         );
 
-        self.q1_not_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q1_not_output_nand.lock().unwrap().connect_output_to_next_gate(
             1,
             1,
             self.q1_output_nand.clone(),
         );
 
         //not gate
-        self.not_gate.borrow_mut().connect_output_to_next_gate(
+        self.not_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.q1_input_nand.clone(),
         );
 
-        self.not_gate.borrow_mut().connect_output_to_next_gate(
+        self.not_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.q1_not_input_nand.clone(),
         );
 
         //q1 input nand
-        self.q1_input_nand.borrow_mut().connect_output_to_next_gate(
+        self.q1_input_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.q_output_nand.clone(),
         );
 
         //q1 not input nand
-        self.q1_not_input_nand.borrow_mut().connect_output_to_next_gate(
+        self.q1_not_input_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             1,
             self.q_not_output_nand.clone(),
@@ -816,44 +815,44 @@ impl MasterSlaveJKFlipFlop {
 
         //q output nand
         let output_index = self.get_index_from_tag(MasterSlaveJKFlipFlop::Q);
-        self.q_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q_output_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gates[output_index].clone(),
         );
 
-        self.q_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q_output_nand.lock().unwrap().connect_output_to_next_gate(
             1,
             0,
             self.q_not_output_nand.clone(),
         );
 
-        self.q_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q_output_nand.lock().unwrap().connect_output_to_next_gate(
             2,
             2,
             self.k_input_nand.clone(),
         );
 
         let output_index = self.get_index_from_tag(MasterSlaveJKFlipFlop::NOT_Q);
-        self.q_not_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q_not_output_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gates[output_index].clone(),
         );
 
-        self.q_not_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q_not_output_nand.lock().unwrap().connect_output_to_next_gate(
             1,
             1,
             self.q_output_nand.clone(),
         );
 
-        self.q_not_output_nand.borrow_mut().connect_output_to_next_gate(
+        self.q_not_output_nand.lock().unwrap().connect_output_to_next_gate(
             2,
             0,
             self.j_input_nand.clone(),
         );
 
-        clk_input_gate.borrow_mut().update_input_signal(
+        clk_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -870,7 +869,7 @@ impl MasterSlaveJKFlipFlop {
 }
 
 impl LogicGate for MasterSlaveJKFlipFlop {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -931,11 +930,11 @@ impl LogicGate for MasterSlaveJKFlipFlop {
 
 pub struct FourCycleClockHookup {
     complex_gate: ComplexGateMembers,
-    flip_flop: Rc<RefCell<MasterSlaveJKFlipFlop>>,
-    q_splitter: Rc<RefCell<Splitter>>,
-    q_input_and: Rc<RefCell<And>>,
-    q_not_input_nand: Rc<RefCell<Nand>>,
-    flip_flop_clk_in_not: Rc<RefCell<Not>>,
+    flip_flop: SharedMutex<MasterSlaveJKFlipFlop>,
+    q_splitter: SharedMutex<Splitter>,
+    q_input_and: SharedMutex<And>,
+    q_not_input_nand: SharedMutex<Nand>,
+    flip_flop_clk_in_not: SharedMutex<Not>,
 }
 
 #[allow(dead_code)]
@@ -948,17 +947,17 @@ impl FourCycleClockHookup {
     pub const CLKS: &'static str = "CLKS";
     pub const CLKE: &'static str = "CLKE";
 
-    pub fn new() -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new() -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let input_gate = SimpleInput::new(3, FourCycleClockHookup::CLK_IN);
 
         //Order of input gates is important here to force the circuit into a deterministic state.
         input_gates.push(input_gate.clone());
 
-        let mut store_output = |gate: Rc<RefCell<SimpleOutput>>| {
+        let mut store_output = |gate: SharedMutex<SimpleOutput>| {
             output_gates.push(gate.clone());
             output_gates_logic.push(gate.clone());
         };
@@ -982,27 +981,27 @@ impl FourCycleClockHookup {
             flip_flop_clk_in_not: Not::new(1),
         };
 
-        clock_hookup.flip_flop.borrow_mut().set_tag("flip_flop");
-        clock_hookup.q_splitter.borrow_mut().set_tag("q_splitter");
-        clock_hookup.q_input_and.borrow_mut().set_tag("q_input_and");
-        clock_hookup.q_not_input_nand.borrow_mut().set_tag("q_not_input_nand");
-        clock_hookup.flip_flop_clk_in_not.borrow_mut().set_tag("flip_flop_clk_in_not");
+        clock_hookup.flip_flop.lock().unwrap().set_tag("flip_flop");
+        clock_hookup.q_splitter.lock().unwrap().set_tag("q_splitter");
+        clock_hookup.q_input_and.lock().unwrap().set_tag("q_input_and");
+        clock_hookup.q_not_input_nand.lock().unwrap().set_tag("q_not_input_nand");
+        clock_hookup.flip_flop_clk_in_not.lock().unwrap().set_tag("flip_flop_clk_in_not");
 
         clock_hookup.build_and_prime_circuit(
             output_gates_logic
         );
 
-        Rc::new(RefCell::new(clock_hookup))
+        new_shared_mutex(clock_hookup)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
 
         //Set J to high
-        let j_input_index = self.flip_flop.borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::J);
-        self.flip_flop.borrow_mut().update_input_signal(
+        let j_input_index = self.flip_flop.lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::J);
+        self.flip_flop.lock().unwrap().update_input_signal(
             GateInput::new(
                 j_input_index,
                 HIGH,
@@ -1011,8 +1010,8 @@ impl FourCycleClockHookup {
         );
 
         //Set K to high
-        let k_input_index = self.flip_flop.borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::K);
-        self.flip_flop.borrow_mut().update_input_signal(
+        let k_input_index = self.flip_flop.lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::K);
+        self.flip_flop.lock().unwrap().update_input_signal(
             GateInput::new(
                 k_input_index,
                 HIGH,
@@ -1023,69 +1022,69 @@ impl FourCycleClockHookup {
         //CLK_IN input
         let clk_input_index = self.get_index_from_tag(FourCycleClockHookup::CLK_IN);
         let clk_input_gate = self.complex_gate.input_gates[clk_input_index].clone();
-        clk_input_gate.borrow_mut().connect_output_to_next_gate(
+        clk_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             self.q_input_and.clone(),
         );
 
-        clk_input_gate.borrow_mut().connect_output_to_next_gate(
+        clk_input_gate.lock().unwrap().connect_output_to_next_gate(
             1,
             1,
             self.q_not_input_nand.clone(),
         );
 
-        clk_input_gate.borrow_mut().connect_output_to_next_gate(
+        clk_input_gate.lock().unwrap().connect_output_to_next_gate(
             2,
             0,
             self.flip_flop_clk_in_not.clone(),
         );
 
-        let clk_input_index = self.flip_flop.borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::CLK_IN);
-        self.flip_flop_clk_in_not.borrow_mut().connect_output_to_next_gate(
+        let clk_input_index = self.flip_flop.lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::CLK_IN);
+        self.flip_flop_clk_in_not.lock().unwrap().connect_output_to_next_gate(
             0,
             clk_input_index,
             self.flip_flop.clone(),
         );
 
-        let q_output_index = self.flip_flop.borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::Q);
-        self.flip_flop.borrow_mut().connect_output_to_next_gate(
+        let q_output_index = self.flip_flop.lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::Q);
+        self.flip_flop.lock().unwrap().connect_output_to_next_gate(
             q_output_index,
             0,
             self.q_splitter.clone(),
         );
 
-        let output_index = self.q_splitter.borrow_mut().get_index_for_output(0, 0);
-        self.q_splitter.borrow_mut().connect_output_to_next_gate(
+        let output_index = self.q_splitter.lock().unwrap().get_index_for_output(0, 0);
+        self.q_splitter.lock().unwrap().connect_output_to_next_gate(
             output_index,
             1,
             self.q_input_and.clone(),
         );
 
         let output_index = self.get_index_from_tag(FourCycleClockHookup::CLK_OUT);
-        let splitter_output_index = self.q_splitter.borrow_mut().get_index_for_output(0, 1);
-        self.q_splitter.borrow_mut().connect_output_to_next_gate(
+        let splitter_output_index = self.q_splitter.lock().unwrap().get_index_for_output(0, 1);
+        self.q_splitter.lock().unwrap().connect_output_to_next_gate(
             splitter_output_index,
             1,
             output_gates[output_index].clone(),
         );
 
-        let not_q_output_index = self.flip_flop.borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::NOT_Q);
-        self.flip_flop.borrow_mut().connect_output_to_next_gate(
+        let not_q_output_index = self.flip_flop.lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::NOT_Q);
+        self.flip_flop.lock().unwrap().connect_output_to_next_gate(
             not_q_output_index,
             0,
             self.q_not_input_nand.clone(),
         );
 
         let output_index = self.get_index_from_tag(FourCycleClockHookup::CLKS);
-        self.q_input_and.borrow_mut().connect_output_to_next_gate(
+        self.q_input_and.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gates[output_index].clone(),
         );
 
         let output_index = self.get_index_from_tag(FourCycleClockHookup::CLKE);
-        self.q_not_input_nand.borrow_mut().connect_output_to_next_gate(
+        self.q_not_input_nand.lock().unwrap().connect_output_to_next_gate(
             0,
             0,
             output_gates[output_index].clone(),
@@ -1102,7 +1101,7 @@ impl FourCycleClockHookup {
                 input_signal = LOW_;
             }
 
-            clk_input_gate.borrow_mut().update_input_signal(
+            clk_input_gate.lock().unwrap().update_input_signal(
                 GateInput::new(
                     0,
                     input_signal.clone(),
@@ -1116,7 +1115,7 @@ impl FourCycleClockHookup {
             );
         }
 
-        clk_input_gate.borrow_mut().update_input_signal(
+        clk_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 LOW_,
@@ -1150,16 +1149,16 @@ impl FourCycleClockHookup {
         }
 
         //J and K on the flip flop are tied high
-        // check_output(&self.flip_flop.borrow_mut().complex_gate.simple_gate);
-        check_output(&self.q_splitter.borrow_mut().members);
-        check_output(&self.q_input_and.borrow_mut().members);
-        check_output(&self.q_not_input_nand.borrow_mut().members);
-        check_output(&self.flip_flop_clk_in_not.borrow_mut().members);
+        // check_output(&self.flip_flop.lock().unwrap().complex_gate.simple_gate);
+        check_output(&self.q_splitter.lock().unwrap().members);
+        check_output(&self.q_input_and.lock().unwrap().members);
+        check_output(&self.q_not_input_nand.lock().unwrap().members);
+        check_output(&self.flip_flop_clk_in_not.lock().unwrap().members);
     }
 }
 
 impl LogicGate for FourCycleClockHookup {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -1220,14 +1219,14 @@ impl LogicGate for FourCycleClockHookup {
 
 pub struct VariableBitMultiplexer {
     complex_gate: ComplexGateMembers,
-    input_and_gates: Vec<Rc<RefCell<And>>>,
-    input_or_gates: Vec<Rc<RefCell<Or>>>,
-    control_lines: Vec<Rc<RefCell<Not>>>,
+    input_and_gates: Vec<SharedMutex<And>>,
+    input_or_gates: Vec<SharedMutex<Or>>,
+    control_lines: Vec<SharedMutex<Not>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitMultiplexer {
-    pub fn new(bus_size: usize, number_inputs: usize) -> Rc<RefCell<Self>> {
+    pub fn new(bus_size: usize, number_inputs: usize) -> SharedMutex<Self> {
         assert_ne!(bus_size, 0);
         assert_ne!(number_inputs, 0);
 
@@ -1235,25 +1234,25 @@ impl VariableBitMultiplexer {
 
         assert_eq!(usize::pow(2, num_control_lines as u32), number_inputs);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
-        let mut input_and_gates: Vec<Rc<RefCell<And>>> = Vec::new();
-        let mut input_or_gates: Vec<Rc<RefCell<Or>>> = Vec::new();
-        let mut control_lines: Vec<Rc<RefCell<Not>>> = Vec::new();
+        let mut input_and_gates: Vec<SharedMutex<And>> = Vec::new();
+        let mut input_or_gates: Vec<SharedMutex<Or>> = Vec::new();
+        let mut control_lines: Vec<SharedMutex<Not>> = Vec::new();
 
 
         let loop_num = bus_size * number_inputs;
         for i in 0..loop_num {
             let and_gate = And::new(num_control_lines + 1, 1);
-            and_gate.borrow_mut().set_tag(format!("and_{}", i).as_str());
+            and_gate.lock().unwrap().set_tag(format!("and_{}", i).as_str());
             input_and_gates.push(and_gate);
         }
 
         for i in 0..bus_size {
             let or_gate = Or::new(number_inputs, 1);
-            or_gate.borrow_mut().set_tag(format!("or_{}", i).as_str());
+            or_gate.lock().unwrap().set_tag(format!("or_{}", i).as_str());
             input_or_gates.push(or_gate);
         }
 
@@ -1266,14 +1265,14 @@ impl VariableBitMultiplexer {
 
         for i in 0..num_control_lines {
             let not_gate = Not::new((number_inputs * bus_size) / 2);
-            not_gate.borrow_mut().set_tag(format!("not_{}", i).as_str());
+            not_gate.lock().unwrap().set_tag(format!("not_{}", i).as_str());
             control_lines.push(not_gate);
 
             let input_tag = format!("C_{}", i);
             input_gates.push(SimpleInput::new((number_inputs * bus_size) / 2 + 1, input_tag.as_str()));
         }
 
-        let mut store_output = |gate: Rc<RefCell<SimpleOutput>>| {
+        let mut store_output = |gate: SharedMutex<SimpleOutput>| {
             output_gates.push(gate.clone());
             output_gates_logic.push(gate.clone());
         };
@@ -1303,7 +1302,7 @@ impl VariableBitMultiplexer {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(multiplexer))
+        new_shared_mutex(multiplexer)
     }
 
     fn build_and_prime_circuit(
@@ -1311,7 +1310,7 @@ impl VariableBitMultiplexer {
         bus_size: usize,
         number_inputs: usize,
         num_control_lines: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let mut not_current_index = vec![0; num_control_lines];
         let mut normal_current_index = vec![0; num_control_lines];
@@ -1322,7 +1321,7 @@ impl VariableBitMultiplexer {
             let control_index = self.get_index_from_tag(control_input_tag.as_str());
             let control_input_gate = self.complex_gate.input_gates[control_index].clone();
 
-            control_input_gate.borrow_mut().connect_output_to_next_gate(
+            control_input_gate.lock().unwrap().connect_output_to_next_gate(
                 normal_current_index[i],
                 0,
                 self.control_lines[i].clone(),
@@ -1341,7 +1340,7 @@ impl VariableBitMultiplexer {
                 let input_gate = self.complex_gate.input_gates[input_index].clone();
 
                 let and_gate_index = j * number_inputs + i;
-                input_gate.borrow_mut().connect_output_to_next_gate(
+                input_gate.lock().unwrap().connect_output_to_next_gate(
                     0,
                     0,
                     self.input_and_gates[and_gate_index].clone(),
@@ -1350,7 +1349,7 @@ impl VariableBitMultiplexer {
                 for (k, c) in binary_number.chars().enumerate() {
                     if c == '0' {
                         //Not input to and gate.
-                        self.control_lines[k].borrow_mut().connect_output_to_next_gate(
+                        self.control_lines[k].lock().unwrap().connect_output_to_next_gate(
                             not_current_index[k],
                             k + 1,
                             self.input_and_gates[and_gate_index].clone(),
@@ -1362,7 +1361,7 @@ impl VariableBitMultiplexer {
                         let control_index = self.get_index_from_tag(control_input_tag.as_str());
                         let control_input_gate = self.complex_gate.input_gates[control_index].clone();
 
-                        control_input_gate.borrow_mut().connect_output_to_next_gate(
+                        control_input_gate.lock().unwrap().connect_output_to_next_gate(
                             normal_current_index[k],
                             k + 1,
                             self.input_and_gates[and_gate_index].clone(),
@@ -1378,7 +1377,7 @@ impl VariableBitMultiplexer {
             let or_gate_index = i / number_inputs;
             let next_gate_input_key = i % number_inputs;
 
-            self.input_and_gates[i].borrow_mut().connect_output_to_next_gate(
+            self.input_and_gates[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 next_gate_input_key,
                 self.input_or_gates[or_gate_index].clone(),
@@ -1388,7 +1387,7 @@ impl VariableBitMultiplexer {
         for i in 0..bus_size {
             let output_tag = format!("o_{}", i);
             let output_index = self.get_index_from_tag(output_tag.as_str());
-            self.input_or_gates[i].borrow_mut().connect_output_to_next_gate(
+            self.input_or_gates[i].lock().unwrap().connect_output_to_next_gate(
                 0,
                 0,
                 output_gates[output_index].clone(),
@@ -1429,21 +1428,21 @@ impl VariableBitMultiplexer {
         }
 
         for i in self.input_and_gates.iter() {
-            check_output(&i.borrow_mut().members);
+            check_output(&i.lock().unwrap().members);
         }
 
         for i in self.input_or_gates.iter() {
-            check_output(&i.borrow_mut().members);
+            check_output(&i.lock().unwrap().members);
         }
 
         for i in self.control_lines.iter() {
-            check_output(&i.borrow_mut().members);
+            check_output(&i.lock().unwrap().members);
         }
     }
 }
 
 impl LogicGate for VariableBitMultiplexer {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -1504,9 +1503,9 @@ impl LogicGate for VariableBitMultiplexer {
 
 pub struct VariableBitCounter {
     complex_gate: ComplexGateMembers,
-    flip_flops: Vec<Rc<RefCell<MasterSlaveJKFlipFlop>>>,
-    flip_flop_clk_in_not_gates: Vec<Rc<RefCell<Not>>>,
-    flip_flop_output_splitter: Rc<RefCell<Splitter>>,
+    flip_flops: Vec<SharedMutex<MasterSlaveJKFlipFlop>>,
+    flip_flop_clk_in_not_gates: Vec<SharedMutex<Not>>,
+    flip_flop_output_splitter: SharedMutex<Splitter>,
 }
 
 #[allow(dead_code)]
@@ -1514,10 +1513,10 @@ impl VariableBitCounter {
     //Inputs
     pub const CLK_IN: &'static str = "CLK_IN";
 
-    pub fn new(num_output_pins: usize) -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new(num_output_pins: usize) -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let input_gate = SimpleInput::new(1, Self::CLK_IN);
 
@@ -1527,7 +1526,7 @@ impl VariableBitCounter {
         let mut flip_flops = Vec::new();
         let mut flip_flop_clk_in_not_gates = Vec::new();
 
-        let mut store_output = |gate: Rc<RefCell<SimpleOutput>>| {
+        let mut store_output = |gate: SharedMutex<SimpleOutput>| {
             output_gates.push(gate.clone());
             output_gates_logic.push(gate.clone());
         };
@@ -1554,8 +1553,8 @@ impl VariableBitCounter {
         };
 
         for i in 0..num_output_pins {
-            clock_hookup.flip_flops[i].borrow_mut().set_tag(format!("flip_flop_{}", i).as_str());
-            clock_hookup.flip_flop_clk_in_not_gates[i].borrow_mut().set_tag(format!("flip_flop_clk_in_not_{}", i).as_str());
+            clock_hookup.flip_flops[i].lock().unwrap().set_tag(format!("flip_flop_{}", i).as_str());
+            clock_hookup.flip_flop_clk_in_not_gates[i].lock().unwrap().set_tag(format!("flip_flop_clk_in_not_{}", i).as_str());
         }
 
         clock_hookup.build_and_prime_circuit(
@@ -1563,18 +1562,18 @@ impl VariableBitCounter {
             num_output_pins,
         );
 
-        Rc::new(RefCell::new(clock_hookup))
+        new_shared_mutex(clock_hookup)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
         num_output_pins: usize,
     ) {
         for i in 0..num_output_pins {
             //Set J to high
-            let j_input_index = self.flip_flops[i].borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::J);
-            self.flip_flops[i].borrow_mut().update_input_signal(
+            let j_input_index = self.flip_flops[i].lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::J);
+            self.flip_flops[i].lock().unwrap().update_input_signal(
                 GateInput::new(
                     j_input_index,
                     HIGH,
@@ -1583,8 +1582,8 @@ impl VariableBitCounter {
             );
 
             //Set K to high
-            let k_input_index = self.flip_flops[i].borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::K);
-            self.flip_flops[i].borrow_mut().update_input_signal(
+            let k_input_index = self.flip_flops[i].lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::K);
+            self.flip_flops[i].lock().unwrap().update_input_signal(
                 GateInput::new(
                     k_input_index,
                     HIGH,
@@ -1592,8 +1591,8 @@ impl VariableBitCounter {
                 )
             );
 
-            let not_q_output_index = self.flip_flops[i].borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::NOT_Q);
-            self.flip_flops[i].borrow_mut().connect_output_to_next_gate(
+            let not_q_output_index = self.flip_flops[i].lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::NOT_Q);
+            self.flip_flops[i].lock().unwrap().connect_output_to_next_gate(
                 not_q_output_index,
                 i,
                 self.flip_flop_output_splitter.clone(),
@@ -1604,26 +1603,26 @@ impl VariableBitCounter {
                 let clk_input_index = self.get_index_from_tag(Self::CLK_IN);
                 let clk_input_gate = self.complex_gate.input_gates[clk_input_index].clone();
 
-                let clk_input_index = self.flip_flops[i].borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::CLK_IN);
-                clk_input_gate.borrow_mut().connect_output_to_next_gate(
+                let clk_input_index = self.flip_flops[i].lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::CLK_IN);
+                clk_input_gate.lock().unwrap().connect_output_to_next_gate(
                     0,
                     clk_input_index,
                     self.flip_flops[i].clone(),
                 );
             } else {
-                let clk_input_index = self.flip_flops[i].borrow_mut().get_index_from_tag(MasterSlaveJKFlipFlop::CLK_IN);
-                let splitter_output_index = self.flip_flop_output_splitter.borrow_mut().get_index_for_output(i - 1, 1);
-                self.flip_flop_output_splitter.borrow_mut().connect_output_to_next_gate(
+                let clk_input_index = self.flip_flops[i].lock().unwrap().get_index_from_tag(MasterSlaveJKFlipFlop::CLK_IN);
+                let splitter_output_index = self.flip_flop_output_splitter.lock().unwrap().get_index_for_output(i - 1, 1);
+                self.flip_flop_output_splitter.lock().unwrap().connect_output_to_next_gate(
                     splitter_output_index,
                     clk_input_index,
                     self.flip_flops[i].clone(),
                 );
             }
 
-            let splitter_output_index = self.flip_flop_output_splitter.borrow_mut().get_index_for_output(i, 0);
+            let splitter_output_index = self.flip_flop_output_splitter.lock().unwrap().get_index_for_output(i, 0);
             let output_tag = format!("o_{}", i);
             let output_index = self.get_index_from_tag(output_tag.as_str());
-            self.flip_flop_output_splitter.borrow_mut().connect_output_to_next_gate(
+            self.flip_flop_output_splitter.lock().unwrap().connect_output_to_next_gate(
                 splitter_output_index,
                 0,
                 output_gates[output_index].clone(),
@@ -1661,14 +1660,14 @@ impl VariableBitCounter {
         }
 
         for i in 0..self.flip_flops.len() {
-            check_output(&self.flip_flops[i].borrow_mut().complex_gate.simple_gate);
-            check_output(&self.flip_flop_clk_in_not_gates[i].borrow_mut().members);
+            check_output(&self.flip_flops[i].lock().unwrap().complex_gate.simple_gate);
+            check_output(&self.flip_flop_clk_in_not_gates[i].lock().unwrap().members);
         }
     }
 }
 
 impl LogicGate for VariableBitCounter {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
+    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
         self.complex_gate.connect_output_to_next_gate(
             self.get_unique_id(),
             current_gate_output_key,
@@ -1740,7 +1739,7 @@ mod tests {
         let num_bits = rand::thread_rng().gen_range(1..=16);
         let cpu_enable = VariableBitCPUEnable::new(num_bits);
 
-        let output = cpu_enable.borrow_mut().fetch_output_signals().unwrap();
+        let output = cpu_enable.lock().unwrap().fetch_output_signals().unwrap();
 
         assert_eq!(output.len(), num_bits);
         for out in output {
@@ -1835,7 +1834,7 @@ mod tests {
     fn master_slave_jk_flip_flop_initialization() {
         let flip_flop = MasterSlaveJKFlipFlop::new();
 
-        let clock_output = flip_flop.borrow_mut().fetch_output_signals().unwrap();
+        let clock_output = flip_flop.lock().unwrap().fetch_output_signals().unwrap();
 
         let mut output_signals = Vec::new();
         for out in clock_output {
@@ -1879,7 +1878,7 @@ mod tests {
     fn four_cycle_clock_hookup_initialization() {
         let clock = FourCycleClockHookup::new();
 
-        let clock_output = clock.borrow_mut().fetch_output_signals().unwrap();
+        let clock_output = clock.lock().unwrap().fetch_output_signals().unwrap();
 
         let mut output_signals = Vec::new();
         for out in clock_output {
@@ -1900,7 +1899,7 @@ mod tests {
     #[test]
     fn four_cycle_clock_hookup_run() {
         let clock_hookup = FourCycleClockHookup::new();
-        clock_hookup.borrow_mut().toggle_output_printing(true);
+        clock_hookup.lock().unwrap().toggle_output_printing(true);
         run_multi_input_output_logic_gate(
             vec![],
             vec![
@@ -1922,7 +1921,7 @@ mod tests {
     fn multiplexer_init() {
         let multiplexer = VariableBitMultiplexer::new(3, 2);
 
-        let multiplexer_output = multiplexer.borrow_mut().fetch_output_signals().unwrap();
+        let multiplexer_output = multiplexer.lock().unwrap().fetch_output_signals().unwrap();
 
         let mut output_signals = Vec::new();
         for out in multiplexer_output {
@@ -1986,14 +1985,14 @@ mod tests {
     #[should_panic]
     fn multiplexer_invalid_num_input() {
         let multi = VariableBitMultiplexer::new(2, 3);
-        multi.borrow_mut().toggle_output_printing(true);
+        multi.lock().unwrap().toggle_output_printing(true);
     }
 
     #[test]
     fn variable_bit_counter_initialization() {
         let counter = VariableBitCounter::new(4);
 
-        let counter_output = counter.borrow_mut().fetch_output_signals().unwrap();
+        let counter_output = counter.lock().unwrap().fetch_output_signals().unwrap();
 
         let mut output_signals = Vec::new();
         for out in counter_output {

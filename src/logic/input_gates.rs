@@ -1,9 +1,8 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, InputSignalReturn, BasicGateMembers, ConnectedOutput, set_all_gate_output_to_signal};
 use crate::logic::foundations::{Signal::{HIGH, LOW_}};
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub struct Clock {
     output_states: Vec<GateOutputState>,
@@ -17,7 +16,7 @@ pub struct Clock {
 
 #[allow(dead_code)]
 impl Clock {
-    pub fn new(output_num: usize, tag: &str) -> Rc<RefCell<Self>> {
+    pub fn new(output_num: usize, tag: &str) -> SharedMutex<Self> {
         assert_ne!(output_num, 0);
         let mut clock = Clock {
             output_states: Vec::with_capacity(output_num),
@@ -34,7 +33,7 @@ impl Clock {
             || GateOutputState::NotConnected(LOW_),
         );
 
-        Rc::new(RefCell::new(clock))
+        new_shared_mutex(clock)
     }
 
     fn get_formatted_input(&self) -> Vec<HashMap<UniqueID, Signal>> {
@@ -73,7 +72,7 @@ impl LogicGate for Clock {
         &mut self,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
-        next_gate: Rc<RefCell<dyn LogicGate>>
+        next_gate: SharedMutex<dyn LogicGate>,
     ) {
         GateLogic::connect_output_to_next_gate(
             self.gate_type,
@@ -110,7 +109,7 @@ impl LogicGate for Clock {
 
         let output_signal = GateLogic::calculate_output_from_inputs(
             &self.gate_type,
-            &input_signals
+            &input_signals,
         )?;
 
         self.previous_signal = output_signal;
@@ -165,7 +164,7 @@ pub struct AutomaticInput {
 
 #[allow(dead_code)]
 impl AutomaticInput {
-    pub fn new(values_to_be_output: Vec<Signal>, output_num: usize, tag: &str) -> Rc<RefCell<Self>> {
+    pub fn new(values_to_be_output: Vec<Signal>, output_num: usize, tag: &str) -> SharedMutex<Self> {
         let mut automatic_input = AutomaticInput {
             values_to_be_output,
             output_states: Vec::with_capacity(output_num),
@@ -181,7 +180,7 @@ impl AutomaticInput {
             || GateOutputState::NotConnected(HIGH),
         );
 
-        Rc::new(RefCell::new(automatic_input))
+        new_shared_mutex(automatic_input)
     }
 
     fn get_formatted_input(&self) -> Vec<HashMap<UniqueID, Signal>> {
@@ -216,7 +215,7 @@ impl LogicGate for AutomaticInput {
         &mut self,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
-        next_gate: Rc<RefCell<dyn LogicGate>>,
+        next_gate: SharedMutex<dyn LogicGate>,
     ) {
         let mut values_to_be_output = self.get_formatted_input();
         GateLogic::connect_output_to_next_gate(
@@ -309,21 +308,19 @@ pub struct SimpleInput {
 
 #[allow(dead_code)]
 impl SimpleInput {
-    pub fn new(output_num: usize, tag: &str) -> Rc<RefCell<Self>> {
+    pub fn new(output_num: usize, tag: &str) -> SharedMutex<Self> {
         assert_ne!(output_num, 0);
 
-        Rc::new(
-            RefCell::new(
-                SimpleInput {
-                    members: BasicGateMembers::new(
-                        1,
-                        output_num,
-                        GateType::SimpleInputType,
-                        Some(LOW_),
-                    ),
-                    tag: String::from(tag),
-                }
-            )
+        new_shared_mutex(
+            SimpleInput {
+                members: BasicGateMembers::new(
+                    1,
+                    output_num,
+                    GateType::SimpleInputType,
+                    Some(LOW_),
+                ),
+                tag: String::from(tag),
+            }
         )
     }
 }
@@ -333,7 +330,7 @@ impl LogicGate for SimpleInput {
         &mut self,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
-        next_gate: Rc<RefCell<dyn LogicGate>>,
+        next_gate: SharedMutex<dyn LogicGate>,
     ) {
         GateLogic::connect_output_to_next_gate(
             self.members.gate_type,
@@ -394,7 +391,7 @@ impl LogicGate for SimpleInput {
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(
-            input_index, connected_id
+            input_index, connected_id,
         );
     }
 
@@ -410,7 +407,6 @@ fn disconnect_gate(
     unique_id: UniqueID,
     tag: &str,
 ) {
-
     let next_gate_info: ConnectedOutput;
     if let Some(output_state) = output_states.get(current_output_index) {
         match output_state {
@@ -435,8 +431,8 @@ fn disconnect_gate(
         )
     }
 
-    next_gate_info.gate.borrow_mut().remove_connected_input(
-        next_gate_info.throughput.input_index, unique_id
+    next_gate_info.gate.lock().unwrap().remove_connected_input(
+        next_gate_info.throughput.input_index, unique_id,
     );
 
     output_states[current_output_index] = GateOutputState::NotConnected(next_gate_info.throughput.signal);
