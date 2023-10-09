@@ -4,7 +4,7 @@ use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use crate::globals::{CLOCK_TICK_NUMBER, get_clock_tick_number};
-use crate::logic::foundations::{ComplexGateMembers, GateInput, GateOutputState, GateTagInfo, GateTagType, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{ComplexGateMembers, connect_gates, GateInput, GateOutputState, GateTagInfo, GateTagType, LogicGate, Signal, UniqueID};
 use crate::logic::input_gates::AutomaticInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::{run_circuit, start_clock};
@@ -94,10 +94,11 @@ pub fn run_multi_input_output_logic_gate_return(
             if i == 0 {
                 let input_gate = AutomaticInput::new(vec![signal], 1, "Start");
 
-                input_gate.lock().unwrap().connect_output_to_next_gate(
+                connect_gates(
+                    input_gate.clone(),
                     0,
-                    cell_index,
                     Arc::clone(&gate),
+                    cell_index,
                 );
 
                 input_gates.push(input_gate);
@@ -130,10 +131,11 @@ pub fn run_multi_input_output_logic_gate_return(
                 if i == 0 {
                     let input_gate = AutomaticInput::new(vec![signal], 1, "Start");
 
-                    input_gate.lock().unwrap().connect_output_to_next_gate(
+                    connect_gates(
+                        input_gate.clone(),
                         0,
-                        tag_index,
                         Arc::clone(&gate),
+                        tag_index,
                     );
 
                     input_gates.push(input_gate);
@@ -178,10 +180,11 @@ pub fn run_multi_input_output_logic_gate_return(
     for i in 0..num_outputs {
         let output_gate = SimpleOutput::new("End");
 
-        gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            gate.clone(),
             i,
-            0,
             output_gate.clone(),
+            0,
         );
 
         output_gates.push(output_gate);
@@ -253,28 +256,31 @@ pub fn test_simple_gate(
     input_gates.push(first_pin_input.clone());
     output_gates.push(output_gate.clone());
 
-    first_pin_input.lock().unwrap().connect_output_to_next_gate(
-        0,
+    connect_gates(
+        first_pin_input.clone(),
         0,
         gate.clone(),
+        0,
     );
 
     if let Some(second_input) = second_input {
         let second_pin_input = AutomaticInput::new(vec![second_input], 1, "");
 
-        second_pin_input.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            second_pin_input.clone(),
             0,
-            1,
             gate.clone(),
+            1,
         );
 
         input_gates.push(second_pin_input.clone());
     }
 
-    gate.lock().unwrap().connect_output_to_next_gate(
-        0,
+    connect_gates(
+        gate.clone(),
         0,
         output_gate.clone(),
+        0,
     );
 
     start_clock(

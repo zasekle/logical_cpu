@@ -1,5 +1,5 @@
 use crate::logic::basic_gates::{Nand, Nor};
-use crate::logic::foundations::{ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, push_reg_outputs_to_output_gates, Signal, UniqueID};
+use crate::logic::foundations::{ComplexGateMembers, connect_gates, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, push_reg_outputs_to_output_gates, Signal, UniqueID};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
@@ -82,40 +82,46 @@ impl SRLatch {
         let q_output_gate = output_gates[self.get_index_from_tag("Q")].clone();
         let not_q_output_gate = output_gates[self.get_index_from_tag("~Q")].clone();
 
-        r_input_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            r_input_gate.clone(),
             0,
             self.top_nor_gate.clone(),
+            0,
         );
 
-        s_input_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            s_input_gate.clone(),
             0,
-            1,
             self.bottom_nor_gate.clone(),
+            1,
         );
 
-        self.top_nor_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.top_nor_gate.clone(),
             0,
             q_output_gate.clone(),
+            0,
         );
 
-        self.top_nor_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            self.top_nor_gate.clone(),
             1,
-            0,
             self.bottom_nor_gate.clone(),
+            0,
         );
 
-        self.bottom_nor_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.bottom_nor_gate.clone(),
             0,
             not_q_output_gate.clone(),
+            0,
         );
 
-        self.bottom_nor_gate.lock().unwrap().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.bottom_nor_gate.clone(),
             1,
             self.top_nor_gate.clone(),
+            1,
         );
 
         //Prime gates
@@ -127,13 +133,17 @@ impl SRLatch {
 }
 
 impl LogicGate for SRLatch {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -171,10 +181,6 @@ impl LogicGate for SRLatch {
 
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -259,40 +265,46 @@ impl ActiveLowSRLatch {
         let q_output_gate = output_gates[self.get_index_from_tag("Q")].clone();
         let not_q_output_gate = output_gates[self.get_index_from_tag("~Q")].clone();
 
-        s_input_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            s_input_gate.clone(),
             0,
             self.top_nand_gate.clone(),
+            0,
         );
 
-        r_input_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            r_input_gate.clone(),
             0,
-            1,
             self.bottom_nand_gate.clone(),
+            1,
         );
 
-        self.top_nand_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.top_nand_gate.clone(),
             0,
             q_output_gate.clone(),
+            0,
         );
 
-        self.top_nand_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            self.top_nand_gate.clone(),
             1,
-            0,
             self.bottom_nand_gate.clone(),
+            0,
         );
 
-        self.bottom_nand_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.bottom_nand_gate.clone(),
             0,
             not_q_output_gate.clone(),
+            0,
         );
 
-        self.bottom_nand_gate.lock().unwrap().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.bottom_nand_gate.clone(),
             1,
             self.top_nand_gate.clone(),
+            1,
         );
 
         //Prime gates
@@ -304,13 +316,17 @@ impl ActiveLowSRLatch {
 }
 
 impl LogicGate for ActiveLowSRLatch {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -348,10 +364,6 @@ impl LogicGate for ActiveLowSRLatch {
 
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -454,66 +466,76 @@ impl OneBitMemoryCell {
 
         let s_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("S")].clone();
 
-        s_input_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            s_input_gate.clone(),
             0,
             self.set_enable_nand_gate.clone(),
-        );
-
-        e_input_gate.lock().unwrap().connect_output_to_next_gate(
             0,
-            1,
-            self.set_enable_nand_gate.clone(),
         );
 
-        e_input_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            e_input_gate.clone(),
+            0,
+            self.set_enable_nand_gate.clone(),
             1,
+        );
+
+        connect_gates(
+            e_input_gate.clone(),
             1,
             self.enable_nand_gate.clone(),
+            1,
         );
 
-        self.set_enable_nand_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.set_enable_nand_gate.clone(),
             0,
             self.sr_top_nand_gate.clone(),
+            0,
         );
 
-        self.set_enable_nand_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            self.set_enable_nand_gate.clone(),
             1,
-            0,
             self.enable_nand_gate.clone(),
+            0,
         );
 
-        self.enable_nand_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            self.enable_nand_gate.clone(),
             0,
-            1,
             self.sr_bottom_nand_gate.clone(),
+            1,
         );
 
-        self.sr_top_nand_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.sr_top_nand_gate.clone(),
             0,
             output_gates[0].clone(),
+            0,
         );
 
-        self.sr_top_nand_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            self.sr_top_nand_gate.clone(),
             1,
-            0,
             self.sr_bottom_nand_gate.clone(),
+            0,
         );
 
         for i in 1..output_num {
-            self.sr_top_nand_gate.lock().unwrap().connect_output_to_next_gate(
+            connect_gates(
+                self.sr_top_nand_gate.clone(),
                 i + 1,
-                0,
                 output_gates[i].clone(),
+                0,
             );
         }
 
-        self.sr_bottom_nand_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            self.sr_bottom_nand_gate.clone(),
             0,
-            1,
             self.sr_top_nand_gate.clone(),
+            1,
         );
 
         //Prime gates
@@ -525,13 +547,17 @@ impl OneBitMemoryCell {
 }
 
 impl LogicGate for OneBitMemoryCell {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -569,10 +595,6 @@ impl LogicGate for OneBitMemoryCell {
 
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -651,30 +673,34 @@ impl VariableBitMemoryCell {
             let enable_gate_index = self.one_bit_memory_cells[i].lock().unwrap().get_index_from_tag("E");
             let set_gate_index = self.one_bit_memory_cells[i].lock().unwrap().get_index_from_tag("S");
 
-            self.complex_gate.input_gates[i].lock().unwrap().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[i].clone(),
                 0,
+                self.one_bit_memory_cells[i].clone(),
                 set_gate_index,
-                self.one_bit_memory_cells[i].clone(),
             );
 
-            s_input_gate.lock().unwrap().connect_output_to_next_gate(
+            connect_gates(
+                s_input_gate.clone(),
                 i,
-                enable_gate_index,
                 self.one_bit_memory_cells[i].clone(),
+                enable_gate_index,
             );
 
-            self.one_bit_memory_cells[i].lock().unwrap().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                self.one_bit_memory_cells[i].clone(),
                 0,
                 output_gates[i].clone(),
+                0,
             );
 
             let reg_tag = format!("reg_{}", i);
             let reg_idx = self.get_index_from_tag(reg_tag.as_str());
-            self.one_bit_memory_cells[i].lock().unwrap().connect_output_to_next_gate(
+            connect_gates(
+                self.one_bit_memory_cells[i].clone(),
                 1,
-                0,
                 output_gates[reg_idx].clone(),
+                0,
             );
         }
 
@@ -689,13 +715,17 @@ impl VariableBitMemoryCell {
 }
 
 impl LogicGate for VariableBitMemoryCell {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -733,10 +763,6 @@ impl LogicGate for VariableBitMemoryCell {
 
     fn get_index_from_tag(&self, tag: &str) -> usize {
         self.complex_gate.get_index_from_tag(tag)
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -783,31 +809,35 @@ mod tests {
         output_gates.push(not_q_output_gate.clone());
 
         let r_index = sr_latch.lock().unwrap().get_index_from_tag("R");
-        r_input_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            r_input_gate.clone(),
             0,
-            r_index,
             sr_latch.clone(),
+            r_index,
         );
 
         let s_index = sr_latch.lock().unwrap().get_index_from_tag("S");
-        s_input_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            s_input_gate.clone(),
             0,
-            s_index,
             sr_latch.clone(),
+            s_index,
         );
 
         let q_output_idx = sr_latch.lock().unwrap().get_index_from_tag("Q");
-        sr_latch.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            sr_latch.clone(),
             q_output_idx,
-            0,
             q_output_gate.clone(),
+            0,
         );
 
         let not_q_output_idx = sr_latch.lock().unwrap().get_index_from_tag("~Q");
-        sr_latch.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            sr_latch.clone(),
             not_q_output_idx,
-            0,
             not_q_output_gate.clone(),
+            0,
         );
 
         let mut collected_output: [Vec<Signal>; 2] = [Vec::new(), Vec::new()];
@@ -884,31 +914,35 @@ mod tests {
         let one_bit_memory_cell = OneBitMemoryCell::new(2);
 
         let e_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag("E");
-        e_input_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            e_input_gate.clone(),
             0,
-            e_index,
             one_bit_memory_cell.clone(),
+            e_index,
         );
 
         let s_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag("S");
-        s_input_gate.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            s_input_gate.clone(),
             0,
-            s_index,
             one_bit_memory_cell.clone(),
+            s_index,
         );
 
         let q_output_idx = one_bit_memory_cell.lock().unwrap().get_index_from_tag("Q");
-        one_bit_memory_cell.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            one_bit_memory_cell.clone(),
             q_output_idx,
-            0,
             q_output_gate.clone(),
+            0,
         );
 
         let second_q_output_idx = one_bit_memory_cell.lock().unwrap().get_index_from_tag("Q_1");
-        one_bit_memory_cell.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            one_bit_memory_cell.clone(),
             second_q_output_idx,
-            0,
             second_q_output_gate.clone(),
+            0,
         );
 
         let mut collected_output: Vec<Signal> = Vec::new();
@@ -960,7 +994,7 @@ mod tests {
 
     #[test]
     fn sr_gate_initialization() {
-        let mut sr_latch = SRLatch::new();
+        let sr_latch = SRLatch::new();
 
         let output = sr_latch.lock().unwrap().fetch_output_signals().unwrap();
 

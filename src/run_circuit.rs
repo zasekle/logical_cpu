@@ -6,7 +6,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
-use crate::logic::foundations::{GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{connect_gates, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::{AutomaticInput, Clock};
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
@@ -48,6 +48,8 @@ pub struct RunCircuitThreadPool {
     condvar_wrapper: Arc<CondvarWrapper>,
 }
 
+//TODO: Will need to change the lock inside connect_output_to_next_gate() to some kind of a shared
+// function in order to avoid deadlock.
 //TODO: For now the goal here is to get a working interface. Performance can be improved upon later.
 impl RunCircuitThreadPool {
 
@@ -492,10 +494,11 @@ pub fn run_instructions(
     let clk_in_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::CLK_IN);
     cpu.lock().unwrap().get_clock_synced_with_cpu(&clock);
 
-    clock.lock().unwrap().connect_output_to_next_gate(
+    connect_gates(
+        clock.clone(),
         0,
-        clk_in_index,
         cpu.clone(),
+        clk_in_index,
     );
 
     input_gates.push(clock.clone());
@@ -504,10 +507,11 @@ pub fn run_instructions(
     let end_output_gate = SimpleOutput::new(END_OUTPUT_GATE_TAG);
 
     let cpu_end_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::END);
-    cpu.lock().unwrap().connect_output_to_next_gate(
+    connect_gates(
+        cpu.clone(),
         cpu_end_index,
-        0,
         end_output_gate.clone(),
+        0,
     );
 
     output_gates.push(end_output_gate.clone());
@@ -587,17 +591,19 @@ pub fn load_values_into_ram(
     );
 
     let load_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::LOAD);
-    load_automatic_input.lock().unwrap().connect_output_to_next_gate(
+    connect_gates(
+        load_automatic_input.clone(),
         0,
-        load_index,
         cpu.clone(),
+        load_index,
     );
 
     let memory_address_register_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::MARS);
-    memory_address_register_automatic_input.lock().unwrap().connect_output_to_next_gate(
+    connect_gates(
+        memory_address_register_automatic_input.clone(),
         0,
-        memory_address_register_index,
         cpu.clone(),
+        memory_address_register_index,
     );
 
     let mut automatic_input_gates: Vec<SharedMutex<AutomaticInput>> = Vec::new();
@@ -606,10 +612,11 @@ pub fn load_values_into_ram(
     cpu.lock().unwrap().get_clock_synced_with_cpu(&clock);
 
     let clk_in_index = cpu.lock().unwrap().get_index_from_tag(VariableBitCPU::CLK_IN);
-    clock.lock().unwrap().connect_output_to_next_gate(
+    connect_gates(
+        clock.clone(),
         0,
-        clk_in_index,
         cpu.clone(),
+        clk_in_index,
     );
 
     input_gates.push(clock.clone());
@@ -621,10 +628,11 @@ pub fn load_values_into_ram(
     for (i, input) in automatic_inputs.iter().enumerate() {
         let ram_input_tag = format!("{}_{}", VariableBitCPU::RAM, i);
         let ram_input_index = cpu.lock().unwrap().get_index_from_tag(ram_input_tag.as_str());
-        input.lock().unwrap().connect_output_to_next_gate(
+        connect_gates(
+            input.clone(),
             0,
-            ram_input_index,
             cpu.clone(),
+            ram_input_index,
         );
         input_gates.push(input.clone());
         automatic_input_gates.push(input.clone());
@@ -747,10 +755,11 @@ mod tests {
         input_gates.push(input_gate.clone());
         output_gates.push(output_gate.clone());
 
-        input_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            input_gate.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
         run_circuit(
@@ -780,23 +789,26 @@ mod tests {
                 input_gates.push(input_gate.clone());
                 output_gates.push(output_gate.clone());
 
-                input_gate.lock().unwrap().connect_output_to_next_gate(
-                    0,
+                connect_gates(
+                    input_gate.clone(),
                     0,
                     not_gate.clone(),
+                    0,
                 );
 
-                not_gate.lock().unwrap().connect_output_to_next_gate(
-                    0,
+                connect_gates(
+                    not_gate.clone(),
                     0,
                     output_gate.clone(),
+                    0,
                 );
 
                 //Create a loop.
-                not_gate.lock().unwrap().connect_output_to_next_gate(
-                    1,
-                    0,
+                connect_gates(
                     not_gate.clone(),
+                    1,
+                    not_gate.clone(),
+                    0,
                 );
 
                 run_circuit(
@@ -830,23 +842,26 @@ mod tests {
                 input_gates.push(input_gate.clone());
                 output_gates.push(output_gate.clone());
 
-                input_gate.lock().unwrap().connect_output_to_next_gate(
-                    0,
+                connect_gates(
+                    input_gate.clone(),
                     0,
                     or_gate.clone(),
+                    0,
                 );
 
-                or_gate.lock().unwrap().connect_output_to_next_gate(
-                    0,
+                connect_gates(
+                    or_gate.clone(),
                     0,
                     output_gate.clone(),
+                    0,
                 );
 
                 //Create a loop.
-                or_gate.lock().unwrap().connect_output_to_next_gate(
-                    1,
+                connect_gates(
+                    or_gate.clone(),
                     1,
                     or_gate.clone(),
+                    1,
                 );
 
                 run_circuit(
@@ -878,16 +893,18 @@ mod tests {
         input_gates.push(input_gate.clone());
         output_gates.push(output_gate.clone());
 
-        input_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            input_gate.clone(),
             0,
             not_gate.clone(),
+            0,
         );
 
-        not_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            not_gate.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
         start_clock(
@@ -911,16 +928,18 @@ mod tests {
         input_gates.push(input_gate.clone());
         output_gates.push(output_gate.clone());
 
-        input_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            input_gate.clone(),
             0,
             not_gate.clone(),
+            0,
         );
 
-        not_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            not_gate.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
         let expected_outputs = vec![HIGH, LOW_, LOW_];

@@ -16,7 +16,7 @@ use crate::shared_mutex::SharedMutex;
 // multiple NONE values connected and a single other signal type. In order to fix this, all
 // inputs for the round are saved inside input_signals in BasicGateMembers (or something
 // similar) and the inputs are checked whenever fetch_output() is called. When
-// connect_output_to_next_gate() is called, it will add the value to input_signals. Then it
+// connect_output() is called, it will add the value to input_signals. Then it
 // will update the value when update_input_signal() is called.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Signal {
@@ -97,7 +97,14 @@ pub struct InputSignalReturn {
 }
 
 pub trait LogicGate: Send {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>);
+    fn internal_connect_output(
+        &mut self,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
+        next_gate: SharedMutex<dyn LogicGate>
+    ) -> Signal;
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal);
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn;
 
@@ -120,8 +127,6 @@ pub trait LogicGate: Send {
     fn get_index_from_tag(&self, tag: &str) -> usize {
         panic!("Gate {} using tag {} id {} did not implement get_index_from_tag()", self.get_tag(), tag, self.get_unique_id().id)
     }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal);
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID);
 
@@ -381,13 +386,13 @@ impl BasicGateMembers {
         }
     }
 
-    pub fn connect_output_to_next_gate(
+    pub fn connect_output(
         &mut self,
         current_gate_output_index: usize,
         next_gate_input_index: usize,
         next_gate: SharedMutex<dyn LogicGate>,
-    ) {
-        GateLogic::connect_output_to_next_gate(
+    ) -> Signal {
+        GateLogic::connect_output(
             self.gate_type,
             self.unique_id,
             &mut self.input_signals,
@@ -397,7 +402,7 @@ impl BasicGateMembers {
             next_gate_input_index,
             next_gate,
             self.should_print_output,
-        );
+        )
     }
 
     pub fn internal_update_index_to_id(
@@ -406,6 +411,16 @@ impl BasicGateMembers {
         gate_input_index: usize,
         signal: Signal,
     ) {
+
+        if self.should_print_output {
+            println!(
+                "Connection TO\n   type {} tag {} id {} index {}",
+                self.gate_type,
+                self.tag,
+                self.unique_id.id,
+                gate_input_index,
+            );
+        }
         //Whenever an input is updated, remove the zero index. Even adding the zero index it will
         // simply be inserted immediately afterwards.
         self.input_signals[gate_input_index].remove(&UniqueID::zero_id());
@@ -598,13 +613,13 @@ impl ComplexGateMembers {
         }
     }
 
-    pub fn connect_output_to_next_gate(
+    pub fn connect_output(
         &mut self,
         current_gate_id: UniqueID,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
         next_gate: SharedMutex<dyn LogicGate>,
-    ) {
+    ) -> Signal {
         //Do not need to run calculate_output_from_inputs() here. It is run in simple gates for the
         // sake of getting the output. However, in complex gates it can be time consuming.
 
@@ -617,35 +632,13 @@ impl ComplexGateMembers {
             }
         };
 
-        //This unsafe block must be done for two reasons.
-        // 1) In order to allow a gate to connect to itself, it must already have a mutable reference
-        //  outstanding.
-        // 2) If this way of doing it is not done, then no mutable references will be able to be
-        //  outstanding when connect_output_to_next_gate methods are called.
-        //TODO: fix this, it won't work
-        let mut next_gate_mut_ref = next_gate.lock().unwrap();
-        //This will limit the ability
-        // let next_gate_mut_ref = unsafe {
-        //     &mut *next_gate.as_ptr()
-        // };
-        //
-        next_gate_mut_ref.internal_update_index_to_id(
-            current_gate_id,
-            next_gate_input_key,
-            signal.clone(),
-        );
-
         if self.simple_gate.should_print_output {
             println!(
-                "Connection for\n   type {} tag {} id {} index {}\nTO\n   type {} tag {} id {} index {}",
+                "Connection FROM\n   type {} tag {} id {} index {}",
                 self.simple_gate.gate_type,
                 self.simple_gate.tag,
                 self.simple_gate.unique_id.id,
                 current_gate_output_key,
-                next_gate_mut_ref.get_gate_type(),
-                next_gate_mut_ref.get_tag(),
-                next_gate_mut_ref.get_unique_id().id(),
-                next_gate_input_key
             );
         }
 
@@ -659,12 +652,14 @@ impl ComplexGateMembers {
                 ConnectedOutput {
                     throughput: GateInput::new(
                         next_gate_input_key,
-                        signal,
+                        signal.clone(),
                         current_gate_id,
                     ),
                     gate: next_gate.clone(),
                 }
             );
+
+        signal
     }
 
     pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -866,7 +861,7 @@ impl GateLogic {
         Ok(output_clone)
     }
 
-    pub fn connect_output_to_next_gate(
+    pub fn connect_output(
         gate_type: GateType,
         current_gate_id: UniqueID,
         input_signals: &Vec<HashMap<UniqueID, Signal>>,
@@ -876,7 +871,7 @@ impl GateLogic {
         next_gate_input_index: usize,
         next_gate: SharedMutex<dyn LogicGate>,
         should_print_output: bool,
-    ) {
+    ) -> Signal {
         //When gates are being connected, there should be no issues with this error. So unwrapping
         // it.
         let output_signal = GateLogic::calculate_output_from_inputs(
@@ -884,20 +879,22 @@ impl GateLogic {
             input_signals,
         ).unwrap();
 
-        GateLogic::connect_output_to_next_gate_no_calculate(
+        GateLogic::connect_output_no_calculate(
             current_gate_id,
             output_states,
             current_gate_output_index,
             next_gate_input_index,
             next_gate,
-            output_signal,
+            output_signal.clone(),
             gate_type,
             current_gate_tag,
             should_print_output,
         );
+
+        output_signal
     }
 
-    pub fn connect_output_to_next_gate_no_calculate(
+    pub fn connect_output_no_calculate(
         current_gate_id: UniqueID,
         output_states: &mut Vec<GateOutputState>,
         current_gate_output_index: usize,
@@ -909,48 +906,21 @@ impl GateLogic {
         should_print_output: bool,
     ) {
 
-        //This unsafe block must be done for two reasons.
-        // 1) In order to allow a gate to connect to itself, it must already have a mutable reference
-        //  outstanding.
-        // 2) If this way of doing it is not done, then no mutable references will be able to be
-        //  outstanding when connect_output_to_next_gate methods are called.
-        //This will limit the ability
-        //TODO: fix this, it won't work
-        let mut next_gate_mut_ref = next_gate.lock().unwrap();
-        //This will limit the ability
-        // let next_gate_mut_ref = unsafe {
-        //     &mut *next_gate.as_ptr()
-        // };
-        //
-
-        next_gate_mut_ref.internal_update_index_to_id(
-            current_gate_id,
-            next_gate_input_index,
-            output_signal.clone(),
-        );
-
         if should_print_output {
-            if current_gate_tag.is_empty() && next_gate_mut_ref.get_tag().is_empty() {
+            if current_gate_tag.is_empty() {
                 println!(
-                    "Connection for\n   type {} id {} index {}\nTO\n   type {} id {} index {}",
+                    "Connection for\n   type {} id {} index {}",
                     current_gate_type,
                     current_gate_id.id(),
                     current_gate_output_index,
-                    next_gate_mut_ref.get_gate_type(),
-                    next_gate_mut_ref.get_unique_id().id(),
-                    next_gate_input_index,
                 );
             } else {
                 println!(
-                    "Connection for\n   type {} tag {} id {} index {}\nTO\n   type {} tag {} id {} index {}",
+                    "Connection for\n   type {} tag {} id {} index {}",
                     current_gate_type,
                     current_gate_tag,
                     current_gate_id.id(),
                     current_gate_output_index,
-                    next_gate_mut_ref.get_gate_type(),
-                    next_gate_mut_ref.get_tag(),
-                    next_gate_mut_ref.get_unique_id().id(),
-                    next_gate_input_index,
                 );
             }
         }
@@ -1164,4 +1134,25 @@ pub fn set_all_gate_output_to_signal(
             }
         }
     }
+}
+
+pub fn connect_gates(
+    output_gate: SharedMutex<dyn LogicGate>,
+    output_index: usize,
+    input_gate: SharedMutex<dyn LogicGate>,
+    input_index: usize,
+) {
+    let output_signal = output_gate.lock().unwrap().internal_connect_output(
+        output_index,
+        input_index,
+        input_gate.clone(),
+    );
+
+    let output_id = output_gate.lock().unwrap().get_unique_id();
+
+    input_gate.lock().unwrap().internal_update_index_to_id(
+        output_id,
+        input_index,
+        output_signal
+    );
 }

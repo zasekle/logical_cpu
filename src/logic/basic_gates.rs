@@ -23,12 +23,16 @@ impl Or {
 }
 
 impl LogicGate for Or {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -57,10 +61,6 @@ impl LogicGate for Or {
 
     fn set_tag(&mut self, tag: &str) {
         self.members.tag = tag.to_string()
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -93,12 +93,16 @@ impl And {
 }
 
 impl LogicGate for And {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -127,10 +131,6 @@ impl LogicGate for And {
 
     fn set_tag(&mut self, tag: &str) {
         self.members.tag = tag.to_string()
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -163,12 +163,16 @@ impl Not {
 }
 
 impl LogicGate for Not {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -197,10 +201,6 @@ impl LogicGate for Not {
 
     fn set_tag(&mut self, tag: &str) {
         self.members.tag = tag.to_string()
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -233,12 +233,16 @@ impl Nor {
 }
 
 impl LogicGate for Nor {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -267,10 +271,6 @@ impl LogicGate for Nor {
 
     fn set_tag(&mut self, tag: &str) {
         self.members.tag = tag.to_string()
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -303,12 +303,16 @@ impl Nand {
 }
 
 impl LogicGate for Nand {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -337,10 +341,6 @@ impl LogicGate for Nand {
 
     fn set_tag(&mut self, tag: &str) {
         self.members.tag = tag.to_string()
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -372,12 +372,16 @@ impl XOr {
 }
 
 impl LogicGate for XOr {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -406,10 +410,6 @@ impl LogicGate for XOr {
 
     fn set_tag(&mut self, tag: &str) {
         self.members.tag = tag.to_string()
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
@@ -459,29 +459,30 @@ impl Splitter {
 
 impl LogicGate for Splitter {
     //current_gate_output_key is meant to be extracted from Splitter::get_index_for_output()
-    fn connect_output_to_next_gate(
-        &mut self,
-        current_gate_output_key: usize,
-        next_gate_input_key: usize,
-        next_gate: SharedMutex<dyn LogicGate>,
-    ) {
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
         //When gates are being connected, there should be no issues with this error.
         let output_signal = calculate_input_signal_from_single_inputs(
             &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
             // &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
         ).unwrap();
 
-        GateLogic::connect_output_to_next_gate_no_calculate(
+        GateLogic::connect_output_no_calculate(
             self.get_unique_id(),
             &mut self.members.output_states,
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-            output_signal,
+            output_signal.clone(),
             self.members.gate_type,
             &self.members.tag,
             self.members.should_print_output,
         );
+
+        output_signal
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -556,10 +557,6 @@ impl LogicGate for Splitter {
         self.members.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
@@ -590,12 +587,12 @@ impl ControlledBuffer {
 }
 
 impl LogicGate for ControlledBuffer {
-    fn connect_output_to_next_gate(
+    fn internal_connect_output(
         &mut self,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
         next_gate: SharedMutex<dyn LogicGate>,
-    ) {
+    ) -> Signal {
         let enable_index = self.get_index_from_tag("E");
         //When gates are being connected, there should be no issues with this error.
         let input_signals =
@@ -606,17 +603,23 @@ impl LogicGate for ControlledBuffer {
             NONE
         };
 
-        GateLogic::connect_output_to_next_gate_no_calculate(
+        GateLogic::connect_output_no_calculate(
             self.get_unique_id(),
             &mut self.members.output_states,
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-            output_signal,
+            output_signal.clone(),
             self.members.gate_type,
             &self.members.tag,
             self.members.should_print_output,
         );
+
+        output_signal
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -709,10 +712,6 @@ impl LogicGate for ControlledBuffer {
         }
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
@@ -726,7 +725,7 @@ impl LogicGate for ControlledBuffer {
 mod tests {
     use rand::Rng;
     use crate::globals::CLOCK_TICK_NUMBER;
-    use crate::logic::foundations::{ComplexGateMembers, Signal};
+    use crate::logic::foundations::{ComplexGateMembers, connect_gates, Signal};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::{AutomaticInput, SimpleInput};
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
@@ -740,10 +739,11 @@ mod tests {
         let output_gate = SimpleOutput::new("OUT");
         let controlled_buffer = ControlledBuffer::new(1);
 
-        controlled_buffer.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            controlled_buffer.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
         controlled_buffer.lock().unwrap().update_input_signal(
@@ -1055,14 +1055,15 @@ mod tests {
     fn test_controlled_buffer_initialization() {
         let output_gate = SimpleOutput::new("OUT");
         let controlled_buffer = ControlledBuffer::new(1);
-        let mut mut_controlled_buffer = controlled_buffer.lock().unwrap();
-        mut_controlled_buffer.connect_output_to_next_gate(
-            0,
+
+        connect_gates(
+            controlled_buffer.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
-        mut_controlled_buffer.update_input_signal(
+        controlled_buffer.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -1070,7 +1071,7 @@ mod tests {
             )
         );
 
-        let output = mut_controlled_buffer.fetch_output_signals().unwrap();
+        let output = controlled_buffer.lock().unwrap().fetch_output_signals().unwrap();
 
         for gate_output_state in output {
             match gate_output_state {
@@ -1118,24 +1119,27 @@ mod tests {
 
             let controlled_buffer = ControlledBuffer::new(1);
 
-            input_gate.lock().unwrap().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                input_gate.clone(),
                 0,
                 controlled_buffer.clone(),
+                0,
             );
 
-            controlled_buffer.lock().unwrap().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                controlled_buffer.clone(),
                 0,
                 output_gate.clone(),
+                0,
             );
 
             let enable_index = controlled_buffer.lock().unwrap().get_index_from_tag("E");
             if i == throughput_gate_index {
-                single_enable_input_gate.lock().unwrap().connect_output_to_next_gate(
+                connect_gates(
+                    single_enable_input_gate.clone(),
                     0,
-                    enable_index,
                     controlled_buffer.clone(),
+                    enable_index,
                 );
             } else {
                 let next_index =
@@ -1144,10 +1148,11 @@ mod tests {
                     } else {
                         i
                     };
-                other_enable_input_gates.lock().unwrap().connect_output_to_next_gate(
+                connect_gates(
+                    other_enable_input_gates.clone(),
                     next_index,
-                    enable_index,
                     controlled_buffer.clone(),
+                    enable_index,
                 );
             }
 
@@ -1198,23 +1203,26 @@ mod tests {
         let output_signal: Vec<Vec<Signal>> = Vec::new();
 
         for i in 0..2 {
-            input_gate.lock().unwrap().connect_output_to_next_gate(
+            connect_gates(
+                input_gate.clone(),
                 i,
-                0,
                 controlled_buffers[i].clone(),
+                0,
             );
 
             let enable_index = controlled_buffers[i].lock().unwrap().get_index_from_tag("E");
-            enable_input_gate.lock().unwrap().connect_output_to_next_gate(
+            connect_gates(
+                enable_input_gate.clone(),
                 i,
-                enable_index,
                 controlled_buffers[i].clone(),
+                enable_index,
             );
 
-            controlled_buffers[i].lock().unwrap().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                controlled_buffers[i].clone(),
                 0,
                 output_gate.clone(),
+                0,
             );
         }
 
@@ -1276,18 +1284,18 @@ mod tests {
                 &mut self,
                 output_gates: Vec<SharedMutex<dyn LogicGate>>,
             ) {
-                self.complex_gate.input_gates[self.get_index_from_tag("Input")]
-                    .lock().unwrap()
-                    .connect_output_to_next_gate(
-                        0,
-                        0,
-                        self.controlled_buffer.clone(),
-                    );
-
-                self.controlled_buffer.lock().unwrap().connect_output_to_next_gate(
+                connect_gates(
+                    self.complex_gate.input_gates[self.get_index_from_tag("Input")].clone(),
                     0,
+                    self.controlled_buffer.clone(),
+                    0,
+                );
+
+                connect_gates(
+                    self.controlled_buffer.clone(),
                     0,
                     output_gates[0].clone(),
+                    0,
                 );
 
                 //Force the enable to low so that NONE is always returned.
@@ -1309,13 +1317,22 @@ mod tests {
         }
 
         impl LogicGate for ControlledBufferWrapper {
-            fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) {
-                self.complex_gate.connect_output_to_next_gate(
+            fn internal_connect_output(
+                &mut self,
+                current_gate_output_key: usize,
+                next_gate_input_key: usize,
+                next_gate: SharedMutex<dyn LogicGate>,
+            ) -> Signal {
+                self.complex_gate.connect_output(
                     self.get_unique_id(),
                     current_gate_output_key,
                     next_gate_input_key,
                     next_gate,
-                );
+                )
+            }
+
+            fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+                self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
             }
 
             fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -1353,10 +1370,6 @@ mod tests {
                 self.complex_gate.get_index_from_tag(tag)
             }
 
-            fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-                self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-            }
-
             fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
                 self.complex_gate.remove_connected_input(input_index, connected_id);
             }
@@ -1376,16 +1389,18 @@ mod tests {
 
         let output_signal = vec![[NONE]];
 
-        input_gate.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            input_gate.clone(),
             0,
             wrapper.clone(),
+            0,
         );
 
-        wrapper.lock().unwrap().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            wrapper.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
         input_gates.push(input_gate);
@@ -1438,10 +1453,11 @@ mod tests {
                 single_turn_output.push(signal.clone());
             }
 
-            input_gate.lock().unwrap().connect_output_to_next_gate(
+            connect_gates(
+                input_gate.clone(),
                 0,
-                i,
                 splitter.clone(),
+                i,
             );
 
             input_gates.push(input_gate);
@@ -1455,10 +1471,11 @@ mod tests {
                 let output_gate = SimpleOutput::new(output_tag.as_str());
                 let splitter_output = splitter.lock().unwrap().get_index_for_output(i, j);
                 println!("i {i} j {j} splitter_output {splitter_output}");
-                splitter.lock().unwrap().connect_output_to_next_gate(
+                connect_gates(
+                    splitter.clone(),
                     splitter_output,
-                    0,
                     output_gate.clone(),
+                    0,
                 );
 
                 output_gates.push(output_gate);

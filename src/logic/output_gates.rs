@@ -45,13 +45,22 @@ impl OutputGate for SimpleOutput {
 }
 
 impl LogicGate for SimpleOutput {
-    fn connect_output_to_next_gate(
+    fn internal_connect_output(
         &mut self,
         _current_gate_output_key: usize,
         _next_gate_input_key: usize,
-        _next_gate: SharedMutex<dyn LogicGate>,
-    ) {
+        _next_gate: SharedMutex<dyn LogicGate>
+    ) -> Signal {
         panic!("An output gate should be the end of the circuit, it should never connect to another input.");
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, _gate_input_index: usize, signal: Signal) {
+        //Whenever an input is updated, remove the zero index. Even adding the zero index it will
+        // simply be inserted immediately afterwards.
+        self.output_state.remove(&UniqueID::zero_id());
+
+        //This is a temporary signal. When the input is updated afterwards, it will add it.
+        self.output_state.insert(sending_id, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -110,15 +119,6 @@ impl LogicGate for SimpleOutput {
 
     fn set_tag(&mut self, tag: &str) {
         self.tag = tag.to_string()
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, _gate_input_index: usize, signal: Signal) {
-        //Whenever an input is updated, remove the zero index. Even adding the zero index it will
-        // simply be inserted immediately afterwards.
-        self.output_state.remove(&UniqueID::zero_id());
-
-        //This is a temporary signal. When the input is updated afterwards, it will add it.
-        self.output_state.insert(sending_id, signal);
     }
 
     fn remove_connected_input(&mut self, _input_index: usize, connected_id: UniqueID) {

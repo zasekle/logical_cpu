@@ -68,13 +68,9 @@ impl Clock {
 }
 
 impl LogicGate for Clock {
-    fn connect_output_to_next_gate(
-        &mut self,
-        current_gate_output_key: usize,
-        next_gate_input_key: usize,
-        next_gate: SharedMutex<dyn LogicGate>,
-    ) {
-        GateLogic::connect_output_to_next_gate(
+
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        GateLogic::connect_output(
             self.gate_type,
             self.unique_id,
             &self.get_formatted_input(),
@@ -84,8 +80,10 @@ impl LogicGate for Clock {
             next_gate_input_key,
             next_gate,
             self.should_print_output,
-        );
+        )
     }
+
+    fn internal_update_index_to_id(&mut self, _sending_id: UniqueID, _gate_input_index: usize, _signal: Signal) {}
 
     fn update_input_signal(&mut self, _input: GateInput) -> InputSignalReturn {
         //Want to return 1 here because run_circuit expects it.
@@ -140,8 +138,6 @@ impl LogicGate for Clock {
     fn is_input_gate(&self) -> bool {
         true
     }
-
-    fn internal_update_index_to_id(&mut self, _sending_id: UniqueID, _gate_input_index: usize, _signal: Signal) {}
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         panic!("Clock never has any input. Passed id {}, passed index {}", connected_id.id(), input_index);
@@ -211,14 +207,9 @@ impl AutomaticInput {
 }
 
 impl LogicGate for AutomaticInput {
-    fn connect_output_to_next_gate(
-        &mut self,
-        current_gate_output_key: usize,
-        next_gate_input_key: usize,
-        next_gate: SharedMutex<dyn LogicGate>,
-    ) {
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
         let mut values_to_be_output = self.get_formatted_input();
-        GateLogic::connect_output_to_next_gate(
+        GateLogic::connect_output(
             self.gate_type,
             self.unique_id,
             &mut values_to_be_output,
@@ -228,8 +219,10 @@ impl LogicGate for AutomaticInput {
             next_gate_input_key,
             next_gate,
             self.should_print_output,
-        );
+        )
     }
+
+    fn internal_update_index_to_id(&mut self, _sending_id: UniqueID, _gate_input_index: usize, _signal: Signal) {}
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         //This doesn't ever actually 'change' input. So there is no reason to update oscillation.
@@ -290,8 +283,6 @@ impl LogicGate for AutomaticInput {
         true
     }
 
-    fn internal_update_index_to_id(&mut self, _sending_id: UniqueID, _gate_input_index: usize, _signal: Signal) {}
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         panic!("AutomaticInput never has any input. Passed id {}, passed index {}", connected_id.id(), input_index);
     }
@@ -326,13 +317,8 @@ impl SimpleInput {
 }
 
 impl LogicGate for SimpleInput {
-    fn connect_output_to_next_gate(
-        &mut self,
-        current_gate_output_key: usize,
-        next_gate_input_key: usize,
-        next_gate: SharedMutex<dyn LogicGate>,
-    ) {
-        GateLogic::connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        GateLogic::connect_output(
             self.members.gate_type,
             self.members.unique_id,
             &mut self.members.input_signals,
@@ -342,7 +328,11 @@ impl LogicGate for SimpleInput {
             next_gate_input_key,
             next_gate,
             self.members.should_print_output,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -383,10 +373,6 @@ impl LogicGate for SimpleInput {
 
     fn is_input_gate(&self) -> bool {
         true
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
