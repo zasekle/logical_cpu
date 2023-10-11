@@ -136,9 +136,8 @@ impl VariableBitRegister {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -166,7 +165,6 @@ impl LogicGate for VariableBitRegister {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -200,6 +198,10 @@ impl LogicGate for VariableBitRegister {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -313,9 +315,8 @@ impl VariableDecoder {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -343,7 +344,6 @@ impl LogicGate for VariableDecoder {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -377,6 +377,10 @@ impl LogicGate for VariableDecoder {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -580,9 +584,8 @@ impl SingleRAMCell {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -610,7 +613,6 @@ impl LogicGate for SingleRAMCell {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -644,6 +646,10 @@ impl LogicGate for SingleRAMCell {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -929,11 +935,8 @@ impl RAMUnit {
         }
 
         //Prime gates
-        //todo: fix
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            // None,
-            Some(GateType::VariableSingleRAMCellType),
         );
     }
 }
@@ -963,11 +966,8 @@ impl LogicGate for RAMUnit {
 
         //The second gate_type parameter will guarantee that all Single RAM cells run on the same
         // clock tick for efficiency.
-        //todo: fix
         let result = self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            // None,
-            Some(GateType::VariableSingleRAMCellType),
         );
 
         unsafe {
@@ -1007,6 +1007,10 @@ impl LogicGate for RAMUnit {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1123,9 +1127,8 @@ impl VariableBitBusOne {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -1153,7 +1156,6 @@ impl LogicGate for VariableBitBusOne {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1187,6 +1189,10 @@ impl LogicGate for VariableBitBusOne {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 

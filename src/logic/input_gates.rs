@@ -146,6 +146,10 @@ impl LogicGate for Clock {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.print_each_input_output_gate = print_each_input_output_gate;
     }
+
+    fn num_children_gates(&self) -> usize {
+        0
+    }
 }
 
 pub struct AutomaticInput {
@@ -290,6 +294,10 @@ impl LogicGate for AutomaticInput {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.print_each_input_output_gate = print_each_input_output_gate;
     }
+
+    fn num_children_gates(&self) -> usize {
+        0
+    }
 }
 
 pub struct SimpleInput {
@@ -308,6 +316,7 @@ impl SimpleInput {
                     1,
                     output_num,
                     GateType::SimpleInputType,
+                    0,
                     Some(LOW_),
                 ),
                 tag: String::from(tag),
@@ -383,6 +392,10 @@ impl LogicGate for SimpleInput {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        0
     }
 }
 

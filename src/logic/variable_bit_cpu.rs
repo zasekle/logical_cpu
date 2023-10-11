@@ -405,9 +405,8 @@ impl VariableBitCPU {
         let clock_input_gate = self.complex_gate.input_gates.pop().unwrap();
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
 
         self.complex_gate.input_gates.push(clock_input_gate);
@@ -1540,7 +1539,6 @@ impl LogicGate for VariableBitCPU {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1574,6 +1572,10 @@ impl LogicGate for VariableBitCPU {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1766,7 +1768,6 @@ mod tests {
             &Vec::new(),
             false,
             &mut |_clock_tick_inputs, _output_gates| {},
-            None,
         );
 
         let collected_signals = collect_signals_from_logic_gate(cpu.clone());

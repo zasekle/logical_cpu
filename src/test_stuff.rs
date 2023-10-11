@@ -194,6 +194,7 @@ pub fn run_multi_input_output_logic_gate_return(
     let mut propagate_signal_through_circuit = true;
     let mut continue_clock = true;
 
+
     while continue_clock {
         unsafe {
             CLOCK_TICK_NUMBER += 1;
@@ -213,7 +214,6 @@ pub fn run_multi_input_output_logic_gate_return(
 
                 collected_output.push(single_collected_output);
             },
-            None,
         );
 
         propagate_signal_through_circuit = false;

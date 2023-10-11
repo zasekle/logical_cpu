@@ -15,6 +15,7 @@ impl Or {
                     input_num,
                     output_num,
                     GateType::OrType,
+                    0,
                     None,
                 )
             }
@@ -70,6 +71,10 @@ impl LogicGate for Or {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
 }
 
 pub struct And {
@@ -85,6 +90,7 @@ impl And {
                     input_num,
                     output_num,
                     GateType::AndType,
+                    0,
                     None,
                 )
             }
@@ -140,6 +146,10 @@ impl LogicGate for And {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+       self.members.number_child_gates
+    }
 }
 
 pub struct Not {
@@ -155,6 +165,7 @@ impl Not {
                     1,
                     output_num,
                     GateType::NotType,
+                    0,
                     None,
                 )
             }
@@ -210,6 +221,10 @@ impl LogicGate for Not {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
 }
 
 pub struct Nor {
@@ -225,6 +240,7 @@ impl Nor {
                     input_num,
                     output_num,
                     GateType::NorType,
+                    0,
                     None,
                 )
             }
@@ -280,6 +296,10 @@ impl LogicGate for Nor {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
 }
 
 pub struct Nand {
@@ -295,6 +315,7 @@ impl Nand {
                     input_num,
                     output_num,
                     GateType::NandType,
+                    0,
                     None,
                 )
             }
@@ -350,6 +371,10 @@ impl LogicGate for Nand {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
 }
 
 pub struct XOr {
@@ -364,6 +389,7 @@ impl XOr {
                     input_num,
                     output_num,
                     GateType::XOrType,
+                    0,
                     None,
                 )
             }
@@ -419,6 +445,10 @@ impl LogicGate for XOr {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
 }
 
 pub struct Splitter {
@@ -437,6 +467,7 @@ impl Splitter {
                     input_num,
                     input_num * outputs_per_input,
                     GateType::SplitterType,
+                    0,
                     Some(LOW_),
                 ),
                 outputs_per_input,
@@ -564,6 +595,10 @@ impl LogicGate for Splitter {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
 }
 
 pub struct ControlledBuffer {
@@ -579,6 +614,7 @@ impl ControlledBuffer {
                     input_output_num + 1,
                     input_output_num,
                     GateType::ControlledBufferType,
+                    0,
                     Some(NONE),
                 )
             }
@@ -718,6 +754,10 @@ impl LogicGate for ControlledBuffer {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
     }
 }
 
@@ -1179,7 +1219,6 @@ mod tests {
                 &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                     collect_output_for_run_circuit(&mut collected_output, &output_gates);
                 },
-                None,
             );
 
             propagate_signal_through_circuit = false;
@@ -1239,7 +1278,6 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
-            None,
         );
 
         assert_eq!(collected_output, output_signal);
@@ -1309,9 +1347,8 @@ mod tests {
                 );
 
                 //Prime gates
-                self.complex_gate.calculate_output_from_inputs(
+                self.complex_gate.calculate_output_from_inputs_and_set_child_count(
                     true,
-                    None,
                 );
             }
         }
@@ -1342,7 +1379,6 @@ mod tests {
             fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
                 self.complex_gate.fetch_output_signals(
                     &self.get_tag(),
-                    None,
                 )
             }
 
@@ -1376,6 +1412,9 @@ mod tests {
 
             fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
                 self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+            }
+            fn num_children_gates(&self) -> usize {
+                self.complex_gate.simple_gate.number_child_gates
             }
         }
 
@@ -1415,7 +1454,6 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
-            None,
         );
 
         assert_eq!(collected_output, output_signal);
@@ -1496,7 +1534,6 @@ mod tests {
 
                 collected_output.push(single_collected_output);
             },
-            None,
         );
 
         println!("{:#?}", collected_output);

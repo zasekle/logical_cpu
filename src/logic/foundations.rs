@@ -8,7 +8,7 @@ use crate::logic::basic_gates::And;
 use crate::logic::foundations::Signal::{HIGH, LOW_, NONE};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
-use crate::run_circuit::run_circuit;
+use crate::run_circuit::{count_gates_in_circuit, run_circuit};
 use crate::shared_mutex::SharedMutex;
 
 //NONE includes some complications. For example when two connections are made to the same
@@ -132,6 +132,7 @@ pub trait LogicGate: Send {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool);
 
+    fn num_children_gates(&self) -> usize;
 }
 
 #[derive(Debug, Clone)]
@@ -329,10 +330,17 @@ pub struct BasicGateMembers {
     pub print_each_input_output_gate: bool,
     pub gate_type: GateType,
     pub tag: String,
+    pub number_child_gates: usize,
 }
 
 impl BasicGateMembers {
-    pub fn new(input_num: usize, output_num: usize, gate_type: GateType, output_signal: Option<Signal>) -> Self {
+    pub fn new(
+        input_num: usize,
+        output_num: usize,
+        gate_type: GateType,
+        number_child_gates: usize,
+        output_signal: Option<Signal>
+    ) -> Self {
 
         //Must have at least one input.
         assert_ne!(input_num, 0);
@@ -346,6 +354,7 @@ impl BasicGateMembers {
             print_each_input_output_gate: true,
             gate_type,
             tag: String::new(),
+            number_child_gates,
         };
 
         let output_signal = if let Some(signal) = output_signal {
@@ -507,6 +516,7 @@ impl ComplexGateMembers {
         assert_ne!(input_num, 0);
         assert_ne!(output_num, 0);
 
+
         let mut gate_tags_to_index = HashMap::new();
 
         for (i, gate) in input_gates.iter_mut().enumerate() {
@@ -532,11 +542,13 @@ impl ComplexGateMembers {
         //Make sure there are enough tags for each gate.
         assert_eq!(gate_tags_to_index.len(), input_num + output_num);
 
+
         ComplexGateMembers {
             simple_gate: BasicGateMembers::new(
                 input_num,
                 output_num,
                 gate_type,
+                0,
                 Some(LOW_),
             ),
             input_gates,
@@ -545,10 +557,9 @@ impl ComplexGateMembers {
         }
     }
 
-    pub fn calculate_output_from_inputs(
+    fn calculate_output_from_inputs(
         &mut self,
         propagate_signal_through_circuit: bool,
-        gate_type_to_run_together: Option<GateType>,
     ) {
         run_circuit(
             &self.input_gates,
@@ -567,10 +578,22 @@ impl ComplexGateMembers {
                     output_string.as_str(),
                 );
             },
-            gate_type_to_run_together,
         );
 
         self.convert_output_gates_to_output_states();
+    }
+
+    pub fn calculate_output_from_inputs_and_set_child_count(
+        &mut self,
+        propagate_signal_through_circuit: bool,
+    ) {
+        self.calculate_output_from_inputs(
+            propagate_signal_through_circuit
+        );
+
+        self.simple_gate.number_child_gates = count_gates_in_circuit(
+            &self.input_gates
+        );
     }
 
     pub fn convert_output_gates_to_output_states(&mut self) {
@@ -680,11 +703,9 @@ impl ComplexGateMembers {
     pub fn fetch_output_signals(
         &mut self,
         tag: &String,
-        gate_type_to_run_together: Option<GateType>,
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.calculate_output_from_inputs(
             false,
-            gate_type_to_run_together,
         );
 
         let output_clone = self.simple_gate.output_states.clone();
@@ -1142,17 +1163,22 @@ pub fn connect_gates(
     input_gate: SharedMutex<dyn LogicGate>,
     input_index: usize,
 ) {
+
+
     let output_signal = output_gate.lock().unwrap().internal_connect_output(
         output_index,
         input_index,
         input_gate.clone(),
     );
 
+
     let output_id = output_gate.lock().unwrap().get_unique_id();
+
 
     input_gate.lock().unwrap().internal_update_index_to_id(
         output_id,
         input_index,
         output_signal
     );
+
 }

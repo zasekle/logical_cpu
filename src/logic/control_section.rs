@@ -613,9 +613,8 @@ impl ControlSection {
         self.check_output();
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 
@@ -3168,7 +3167,6 @@ impl LogicGate for ControlSection {
 
         let result = self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         );
 
         unsafe {
@@ -3208,6 +3206,10 @@ impl LogicGate for ControlSection {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -3286,7 +3288,6 @@ mod tests {
                     &output_gates,
                     false,
                     &mut |_clock_tick_inputs, _output_gates| {},
-                    None,
                 );
             }
 

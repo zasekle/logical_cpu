@@ -125,9 +125,8 @@ impl SRLatch {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -155,7 +154,6 @@ impl LogicGate for SRLatch {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -189,6 +187,10 @@ impl LogicGate for SRLatch {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -308,9 +310,8 @@ impl ActiveLowSRLatch {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -338,7 +339,6 @@ impl LogicGate for ActiveLowSRLatch {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -372,6 +372,10 @@ impl LogicGate for ActiveLowSRLatch {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -539,9 +543,8 @@ impl OneBitMemoryCell {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -569,7 +572,6 @@ impl LogicGate for OneBitMemoryCell {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -603,6 +605,10 @@ impl LogicGate for OneBitMemoryCell {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -707,9 +713,8 @@ impl VariableBitMemoryCell {
         drop(s_input_gate);
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -737,7 +742,6 @@ impl LogicGate for VariableBitMemoryCell {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -771,6 +775,10 @@ impl LogicGate for VariableBitMemoryCell {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -882,7 +890,6 @@ mod tests {
                         GateOutputState::Connected(_) => panic!("Final output gate should not be connected")
                     }
                 },
-                None,
             );
 
             propagate_signal_through_circuit = false;
@@ -978,7 +985,6 @@ mod tests {
                         }
                     }
                 },
-                None,
             );
 
             propagate_signal_through_circuit = false;

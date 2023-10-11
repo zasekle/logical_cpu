@@ -6,14 +6,14 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
-use crate::logic::foundations::{connect_gates, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{connect_gates, GateInput, GateLogicError, GateOutputState, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::{AutomaticInput, Clock};
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::RAMUnit;
 use crate::logic::variable_bit_cpu::VariableBitCPU;
 use crate::{ALU_TIME, CONTROL_SECTION_TIME, RAM_TIME};
-use crate::shared_mutex::SharedMutex;
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 struct CondvarWrapper {
@@ -35,12 +35,26 @@ impl CondvarWrapper {
     }
 }
 
-//TODO: maybe make the inner workings one item, then the thread pool have a vector of those items.
-pub struct RunCircuitThreadPool {
-    // mutex: Mutex<()>,
+enum LargeGateStatus {
+    RUNNING,
+    CANCELED,
+}
+
+struct RunningLargeGate {
+    unique_id: UniqueID,
+    outstanding_children: usize,
+    status: LargeGateStatus,
+}
+
+pub struct ThreadPoolLists {
+    running_large_gates: Vec<RunningLargeGate>,
     processing_set: HashSet<UniqueID>,
     waiting_to_be_processed_set: HashSet<UniqueID>,
-    // gates: Vec<SharedMutex<dyn LogicGate>>,
+}
+
+//TODO: maybe make the inner workings one item, then the thread pool have a vector of those items.
+pub struct RunCircuitThreadPool {
+    thread_pool_lists: Mutex<ThreadPoolLists>,
     gates: SharedMutex<Vec<SharedMutex<dyn LogicGate>>>,
 
     threads: Vec<JoinHandle<()>>,
@@ -53,12 +67,30 @@ pub struct RunCircuitThreadPool {
 //TODO: For now the goal here is to get a working interface. Performance can be improved upon later.
 impl RunCircuitThreadPool {
 
+    //TODO: I feel like I need a better way to actually organize this stuff so I have a clear
+    // starting point. Maybe not, maybe I just need to write it in chunks like I have been.
+
+    //TODO: Steps
+    // Need to check if this gate should run in a single-threaded or multi-threaded way.
+    // If single-threaded, run it (should be cancellable by checking the status of its parent)
+    // If multi-threaded, store it in a separate Vec and run its children gates
+    //  This needs to include a status (for CANCELLED or ACTIVE)
+    //  When its outstanding children gates hit 0, it will need to be reloaded and be
+    //   waiting_to_be_processed (maybe something different for ACTIVE and CANCELLED)
+
+    //TODO: So I need
+    // Some way to get/measure the number of outstanding gates.
+
     pub fn new(size: NonZeroUsize) -> Self {
         let mut thread_pool = RunCircuitThreadPool {
-            processing_set: HashSet::new(),
-            waiting_to_be_processed_set: HashSet::new(),
-            gates: Arc::new(Mutex::new(Vec::new())),
-
+            thread_pool_lists: Mutex::new(
+                ThreadPoolLists {
+                    running_large_gates: Vec::new(),
+                    processing_set: HashSet::new(),
+                    waiting_to_be_processed_set: HashSet::new(),
+                }
+            ),
+            gates: new_shared_mutex(Vec::new()),
             threads: Vec::new(),
             shutdown: Arc::new(AtomicBool::from(false)),
             condvar_wrapper: Arc::new(CondvarWrapper::new()),
@@ -91,6 +123,8 @@ impl RunCircuitThreadPool {
                         if let Some(_t) = task {
                             println!("Thread {i} running task");
                             // t();
+                            //TODO: make the gate run
+                            //TODO: after the gate runs, will need to change around the queues (look at each one)
                         } else {
                             println!("Thread {i} sleeping");
                             signal_clone.wait();
@@ -115,7 +149,7 @@ impl RunCircuitThreadPool {
 
     // pub fn shutdown(&mut self) {
     //     {
-    //         let mut unlocked_tasks = self.tasks.lock().unwrap();
+    //         let mut unlocked_tasks = self.gates.lock().unwrap();
     //         unlocked_tasks.clear();
     //     }
     //     self.shutdown.store(true, Ordering::Release);
@@ -127,39 +161,39 @@ impl RunCircuitThreadPool {
         gate: SharedMutex<dyn LogicGate>,
         gate_id: UniqueID,
     ) {
-        // let _guard = self.mutex.lock().expect("Mutex failed to lock.");
-        //
-        // //TODO: If contained in currently_processing_set
-        // // Interrupt the running thread that is doing it and have it restart
-        // // Need to take into account that the interrupt could happen as the thread running it is
-        // //  completing.
-        // // TODO: Maybe interrupting the smaller gates isn't a big deal, but should probably
-        // //  somehow interrupt the bigger gates This would mean that they need to somehow
-        // //   1) Add the larger gate to a queue (This needs to be done anyway in order to tell which
-        // //    gates are currently being processed).
-        // //   2) Pop them from the processed queue and if anything that is working on a small gate
-        // //    doesn't find them, don't complete.
-        // //  So I am thinking that there will be a distinction between simple and complex gates.
-        // //   Simple gates will just be added to a queue and directly worked by the threads. Complex
-        // //   Gates will be saved somewhere else. Then they can be either CANCELED or COMPLETED and
-        // //   the threads running the internal simple gates for the complex gate will react
-        // //   accordingly.
-        //
-        // let inserted = self.waiting_to_be_processed_set.insert(
-        //     gate_id
-        // );
-        //
-        // if inserted {
-        //     //If the gate is already in the queue, but not being processed, no need to do anything.
-        //     return;
-        // }
-        //
-        // self.gates.push(gate);
-        //
-        // //TODO: Will need to do something to activate the thread pool. If I use channels, I will
-        // // have a 'gap' in between when the instance is retrieved from the thread pool and when the
-        // // unique_id is moved from waiting to processing. So I probably need to use the same Mutex
-        // // to protect the thread pool as I am using here and use the 'standard' thread pool design.
+        let _guard = self.mutex.lock().expect("Mutex failed to lock.");
+
+        //TODO: If contained in currently_processing_set
+        // Interrupt the running thread that is doing it and have it restart
+        // Need to take into account that the interrupt could happen as the thread running it is
+        //  completing.
+        // TODO: Maybe interrupting the smaller gates isn't a big deal, but should probably
+        //  somehow interrupt the bigger gates This would mean that they need to somehow
+        //   1) Add the larger gate to a queue (This needs to be done anyway in order to tell which
+        //    gates are currently being processed).
+        //   2) Pop them from the processed queue and if anything that is working on a small gate
+        //    doesn't find them, don't complete.
+        //  So I am thinking that there will be a distinction between simple and complex gates.
+        //   Simple gates will just be added to a queue and directly worked by the threads. Complex
+        //   Gates will be saved somewhere else. Then they can be either CANCELED or COMPLETED and
+        //   the threads running the internal simple gates for the complex gate will react
+        //   accordingly.
+
+        let inserted = self.waiting_to_be_processed_set.insert(
+            gate_id
+        );
+
+        if inserted {
+            //If the gate is already in the queue, but not being processed, no need to do anything.
+            return;
+        }
+
+        self.gates.push(gate);
+
+        //TODO: Will need to do something to activate the thread pool. If I use channels, I will
+        // have a 'gap' in between when the instance is retrieved from the thread pool and when the
+        // unique_id is moved from waiting to processing. So I probably need to use the same Mutex
+        // to protect the thread pool as I am using here and use the 'standard' thread pool design.
     }
 }
 
@@ -187,7 +221,6 @@ pub fn start_clock<F>(
             output_gates,
             propagate_signal_through_circuit,
             &mut handle_output,
-            None,
         );
 
         propagate_signal_through_circuit = false;
@@ -203,7 +236,6 @@ pub fn run_circuit<F>(
     output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>,
     propagate_signal_through_circuit: bool,
     handle_output: &mut F,
-    gate_type_to_run_together: Option<GateType>,
 ) -> bool where
     F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<SharedMutex<dyn LogicGateAndOutputGate>>)
 {
@@ -217,12 +249,9 @@ pub fn run_circuit<F>(
             false
         };
 
+    // let mut unique_gates = HashSet::new();
     let mut clock_tick_inputs = Vec::new();
     let mut next_gates: Vec<SharedMutex<dyn LogicGate>> = input_gates.clone();
-
-    let mut gathering_gates_to_run = true;
-    let mut gathered_gates_set = HashSet::new();
-    let mut gathered_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
     if print_output {
         println!("run_circuit");
@@ -238,6 +267,8 @@ pub fn run_circuit<F>(
 
         for gate_cell in gates.into_iter() {
             let mut gate = gate_cell.lock().unwrap();
+            // unique_gates.insert(gate.get_unique_id());
+
             let gate_output = gate.fetch_output_signals();
 
             let gate_output = if let Err(err) = gate_output {
@@ -266,17 +297,6 @@ pub fn run_circuit<F>(
             }
             if print_output {
                 println!("gate_output.len(): {:?}", gate_output.len());
-            }
-
-            if let Some(gate_type) = gate_type_to_run_together {
-                if gate_type == gate.get_gate_type() && gathering_gates_to_run
-                {
-                    if gathered_gates_set.insert(gate.get_unique_id()) {
-                        drop(gate);
-                        gathered_gates.push(gate_cell);
-                    }
-                    continue;
-                }
             }
 
             drop(gate);
@@ -353,14 +373,6 @@ pub fn run_circuit<F>(
             }
             panic!("All gates inside the circuit have returned invalid input, aborting.\nInvalid Gate List\n{:#?}", gates);
         }
-
-        //This will allow the function to group all the gates of the same type together and run
-        // them at the same time.
-        if !gathered_gates.is_empty() && next_gates.is_empty() {
-            gathering_gates_to_run = false;
-            next_gates = gathered_gates;
-            gathered_gates = Vec::new();
-        }
     }
 
     handle_output(
@@ -369,6 +381,96 @@ pub fn run_circuit<F>(
     );
 
     continue_clock
+}
+
+pub fn count_gates_in_circuit(
+    input_gates: &Vec<SharedMutex<dyn LogicGate>>,
+) -> usize {
+    let mut unique_gates = HashSet::new();
+    let mut next_gates: Vec<SharedMutex<dyn LogicGate>> = input_gates.clone();
+
+    while !next_gates.is_empty() {
+        let gates = next_gates;
+        next_gates = Vec::new();
+        let mut next_gates_set = HashSet::new();
+        let mut num_invalid_gates: usize = 0;
+
+        for gate_cell in gates.into_iter() {
+            let mut gate = gate_cell.lock().unwrap();
+            unique_gates.insert(gate.get_unique_id());
+
+            let gate_output = gate.fetch_output_signals();
+
+            let gate_output = if let Err(err) = gate_output {
+                match err {
+                    GateLogicError::NoMoreAutomaticInputsRemaining => {
+                        panic!("AutomaticInput should not be used with count_gates_in_circuit().")
+                    }
+                    GateLogicError::MultipleValidSignalsWhenCalculating => {
+                        num_invalid_gates += 1;
+                        drop(gate);
+                        next_gates.push(gate_cell);
+                        continue;
+                    }
+                };
+            } else {
+                gate_output.unwrap()
+            };
+
+            drop(gate);
+            for output in gate_output.into_iter() {
+                match output {
+                    GateOutputState::NotConnected(_signal) => {}
+                    GateOutputState::Connected(next_gate_info) => {
+                        let next_gate = Arc::clone(&next_gate_info.gate);
+                        let mut mutable_next_gate = next_gate.lock().unwrap();
+
+                        unique_gates.insert(mutable_next_gate.get_unique_id());
+
+                        let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
+                            mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
+                        let gate_id = mutable_next_gate.get_unique_id();
+
+                        let contains_id = next_gates_set.contains(&gate_id);
+
+                        //It is important to remember that a situation such as an OR gate feeding
+                        // back into itself is perfectly valid. This can be interpreted that if the
+                        // input was not changed, the output was not changed either and so nothing
+                        // needs to be done with this gate.
+                        //The first tick is a bit special, because the circuit needs to propagate
+                        // the signal regardless of if the gates change or not. This leads to
+                        // checking if it is the first time the gate is updated on the first
+                        // clock tick.
+                        //Also each gate only needs to be stored inside the map once. All changed
+                        // inputs are saved as part of the state, so collect_output() only needs
+                        // to run once.
+                        if (input_signal_updated || changed_count_this_tick == 1) && !contains_id {
+                            drop(mutable_next_gate);
+                            // println!("next_gates.insert()");
+                            next_gates_set.insert(gate_id);
+                            next_gates.push(next_gate);
+                        }
+                    }
+                }
+            }
+        }
+
+        //This is set up to handle invalid states. If all gates are in an invalid state the app will
+        // panic. See calculate_input_signal_from_single_inputs() in foundations.rs for more
+        // details.
+        if num_invalid_gates > 0 && num_invalid_gates == next_gates.len() {
+            let mut gates = Vec::new();
+            for gate in next_gates {
+                let mut_gate = gate.lock().unwrap();
+                gates.push(
+                    format!("Gate {} id {} with tag {}.", mut_gate.get_gate_type(), mut_gate.get_unique_id().id(), mut_gate.get_tag())
+                );
+            }
+            panic!("All gates inside the circuit have returned invalid input, aborting.\nInvalid Gate List\n{:#?}", gates);
+        }
+    }
+
+    unique_gates.len()
 }
 
 pub fn generate_default_output(cpu: &SharedMutex<VariableBitCPU>) -> Vec<Signal> {
@@ -535,7 +637,6 @@ pub fn run_instructions(
             &output_gates,
             propagate_signal,
             &mut |_clock_tick_inputs, _output_gates| {},
-            None,
         );
 
         propagate_signal = false;
@@ -651,7 +752,6 @@ pub fn load_values_into_ram(
             &Vec::new(),
             propagate_signal,
             &mut |_clock_tick_inputs, _output_gates| {},
-            None,
         );
 
         propagate_signal = false;
@@ -769,7 +869,6 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates| {
                 check_for_single_element_signal(output_gates, HIGH);
             },
-            None,
         );
     }
 
@@ -821,7 +920,6 @@ mod tests {
                         // not.
                         assert!(false);
                     },
-                    None,
                 );
             },
         );
@@ -871,7 +969,6 @@ mod tests {
                     &mut |_clock_tick_inputs, output_gates| {
                         check_for_single_element_signal(output_gates, HIGH);
                     },
-                    None,
                 );
             },
         );

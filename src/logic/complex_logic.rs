@@ -4,7 +4,6 @@ use crate::logic::basic_gates::{And, Nand, Not, Or, Splitter};
 use crate::logic::foundations::{BasicGateMembers, build_simple_inputs_and_outputs, build_simple_inputs_and_outputs_with_and, calculate_input_signals_from_all_inputs, ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::foundations::connect_gates;
 
-use crate::logic::foundations::GateType::OneBitMemoryCellType;
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
@@ -92,6 +91,41 @@ impl VariableOutputStepper {
             clk_bottom_not_gate: Not::new(1),
             mem_one_not_gate: Not::new(1),
         };
+
+        // for input in input_gates.iter() {
+        //     variable_output_stepper.complex_gate.simple_gate.number_child_gates += input.lock().unwrap().num_children_gates();
+        // }
+        //
+        // for output in output_gates.iter() {
+        //     variable_output_stepper.complex_gate.simple_gate.number_child_gates += output.lock().unwrap().num_children_gates();
+        // }
+        //
+        // for mem_cell in variable_output_stepper.mem_cells.iter() {
+        //     variable_output_stepper.complex_gate.simple_gate.number_child_gates += mem_cell.lock().unwrap().num_children_gates();
+        // }
+        //
+        // for and_gate in variable_output_stepper.output_and_gates.iter() {
+        //     variable_output_stepper.complex_gate.simple_gate.number_child_gates += and_gate.lock().unwrap().num_children_gates();
+        // }
+        //
+        // for or_gate in variable_output_stepper.output_not_gates.iter() {
+        //     variable_output_stepper.complex_gate.simple_gate.number_child_gates += or_gate.lock().unwrap().num_children_gates();
+        // }
+        //
+        // variable_output_stepper.complex_gate.simple_gate.number_child_gates +=
+        //     variable_output_stepper.output_or_gate.lock().unwrap().num_children_gates();
+        //
+        // variable_output_stepper.complex_gate.simple_gate.number_child_gates +=
+        //     variable_output_stepper.clk_top_or_gate.lock().unwrap().num_children_gates();
+        //
+        // variable_output_stepper.complex_gate.simple_gate.number_child_gates +=
+        //     variable_output_stepper.clk_bottom_or_gate.lock().unwrap().num_children_gates();
+        //
+        // variable_output_stepper.complex_gate.simple_gate.number_child_gates +=
+        //     variable_output_stepper.clk_bottom_not_gate.lock().unwrap().num_children_gates();
+        //
+        // variable_output_stepper.complex_gate.simple_gate.number_child_gates +=
+        //     variable_output_stepper.mem_one_not_gate.lock().unwrap().num_children_gates();
 
         variable_output_stepper.build_and_prime_circuit(
             number_outputs,
@@ -287,9 +321,8 @@ impl VariableOutputStepper {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            Some(OneBitMemoryCellType),
         );
     }
 }
@@ -317,7 +350,6 @@ impl LogicGate for VariableOutputStepper {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            Some(OneBitMemoryCellType),
         )
     }
 
@@ -351,6 +383,10 @@ impl LogicGate for VariableOutputStepper {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -429,9 +465,8 @@ impl VariableBitCPUEnable {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -459,7 +494,6 @@ impl LogicGate for VariableBitCPUEnable {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -493,6 +527,10 @@ impl LogicGate for VariableBitCPUEnable {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -556,9 +594,8 @@ impl SignalGatekeeper {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -602,7 +639,6 @@ impl LogicGate for SignalGatekeeper {
         if *e_signal == HIGH { //Gate is enabled.
             self.complex_gate.fetch_output_signals(
                 &self.get_tag(),
-                None,
             )
         } else {
             let input_signals = calculate_input_signals_from_all_inputs(&self.complex_gate.simple_gate.input_signals)?;
@@ -646,6 +682,10 @@ impl LogicGate for SignalGatekeeper {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -907,9 +947,8 @@ impl MasterSlaveJKFlipFlop {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -937,7 +976,6 @@ impl LogicGate for MasterSlaveJKFlipFlop {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -971,6 +1009,10 @@ impl LogicGate for MasterSlaveJKFlipFlop {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1165,9 +1207,8 @@ impl FourCycleClockHookup {
                 )
             );
 
-            self.complex_gate.calculate_output_from_inputs(
+            self.complex_gate.calculate_output_from_inputs_and_set_child_count(
                 if i == 0 { true } else { false },
-                None,
             );
         }
 
@@ -1236,7 +1277,6 @@ impl LogicGate for FourCycleClockHookup {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1270,6 +1310,10 @@ impl LogicGate for FourCycleClockHookup {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1459,9 +1503,8 @@ impl VariableBitMultiplexer {
         #[cfg(feature = "high_restriction")]
         self.check_output();
 
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 
@@ -1526,7 +1569,6 @@ impl LogicGate for VariableBitMultiplexer {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1560,6 +1602,10 @@ impl LogicGate for VariableBitMultiplexer {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1695,9 +1741,8 @@ impl VariableBitCounter {
             );
         }
 
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 
@@ -1755,7 +1800,6 @@ impl LogicGate for VariableBitCounter {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1789,6 +1833,10 @@ impl LogicGate for VariableBitCounter {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 

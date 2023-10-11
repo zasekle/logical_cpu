@@ -103,9 +103,8 @@ impl HalfAdder {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -131,7 +130,6 @@ impl LogicGate for HalfAdder {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -165,6 +163,10 @@ impl LogicGate for HalfAdder {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -286,9 +288,8 @@ impl FullAdder {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -314,7 +315,6 @@ impl LogicGate for FullAdder {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -349,6 +349,10 @@ impl LogicGate for FullAdder {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
 }
 
 pub struct VariableBitAdder {
@@ -361,11 +365,13 @@ impl VariableBitAdder {
     pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
+
         let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
         let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
         let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let mut full_adders = Vec::new();
+
 
         for i in 0..num_bits {
             let a_input_tag = format!("a_{}", i);
@@ -393,6 +399,7 @@ impl VariableBitAdder {
         output_gates.push(carry_output_gate.clone());
         output_gates_logic.push(carry_output_gate);
 
+
         let mut variable_bit_adder = VariableBitAdder {
             complex_gate: ComplexGateMembers::new(
                 num_bits * 2 + 1,
@@ -404,10 +411,12 @@ impl VariableBitAdder {
             full_adders,
         };
 
+
         variable_bit_adder.build_and_prime_circuit(
             num_bits,
             output_gates_logic,
         );
+
 
         new_shared_mutex(variable_bit_adder)
     }
@@ -417,6 +426,7 @@ impl VariableBitAdder {
         num_bits: usize,
         output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
+
         for i in 0..num_bits {
             let a_input_tag = format!("a_{}", i);
             let b_input_tag = format!("b_{}", i);
@@ -433,6 +443,9 @@ impl VariableBitAdder {
             let s_adder_index = mut_full_adder.get_index_from_tag("S");
             let c_in_adder_index = mut_full_adder.get_index_from_tag("C_IN");
 
+            //Must be dropped or deadlock will occur when the gate is passed to connect_gates below.
+            drop(mut_full_adder);
+
             connect_gates(
                 self.complex_gate.input_gates[a_input_index].clone(),
                 0,
@@ -447,8 +460,6 @@ impl VariableBitAdder {
                 b_adder_index,
             );
 
-            drop(mut_full_adder);
-
             connect_gates(
                 self.full_adders[i].clone(),
                 s_adder_index,
@@ -456,13 +467,12 @@ impl VariableBitAdder {
                 0,
             );
 
-            let mut_full_adder = self.full_adders[i].lock().unwrap();
             if i == 0 { //First adder in the line.
                 let c_in_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("C_IN")].clone();
-                let c_in_adder_index = mut_full_adder.get_index_from_tag("C_IN");
+                let c_in_adder_index = self.full_adders[i].lock().unwrap().get_index_from_tag("C_IN");
 
                 connect_gates(
-                    c_in_input_gate.clone(),
+                    c_in_input_gate,
                     0,
                     self.full_adders[i].clone(),
                     c_in_adder_index,
@@ -478,6 +488,7 @@ impl VariableBitAdder {
             }
         }
 
+
         let c_out_adder_index = self.full_adders[num_bits - 1].lock().unwrap().get_index_from_tag("C_OUT");
         let c_out_output_index = self.get_index_from_tag("C_OUT");
         connect_gates(
@@ -487,10 +498,10 @@ impl VariableBitAdder {
             0,
         );
 
+
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -516,7 +527,6 @@ impl LogicGate for VariableBitAdder {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -550,6 +560,10 @@ impl LogicGate for VariableBitAdder {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -689,9 +703,8 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -717,7 +730,6 @@ impl<const LEFT_SHIFT: bool> LogicGate for VariableBitShiftLeft<LEFT_SHIFT> {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -751,6 +763,10 @@ impl<const LEFT_SHIFT: bool> LogicGate for VariableBitShiftLeft<LEFT_SHIFT> {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -825,9 +841,8 @@ impl VariableBitNot {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -853,7 +868,6 @@ impl LogicGate for VariableBitNot {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -887,6 +901,10 @@ impl LogicGate for VariableBitNot {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -979,9 +997,8 @@ impl VariableBitAnd {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -1007,7 +1024,6 @@ impl LogicGate for VariableBitAnd {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1041,6 +1057,10 @@ impl LogicGate for VariableBitAnd {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1133,9 +1153,8 @@ impl VariableBitOr {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -1161,7 +1180,6 @@ impl LogicGate for VariableBitOr {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1195,6 +1213,10 @@ impl LogicGate for VariableBitOr {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1357,9 +1379,8 @@ impl XOrLE {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -1385,7 +1406,6 @@ impl LogicGate for XOrLE {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1419,6 +1439,10 @@ impl LogicGate for XOrLE {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1584,9 +1608,8 @@ impl VariableBitXOrLE {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -1612,7 +1635,6 @@ impl LogicGate for VariableBitXOrLE {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1646,6 +1668,10 @@ impl LogicGate for VariableBitXOrLE {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1722,9 +1748,8 @@ impl VariableBitZ {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -1750,7 +1775,6 @@ impl LogicGate for VariableBitZ {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1784,6 +1808,10 @@ impl LogicGate for VariableBitZ {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1861,9 +1889,8 @@ impl VariableBitEnable {
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
@@ -1889,7 +1916,6 @@ impl LogicGate for VariableBitEnable {
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            None,
         )
     }
 
@@ -1923,6 +1949,10 @@ impl LogicGate for VariableBitEnable {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -1997,6 +2027,7 @@ impl ArithmeticLogicUnit {
     pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
+
         let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
         let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
         let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
@@ -2061,6 +2092,24 @@ impl ArithmeticLogicUnit {
         decoder_splitters.push(Splitter::new(1, 4)); // 4; SHR
         decoder_splitters.push(Splitter::new(1, 5)); // 5: Adder
 
+
+        let xor_le= VariableBitXOrLE::new(num_bits);
+
+        let or= VariableBitOr::new(num_bits);
+
+        let and= VariableBitAnd::new(num_bits);
+
+        let not= VariableBitNot::new(num_bits);
+
+        let shift_left= VariableBitShiftLeft::<true>::new(num_bits);
+
+        let shift_right= VariableBitShiftLeft::<false>::new(num_bits);
+
+        let adder= VariableBitAdder::new(num_bits);
+
+        let decoder= VariableDecoder::new(3);
+
+
         let mut arithmetic_logic_unit = ArithmeticLogicUnit {
             complex_gate: ComplexGateMembers::new(
                 2 * num_bits + 4,
@@ -2069,14 +2118,14 @@ impl ArithmeticLogicUnit {
                 input_gates,
                 output_gates,
             ),
-            xor_le: VariableBitXOrLE::new(num_bits),
-            or: VariableBitOr::new(num_bits),
-            and: VariableBitAnd::new(num_bits),
-            not: VariableBitNot::new(num_bits),
-            shift_left: VariableBitShiftLeft::<true>::new(num_bits),
-            shift_right: VariableBitShiftLeft::<false>::new(num_bits),
-            adder: VariableBitAdder::new(num_bits),
-            decoder: VariableDecoder::new(3),
+            xor_le,
+            or,
+            and,
+            not,
+            shift_left,
+            shift_right,
+            adder,
+            decoder,
             decoder_splitters,
             enable_gates,
             enable_splitters,
@@ -2087,6 +2136,7 @@ impl ArithmeticLogicUnit {
             input_signal_gatekeepers,
             carry_in_signal_gatekeepers,
         };
+
 
         arithmetic_logic_unit.build_and_prime_circuit(
             num_bits,
@@ -2105,6 +2155,7 @@ impl ArithmeticLogicUnit {
         let b_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("B")].clone();
         let c_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("C")].clone();
         let c_in_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("C_IN")].clone();
+
 
         for i in 0..num_bits {
             let input_tag = format!("i_{}", i);
@@ -2375,6 +2426,7 @@ impl ArithmeticLogicUnit {
             }
         }
 
+
         //Carry In -> Signal gatekeepers & Signal gatekeepers -> Arithmetic gates
         connect_gates(
             c_in_input_gate.clone(),
@@ -2382,6 +2434,7 @@ impl ArithmeticLogicUnit {
             self.carry_in_signal_gatekeepers[0].clone(),
             0,
         );
+
 
         let shift_left_shift_in_index = self.shift_left.lock().unwrap().get_index_from_tag("S_IN");
         connect_gates(
@@ -2391,12 +2444,14 @@ impl ArithmeticLogicUnit {
             shift_left_shift_in_index,
         );
 
+
         connect_gates(
             c_in_input_gate.clone(),
             0,
             self.carry_in_signal_gatekeepers[1].clone(),
             0,
         );
+
 
         let shift_right_shift_in_index = self.shift_right.lock().unwrap().get_index_from_tag("S_IN");
         connect_gates(
@@ -2406,12 +2461,14 @@ impl ArithmeticLogicUnit {
             shift_right_shift_in_index,
         );
 
+
         connect_gates(
             c_in_input_gate.clone(),
             0,
             self.carry_in_signal_gatekeepers[2].clone(),
             0,
         );
+
 
         let adder_carry_in_index = self.adder.lock().unwrap().get_index_from_tag("C_IN");
         connect_gates(
@@ -2420,6 +2477,7 @@ impl ArithmeticLogicUnit {
             self.adder.clone(),
             adder_carry_in_index,
         );
+
 
         //Simple outputs
         let xor_larger_output_index = self.xor_le.lock().unwrap().get_index_from_tag("L");
@@ -2431,6 +2489,7 @@ impl ArithmeticLogicUnit {
             0,
         );
 
+
         let xor_equal_output_index = self.xor_le.lock().unwrap().get_index_from_tag("E");
         let equal_output_index = self.get_index_from_tag("EQ");
         connect_gates(
@@ -2439,6 +2498,7 @@ impl ArithmeticLogicUnit {
             output_gates[equal_output_index].clone(),
             0,
         );
+
 
         let z_output_index = self.z.lock().unwrap().get_index_from_tag("O");
         let alu_z_output_index = self.get_index_from_tag("Z");
@@ -2449,6 +2509,7 @@ impl ArithmeticLogicUnit {
             0,
         );
 
+
         //Shift/Carry out -> Controlled Buffers
         let shl_shift_out_index = self.shift_left.lock().unwrap().get_index_from_tag("S_OUT");
         connect_gates(
@@ -2458,6 +2519,7 @@ impl ArithmeticLogicUnit {
             0,
         );
 
+
         let shl_shift_out_index = self.shift_right.lock().unwrap().get_index_from_tag("S_OUT");
         connect_gates(
             self.shift_right.clone(),
@@ -2466,6 +2528,7 @@ impl ArithmeticLogicUnit {
             0,
         );
 
+
         let adder_carry_out_index = self.adder.lock().unwrap().get_index_from_tag("C_OUT");
         connect_gates(
             self.adder.clone(),
@@ -2473,6 +2536,7 @@ impl ArithmeticLogicUnit {
             self.adder_controlled_buffer.clone(),
             0,
         );
+
 
         //Controlled Buffers -> Carry out output
         let alu_carry_output_index = self.get_index_from_tag("C_OUT");
@@ -2483,6 +2547,7 @@ impl ArithmeticLogicUnit {
             0,
         );
 
+
         connect_gates(
             self.shr_controlled_buffer.clone(),
             0,
@@ -2490,12 +2555,14 @@ impl ArithmeticLogicUnit {
             0,
         );
 
+
         connect_gates(
             self.adder_controlled_buffer.clone(),
             0,
             output_gates[alu_carry_output_index].clone(),
             0,
         );
+
 
         //Decoder Inputs and set starting states to HIGH (HIGH, HIGH, HIGH will set all enables to
         // disabled).
@@ -2506,6 +2573,7 @@ impl ArithmeticLogicUnit {
             2,
         );
 
+
         a_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
@@ -2514,12 +2582,14 @@ impl ArithmeticLogicUnit {
             )
         );
 
+
         connect_gates(
             b_input_gate.clone(),
             0,
             self.decoder.clone(),
             1,
         );
+
 
         b_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
@@ -2529,12 +2599,14 @@ impl ArithmeticLogicUnit {
             )
         );
 
+
         connect_gates(
             c_input_gate.clone(),
             0,
             self.decoder.clone(),
             0,
         );
+
 
         c_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
@@ -2553,6 +2625,7 @@ impl ArithmeticLogicUnit {
         // SHR;   Decoder input: 1; Enable Gate idx: 5; Splitter idx: 4; input_gatekeeper idx: 4    ; carry_gatekeeper idx:  1;
         // Adder; Decoder input: 0; Enable Gate idx: 6; Splitter idx: 5; input_gatekeeper idx: 5 & 8; carry_gatekeeper idx:  2;
 
+
         //Decoder -> Splitters
         for j in 0..6 {
             connect_gates(
@@ -2565,6 +2638,7 @@ impl ArithmeticLogicUnit {
 
         //Splitters -> Enables
 
+
         //Xor does not need a splitter
         let enable_gate_enable_index = self.enable_gates[0].lock().unwrap().get_index_from_tag("E");
         connect_gates(
@@ -2573,6 +2647,7 @@ impl ArithmeticLogicUnit {
             self.enable_gates[0].clone(),
             enable_gate_enable_index,
         );
+
 
         //Or
         let decoder_splitter_output_index = self.decoder_splitters[0].lock().unwrap().get_index_for_output(
@@ -2586,6 +2661,7 @@ impl ArithmeticLogicUnit {
             enable_gate_enable_index,
         );
 
+
         let decoder_splitter_output_index = self.decoder_splitters[0].lock().unwrap().get_index_for_output(
             0, 1,
         );
@@ -2597,6 +2673,7 @@ impl ArithmeticLogicUnit {
             gatekeeper_enable_index,
         );
 
+
         let decoder_splitter_output_index = self.decoder_splitters[0].lock().unwrap().get_index_for_output(
             0, 2,
         );
@@ -2607,6 +2684,7 @@ impl ArithmeticLogicUnit {
             self.input_signal_gatekeepers[6].clone(),
             gatekeeper_enable_index,
         );
+
 
         //And
         let decoder_splitter_output_index = self.decoder_splitters[1].lock().unwrap().get_index_for_output(
@@ -2620,6 +2698,7 @@ impl ArithmeticLogicUnit {
             enable_gate_enable_index,
         );
 
+
         let decoder_splitter_output_index = self.decoder_splitters[1].lock().unwrap().get_index_for_output(
             0, 1,
         );
@@ -2630,6 +2709,7 @@ impl ArithmeticLogicUnit {
             self.input_signal_gatekeepers[1].clone(),
             gatekeeper_enable_index,
         );
+
 
         let decoder_splitter_output_index = self.decoder_splitters[1].lock().unwrap().get_index_for_output(
             0, 2,
@@ -2642,6 +2722,7 @@ impl ArithmeticLogicUnit {
             gatekeeper_enable_index,
         );
 
+
         //Not
         let decoder_splitter_output_index = self.decoder_splitters[2].lock().unwrap().get_index_for_output(
             0, 0,
@@ -2653,6 +2734,7 @@ impl ArithmeticLogicUnit {
             self.enable_gates[3].clone(),
             enable_gate_enable_index,
         );
+
 
         let decoder_splitter_output_index = self.decoder_splitters[2].lock().unwrap().get_index_for_output(
             0, 1,
@@ -2812,9 +2894,8 @@ impl ArithmeticLogicUnit {
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            Some(GateType::VariableBitEnableType),
         );
     }
 }
@@ -2842,7 +2923,6 @@ impl LogicGate for ArithmeticLogicUnit {
 
         let result = self.complex_gate.fetch_output_signals(
             &self.get_tag(),
-            Some(GateType::VariableBitEnableType),
         );
 
         unsafe {
@@ -2882,6 +2962,10 @@ impl LogicGate for ArithmeticLogicUnit {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
     }
 }
 
@@ -3016,9 +3100,12 @@ mod tests {
         ); //Zero      (Z)
         gen_randoms_result.output.push(gen_randoms_result.carry_out); //Carry Out (C_OUT)
 
+
         let alu = ArithmeticLogicUnit::new(num_bits);
 
+
         let alu_operation = AluOperations::get_vectors(opt);
+
 
         run_multi_input_output_logic_gate(
             vec![],
@@ -3757,6 +3844,7 @@ mod tests {
             let num_bits = rand::thread_rng().gen_range(2..16);
 
             let gen_randoms_result = generate_random_not_inputs_outputs(num_bits);
+
 
             run_alu(num_bits, AluOperations::Not, gen_randoms_result);
         }
