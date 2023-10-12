@@ -28,6 +28,9 @@ fn main() {
     // a reasonable amount of time, I would probably need to re-write the entire simulation with
     // dropping most of the logic gates themselves and this would defeat the purpose.
 
+    //NOTE: When all Rc<RefCell<>> items had been converted into Arc<Mutex<>> item, but
+    // multi-threading has not yet been implemented, it runs at ~57Hz.
+
     //TODO
     // Right now the way that it loads the memory is actually part of the circuit, might want to change
     // that so it is programmatically done instead. There isn't actually any need to do it the way
