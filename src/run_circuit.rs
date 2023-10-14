@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
+use std::os::linux::raw::stat;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread;
@@ -175,10 +176,9 @@ impl RunCircuitThreadPool {
                                                 &mut thread_pool_lists,
                                                 0,
                                                 &gate_id,
-                                                parent_id
+                                                parent_id,
                                             );
 
-                                            //TODO: is this done?
                                             continue;
                                         }
                                     }
@@ -193,7 +193,7 @@ impl RunCircuitThreadPool {
                                         ProcessingSizeOfGate::Small
                                     } else {
                                         ProcessingSizeOfGate::Large {
-                                            outstanding_children: 0, //TODO: maybe set this?
+                                            outstanding_children: 0, //TODO: set this somewhere
                                             gate: gate.gate.clone(),
                                         }
                                     };
@@ -219,10 +219,37 @@ impl RunCircuitThreadPool {
 
                             let mut num_gates_added = 0;
                             if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
-                                //TODO: Small gate (run_circuit?) OR just run calculate. get fetch
-                                // results and add em on.
+                                let fetched_signals =
+                                    running_gate.gate.lock().unwrap().fetch_output_signals();
 
-                                //TODO: change num_gates_added;
+                                match fetched_signals {
+                                    Ok(output_states) => {
+                                        for gate_output_state in output_states {
+                                            match gate_output_state {
+                                                GateOutputState::NotConnected(_) => {}
+                                                GateOutputState::Connected(connected_gate) => {
+                                                    //TODO: need to increment num_gates_added
+                                                    //TODO: Need to save the gates to add them to the queue below, use the
+                                                    // same credentials as run_circuit. How do I prevent duplicates? There
+                                                    // are duplicate at two levels to worry about. First is inside the gates
+                                                    // queue (add_queue function maybe), second is duplicates that are
+                                                    // returned from fetch itself (is this even possible).
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(err) => {
+                                        match err {
+                                            GateLogicError::NoMoreAutomaticInputsRemaining => {
+                                                //TODO: probably just call shutdown
+                                            }
+                                            GateLogicError::MultipleValidSignalsWhenCalculating => {
+                                                //TODO: will need to store these (maybe inside processing_), then
+                                                // when outstanding children hits 0, increment them
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 //TODO: Large gate, extract input gates and add em on.
 
@@ -245,10 +272,6 @@ impl RunCircuitThreadPool {
                                         &gate_id
                                     );
 
-                                    //TODO: I removed the current gate and all of its children, but shouldn't I also
-                                    // remove it from the parent HashSet. Should this be done above too (where is says
-                                    // "is this done?").
-
                                     let parent_id = &running_gate.parent_id;
 
                                     //TODO: Remember that the highest level gate will have a parent_id of ZERO
@@ -261,13 +284,15 @@ impl RunCircuitThreadPool {
                                         thread_pool_lists,
                                         num_gates_added,
                                         &gate_id,
-                                        parent_id
+                                        parent_id,
                                     );
 
                                     //TODO: Should push the next gates into the lists, assuming
                                     // something about large/small.
                                     //TODO: How is this different than the add_to_queue function
-                                    // below?
+                                    // below? It kind of is because it doesn't need to check the other
+                                    // stuff right? I know its Running, so therefore its inside the
+                                    // processing queue.
                                 }
                                 ProcessingGateStatus::Redo => {
                                     thread_pool_lists.waiting_to_be_processed_set.insert(
@@ -285,8 +310,6 @@ impl RunCircuitThreadPool {
                                     thread_pool_lists.gates.push_front(running_gate);
 
                                     //If this gate needs to redo, it is still in parental_tree.
-
-                                    //TODO: maybe I should end here?
                                 }
                                 ProcessingGateStatus::Cancel => {
                                     thread_pool_lists.processing_set.remove(
@@ -295,14 +318,8 @@ impl RunCircuitThreadPool {
 
                                     //If this gate was canceled, it was already removed from
                                     // parental_tree.
-
-                                    //TODO: maybe I should end here?
                                 }
                             }
-
-                            //TODO: after the gate runs, will need to check the status then
-                            // change around the queues (look at each one), Redo means that the gate
-                            // needs re-run. Cancel means to just stop it.
                         } else {
                             println!("Thread {i} sleeping");
                             signal_clone.wait();
@@ -319,7 +336,7 @@ impl RunCircuitThreadPool {
         mut thread_pool_lists: &mut ThreadPoolLists,
         num_new_children: usize,
         gate_id: &UniqueID,
-        parent_id: &UniqueID
+        parent_id: &UniqueID,
     ) {
         let siblings = thread_pool_lists.parental_tree.get_mut(
             parent_id
@@ -335,8 +352,6 @@ impl RunCircuitThreadPool {
             .expect("The parent gate should always exist when the child gate is \
                                          still in the Running status.");
 
-        //TODO: is this correct? I am subtracting 1 from the outstanding children of the parent AND
-        // adding on the number of siblings.
         let (parent_outstanding_children, parent_gate) =
             match &mut parent_processing_gate.processing_type {
                 ProcessingSizeOfGate::Large { outstanding_children, gate } => {
@@ -372,10 +387,7 @@ impl RunCircuitThreadPool {
                     gate: parent_gate,
                 }
             )
-
         }
-
-        //TODO: should parental_tree be updated somewhere in here?
     }
 
     //TODO: finish these
@@ -453,8 +465,6 @@ impl RunCircuitThreadPool {
             return;
         }
 
-        //TODO: No need to remove the highest level gate if the status was set to Redo. But need to
-        // remove its children because they are canceled.
         fn remove_children(
             thread_pool_lists: &mut ThreadPoolLists,
             gate_id: UniqueID,
@@ -495,6 +505,14 @@ impl RunCircuitThreadPool {
             &mut thread_pool_lists,
             gate_id.clone(),
         );
+
+        //Do not want the current gate removed because it is going to redo. But want it to be empty.
+        thread_pool_lists
+            .parental_tree
+            .insert(
+                gate_id,
+                HashSet::new(),
+            );
 
         //TODO: notify condition variable that it needs to run.
 
