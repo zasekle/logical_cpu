@@ -49,6 +49,7 @@ enum ProcessingSizeOfGate {
     Large {
         outstanding_children: usize,
         gate: SharedMutex<dyn LogicGate>,
+        multiple_valid_input_gates: Vec<Box<dyn LogicGate>>,
     },
     Small,
 }
@@ -63,7 +64,9 @@ enum WaitingSizeOfGate {
 impl WaitingSizeOfGate {
     fn convert_from_processing(size: &ProcessingSizeOfGate) -> Self {
         match size {
-            ProcessingSizeOfGate::Large { outstanding_children, .. } => Self::Large { outstanding_children: *outstanding_children },
+            ProcessingSizeOfGate::Large { outstanding_children, .. } => Self::Large {
+                outstanding_children: *outstanding_children,
+            },
             ProcessingSizeOfGate::Small => Self::Small
         }
     }
@@ -195,6 +198,7 @@ impl RunCircuitThreadPool {
                                         ProcessingSizeOfGate::Large {
                                             outstanding_children: 0, //TODO: set this somewhere
                                             gate: gate.gate.clone(),
+                                            multiple_valid_input_gates: Vec::new(),
                                         }
                                     };
 
@@ -354,7 +358,7 @@ impl RunCircuitThreadPool {
 
         let (parent_outstanding_children, parent_gate) =
             match &mut parent_processing_gate.processing_type {
-                ProcessingSizeOfGate::Large { outstanding_children, gate } => {
+                ProcessingSizeOfGate::Large { outstanding_children, gate, multiple_valid_input_gates } => {
                     //Subtract the current gate from the number of outstanding children.
                     *outstanding_children -= 1;
                     *outstanding_children += num_new_children;
