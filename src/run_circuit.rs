@@ -183,7 +183,7 @@ impl RunCircuitThreadPool {
                                                 //TODO: Do something if no parent, maybe continue?
                                             }
 
-                                            Self::decrement_parent_gate(
+                                            Self::update_parent_gate(
                                                 &mut thread_pool_lists,
                                                 0,
                                                 &gate_id,
@@ -230,6 +230,7 @@ impl RunCircuitThreadPool {
 
                             let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
 
+                            let mut next_gates = Vec::new();
                             let mut multiple_valid_signals = Vec::new();
                             let mut num_gates_added = 0;
                             if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
@@ -293,17 +294,11 @@ impl RunCircuitThreadPool {
                                     let parent_id = &running_gate.parent_id;
 
                                     //TODO: Remember that the highest level gate will have a parent_id of ZERO
-                                    if parent_id.id() == 0 {
-                                        //TODO: This will be the highest level gate because it has no parents,
-                                        // I think I can just return here.
+                                    if parent_id.id() != 0 {
+                                        //TODO: what to do here?
                                     }
 
-                                    //TODO: use multiple_valid_signals and push them into the parent gate. Also
-                                    // need to make sure to subtract them from the outstanding_gates number. Should
-                                    // this go before or after the parent gate decrement? OR should it go in the
-                                    // same function?
-
-                                    Self::decrement_parent_gate(
+                                    Self::update_parent_gate(
                                         thread_pool_lists,
                                         num_gates_added,
                                         &gate_id,
@@ -356,7 +351,7 @@ impl RunCircuitThreadPool {
         thread_pool
     }
 
-    fn decrement_parent_gate(
+    fn update_parent_gate(
         mut thread_pool_lists: &mut ThreadPoolLists,
         num_new_children: usize,
         gate_id: &UniqueID,
@@ -365,9 +360,11 @@ impl RunCircuitThreadPool {
     ) {
         let siblings = thread_pool_lists.parental_tree.get_mut(
             parent_id
-        ).expect("A sibling completed when its parent tree \
-                                        was removed. This should never happen because the parent tree should \
-                                        never be completed before the children tree is.");
+        ).expect(
+        "A sibling completed when its parent tree \
+                was removed. This should never happen because the parent tree should \
+                never be completed before the children tree is."
+        );
 
         siblings.remove(&gate_id);
 
@@ -513,7 +510,7 @@ impl RunCircuitThreadPool {
                 }
             );
 
-            //TODO: notify condition variable that it needs to run.
+            self.condvar_wrapper.cond.notify_one();
 
             return;
         }
@@ -567,7 +564,7 @@ impl RunCircuitThreadPool {
                 HashSet::new(),
             );
 
-        //TODO: notify condition variable that it needs to run.
+        self.condvar_wrapper.cond.notify_one();
 
         //No need to add the gate, it is currently processing. This means that it will 'Redo'
         // itself.
