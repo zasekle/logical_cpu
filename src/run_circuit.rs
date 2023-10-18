@@ -231,6 +231,7 @@ impl RunCircuitThreadPool {
                             let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
 
                             let mut next_gates = Vec::new();
+                            let mut next_gates_set = HashSet::new();
                             let mut multiple_valid_signals = Vec::new();
                             let mut num_gates_added = 0;
                             if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
@@ -242,8 +243,41 @@ impl RunCircuitThreadPool {
                                         for gate_output_state in output_states {
                                             match gate_output_state {
                                                 GateOutputState::NotConnected(_) => {}
-                                                GateOutputState::Connected(connected_gate) => {
-                                                    //TODO: need to increment num_gates_added
+                                                GateOutputState::Connected(next_gate_info) => {
+
+                                                    //TODO: Make this a function with run_circuit (the match statement might be able to be a set too).
+                                                    let next_gate = Arc::clone(&next_gate_info.gate);
+                                                    let mut mutable_next_gate = next_gate.lock().unwrap();
+
+                                                    let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
+                                                        mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
+                                                    let gate_id = mutable_next_gate.get_unique_id();
+
+                                                    let contains_id = next_gates_set.contains(&gate_id);
+
+                                                    //It is important to remember that a situation such as an OR gate feeding
+                                                    // back into itself is perfectly valid. This can be interpreted that if the
+                                                    // input was not changed, the output was not changed either and so nothing
+                                                    // needs to be done with this gate.
+                                                    //The first tick is a bit special, because the circuit needs to propagate
+                                                    // the signal regardless of if the gates change or not. This leads to
+                                                    // checking if it is the first time the gate is updated on the first
+                                                    // clock tick.
+                                                    //Also each gate only needs to be stored inside the map once. All changed
+                                                    // inputs are saved as part of the state, so collect_output() only needs
+                                                    // to run once.
+                                                    //TODO: Will need at some point to propagate the signal through the entire circuit to prime it
+                                                    // with this new way, that will never be done, OR I can pass it in somehow
+                                                    if (input_signal_updated || (
+                                                        // propagate_signal_through_circuit &&
+                                                        changed_count_this_tick == 1
+                                                    )) && !contains_id {
+                                                        drop(mutable_next_gate);
+                                                        // println!("next_gates.insert()");
+                                                        next_gates_set.insert(gate_id);
+                                                        next_gates.push(next_gate);
+                                                    }
+                                                    //TODO: need to increment num_gates_added OR just use the next_gates.len() func
                                                     //TODO: Need to save the gates to add them to the queue below, use the
                                                     // same credentials as run_circuit. How do I prevent duplicates? There
                                                     // are duplicate at two levels to worry about. First is inside the gates
