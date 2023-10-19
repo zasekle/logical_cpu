@@ -6,7 +6,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
-use crate::logic::foundations::{connect_gates, GateInput, GateLogicError, GateOutputState, InputSignalReturn, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{connect_gates, ConnectedOutput, GateInput, GateLogicError, GateOutputState, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::{AutomaticInput, Clock};
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
@@ -18,7 +18,7 @@ use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 static NUM_CHILDREN_GATES_FOR_LARGE_GATE: usize = 7;
 
-struct CondvarWrapper {
+pub struct CondvarWrapper {
     cond: Condvar,
     mutex: Mutex<()>,
 }
@@ -95,8 +95,14 @@ pub struct ThreadPoolLists {
 
 impl ThreadPoolLists {
     pub fn clear(&mut self) {
+        //TODO: Do I want to clear the parental_tree? Will it mess with what happens to the
+        // processing stuff?
         self.parental_tree.clear();
-        self.processing_set.clear();
+
+        for (_id, processing_gate) in self.processing_set.iter_mut() {
+            processing_gate.status = ProcessingGateStatus::Cancel;
+        }
+
         self.waiting_to_be_processed_set.clear();
         self.gates.clear();
     }
@@ -107,24 +113,21 @@ pub struct RunCircuitThreadPool {
 
     threads: Vec<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
+    //TODO: This will need to be set to false after the first clock tick. Might just be able to set
+    // it to true on initialization too depending on implementation.
+    propagate_signal: Arc<AtomicBool>,
     condvar_wrapper: Arc<CondvarWrapper>,
+}
+
+pub struct QueueElement {
+    gate: SharedMutex<dyn LogicGate>,
+    parent_id: UniqueID,
+    gate_id: UniqueID,
+    number_children_in_gate: usize,
 }
 
 //TODO: For now the goal here is to get a working interface. Performance can be improved upon later.
 impl RunCircuitThreadPool {
-
-    //TODO: Steps
-    // Need to check if this gate should run in a single-threaded or multi-threaded way.
-    // If single-threaded, run it (should be cancellable by checking the status of its parent)
-    // If multi-threaded, store it in a separate Vec and run its children gates
-    //  This needs to include a status (for CANCELLED or ACTIVE)
-    //  When its outstanding children gates hit 0, it will need to be reloaded and be
-    //   waiting_to_be_processed (maybe something different for ACTIVE and CANCELLED)
-
-    //TODO: So I need
-    // Some way to get/measure the number of outstanding gates.
-
-    //TODO: Will there be a problem with the edge cases that I has to deal with in run_circuit?
     pub fn new(size: NonZeroUsize) -> Self {
         let mut thread_pool = RunCircuitThreadPool {
             thread_pool_lists: Arc::new(
@@ -139,6 +142,7 @@ impl RunCircuitThreadPool {
             ),
             threads: Vec::new(),
             shutdown: Arc::new(AtomicBool::from(false)),
+            propagate_signal: Arc::new(AtomicBool::from(false)),
             condvar_wrapper: Arc::new(CondvarWrapper::new()),
         };
 
@@ -146,6 +150,7 @@ impl RunCircuitThreadPool {
             let mut shutdown_clone = thread_pool.shutdown.clone();
             let mut thread_pool_lists_clone = thread_pool.thread_pool_lists.clone();
             let mut signal_clone = thread_pool.condvar_wrapper.clone();
+            let mut propagate_signal_clone = thread_pool.propagate_signal.clone();
             thread_pool.threads.push(
                 thread::spawn(move || {
                     println!("Thread {i} started");
@@ -233,7 +238,7 @@ impl RunCircuitThreadPool {
                             let mut next_gates = Vec::new();
                             let mut next_gates_set = HashSet::new();
                             let mut multiple_valid_signals = Vec::new();
-                            let mut num_gates_added = 0;
+                            // let mut num_gates_added = 0;
                             if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
                                 let fetched_signals =
                                     running_gate.gate.lock().unwrap().fetch_output_signals();
@@ -244,9 +249,7 @@ impl RunCircuitThreadPool {
                                             match gate_output_state {
                                                 GateOutputState::NotConnected(_) => {}
                                                 GateOutputState::Connected(next_gate_info) => {
-
-                                                    //TODO: Make this a function with run_circuit (the match statement might be able to be a set too).
-                                                    let next_gate = Arc::clone(&next_gate_info.gate);
+                                                    let next_gate = next_gate_info.gate.clone();
                                                     let mut mutable_next_gate = next_gate.lock().unwrap();
 
                                                     let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
@@ -255,34 +258,26 @@ impl RunCircuitThreadPool {
 
                                                     let contains_id = next_gates_set.contains(&gate_id);
 
-                                                    //It is important to remember that a situation such as an OR gate feeding
-                                                    // back into itself is perfectly valid. This can be interpreted that if the
-                                                    // input was not changed, the output was not changed either and so nothing
-                                                    // needs to be done with this gate.
-                                                    //The first tick is a bit special, because the circuit needs to propagate
-                                                    // the signal regardless of if the gates change or not. This leads to
-                                                    // checking if it is the first time the gate is updated on the first
-                                                    // clock tick.
-                                                    //Also each gate only needs to be stored inside the map once. All changed
-                                                    // inputs are saved as part of the state, so collect_output() only needs
-                                                    // to run once.
-                                                    //TODO: Will need at some point to propagate the signal through the entire circuit to prime it
-                                                    // with this new way, that will never be done, OR I can pass it in somehow
-                                                    if (input_signal_updated || (
-                                                        // propagate_signal_through_circuit &&
-                                                        changed_count_this_tick == 1
-                                                    )) && !contains_id {
+                                                    let should_update_gate = check_if_next_gate_should_be_stored(
+                                                        input_signal_updated,
+                                                        changed_count_this_tick,
+                                                        contains_id,
+                                                        propagate_signal_clone.load(Ordering::Relaxed),
+                                                    );
+
+                                                    if should_update_gate {
+                                                        let number_children_in_gate = mutable_next_gate.num_children_gates();
                                                         drop(mutable_next_gate);
-                                                        // println!("next_gates.insert()");
                                                         next_gates_set.insert(gate_id);
-                                                        next_gates.push(next_gate);
+                                                        next_gates.push(
+                                                            QueueElement {
+                                                                gate: next_gate,
+                                                                parent_id: running_gate.parent_id,
+                                                                gate_id,
+                                                                number_children_in_gate,
+                                                            }
+                                                        );
                                                     }
-                                                    //TODO: need to increment num_gates_added OR just use the next_gates.len() func
-                                                    //TODO: Need to save the gates to add them to the queue below, use the
-                                                    // same credentials as run_circuit. How do I prevent duplicates? There
-                                                    // are duplicate at two levels to worry about. First is inside the gates
-                                                    // queue (add_queue function maybe), second is duplicates that are
-                                                    // returned from fetch itself (is this even possible).
                                                 }
                                             }
                                         }
@@ -304,9 +299,9 @@ impl RunCircuitThreadPool {
                                     }
                                 }
                             } else {
-                                //TODO: Large gate, extract input gates and add em on.
-
-                                //TODO: change num_gates_added;
+                                //TODO: Large gate, extract input gates and add em to next_gates.
+                                // This will require a function inside for getting the input gates OR
+                                // for getting the ComplexGate struct, then can get the gates from that.
                             }
 
                             let mut thread_pool_lists_guard = thread_pool_lists_clone.lock().unwrap();
@@ -328,16 +323,23 @@ impl RunCircuitThreadPool {
                                     let parent_id = &running_gate.parent_id;
 
                                     //TODO: Remember that the highest level gate will have a parent_id of ZERO
-                                    if parent_id.id() != 0 {
+                                    if parent_id.id() == 0 {
                                         //TODO: what to do here?
                                     }
 
                                     Self::update_parent_gate(
                                         thread_pool_lists,
-                                        num_gates_added,
+                                        next_gates.len(),
                                         &gate_id,
                                         parent_id,
                                         multiple_valid_signals,
+                                    );
+
+                                    //TODO: fix this
+                                    Self::add_to_queue(
+                                        thread_pool_lists_guard,
+                                        next_gates,
+                                        &mut signal_clone,
                                     );
 
                                     //TODO: Should push the next gates into the lists, assuming
@@ -346,6 +348,11 @@ impl RunCircuitThreadPool {
                                     // below? It kind of is because it doesn't need to check the other
                                     // stuff right? I know its Running, so therefore its inside the
                                     // processing queue.
+                                    //TODO: Need to save the gates to add them to the queue below, use the
+                                    // same credentials as run_circuit. How do I prevent duplicates? There
+                                    // are duplicate at two levels to worry about. First is inside the gates
+                                    // queue (add_queue function maybe), second is duplicates that are
+                                    // returned from fetch itself (is this even possible).
                                 }
                                 ProcessingGateStatus::Redo => {
                                     thread_pool_lists.waiting_to_be_processed_set.insert(
@@ -395,7 +402,7 @@ impl RunCircuitThreadPool {
         let siblings = thread_pool_lists.parental_tree.get_mut(
             parent_id
         ).expect(
-        "A sibling completed when its parent tree \
+            "A sibling completed when its parent tree \
                 was removed. This should never happen because the parent tree should \
                 never be completed before the children tree is."
         );
@@ -492,116 +499,112 @@ impl RunCircuitThreadPool {
         );
     }
 
-    fn add_to_queue(
-        &mut self,
+    pub fn add_to_queue(
         mut thread_pool_lists: MutexGuard<ThreadPoolLists>,
-        outstanding_children: usize,
-        gate: SharedMutex<dyn LogicGate>,
-        parent_id: UniqueID,
-        gate_id: UniqueID,
+        mut queue_elements: Vec<QueueElement>,
+        condvar_wrapper: &mut Arc<CondvarWrapper>,
     ) {
-        // let mut thread_pool_lists = self.thread_pool_lists.lock().unwrap();
-        let num_children_gate = gate.lock().unwrap().num_children_gates();
-
-        let inserted = thread_pool_lists.waiting_to_be_processed_set.insert(
-            gate_id.clone(),
-            if num_children_gate < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
-                WaitingSizeOfGate::Small
-            } else {
-                WaitingSizeOfGate::Large { outstanding_children }
-            },
-        );
-
-        if let None = inserted {
-            //If the gate is already in the queue, but not being processed, no need to do anything.
-            return;
-        }
-
-        let mut processing = thread_pool_lists.processing_set.get_mut(&gate_id);
-
-        if let Some(processing_gate) = processing.take() {
-            if num_children_gate < NUM_CHILDREN_GATES_FOR_LARGE_GATE { //small gate
-                processing_gate.status = ProcessingGateStatus::Cancel;
-            } else {
-                processing_gate.status = ProcessingGateStatus::Redo;
-            }
-        } else { //Gate is not in queue.
-            let parental_set = thread_pool_lists
-                .parental_tree
-                .get_mut(&parent_id)
-                .expect("Parental tree should always exist when calling a child tree.");
-
-            parental_set.insert(gate_id.clone());
-
-            //TODO: take care of the case where parent_id is 0
-
-            //waiting_to_be_processed_set was inserted to above.
-
-            thread_pool_lists.gates.push_back(
-                ParentIdAndGate {
-                    parent_id,
-                    gate,
-                }
-            );
-
-            self.condvar_wrapper.cond.notify_one();
-
-            return;
-        }
-
-        fn remove_children(
-            thread_pool_lists: &mut ThreadPoolLists,
-            gate_id: UniqueID,
-        ) {
-            let children = thread_pool_lists
-                .parental_tree
-                .remove(&gate_id)
-                .expect("Child ID did not exist in parental_tree.");
-            for child_id in children.into_iter() {
-                let removed = thread_pool_lists.waiting_to_be_processed_set.remove(
-                    &child_id
-                );
-
-                if let Some(_) = removed {
-                    //Instead of searching through the gates Vec, it will instead skip any values inside
-                    // the gates Vec that is not inside waiting_to_be_processed.
-                    continue;
-                }
-
-                let child_processing_gate = thread_pool_lists.processing_set.get_mut(
-                    &child_id
-                );
-
-                if let Some(child_processing_gate) = child_processing_gate {
-                    child_processing_gate.status = ProcessingGateStatus::Cancel;
+        for gate_element in queue_elements.into_iter() {
+            let inserted = thread_pool_lists.waiting_to_be_processed_set.insert(
+                gate_element.gate_id.clone(),
+                if gate_element.number_children_in_gate < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
+                    WaitingSizeOfGate::Small
                 } else {
-                    panic!("A child ID was found inside \"parental_id\" structure but was not in processing or waiting to be processed sets.")
-                }
-
-                remove_children(
-                    thread_pool_lists,
-                    child_id,
-                );
-            }
-        }
-
-        remove_children(
-            &mut thread_pool_lists,
-            gate_id.clone(),
-        );
-
-        //Do not want the current gate removed because it is going to redo. But want it to be empty.
-        thread_pool_lists
-            .parental_tree
-            .insert(
-                gate_id,
-                HashSet::new(),
+                    WaitingSizeOfGate::Large { outstanding_children: 0 }
+                },
             );
 
-        self.condvar_wrapper.cond.notify_one();
+            if let None = inserted {
+                //If the gate is already in the queue, but not being processed, no need to do anything.
+                return;
+            }
 
-        //No need to add the gate, it is currently processing. This means that it will 'Redo'
-        // itself.
+            let mut processing = thread_pool_lists.processing_set.get_mut(&gate_element.gate_id);
+
+            if let Some(processing_gate) = processing.take() {
+                if gate_element.number_children_in_gate < NUM_CHILDREN_GATES_FOR_LARGE_GATE { //small gate
+                    processing_gate.status = ProcessingGateStatus::Cancel;
+                } else {
+                    processing_gate.status = ProcessingGateStatus::Redo;
+                }
+            } else { //Gate is not in queue.
+                let parental_set = thread_pool_lists
+                    .parental_tree
+                    .get_mut(&gate_element.parent_id)
+                    .expect("Parental tree should always exist when calling a child tree.");
+
+                parental_set.insert(gate_element.gate_id.clone());
+
+                //TODO: take care of the case where parent_id is 0
+
+                //waiting_to_be_processed_set was inserted to above.
+
+                thread_pool_lists.gates.push_back(
+                    ParentIdAndGate {
+                        parent_id: gate_element.parent_id,
+                        gate: gate_element.gate,
+                    }
+                );
+
+                condvar_wrapper.cond.notify_one();
+
+                return;
+            }
+
+            fn remove_children(
+                thread_pool_lists: &mut ThreadPoolLists,
+                gate_id: UniqueID,
+            ) {
+                let children = thread_pool_lists
+                    .parental_tree
+                    .remove(&gate_id)
+                    .expect("Child ID did not exist in parental_tree.");
+                for child_id in children.into_iter() {
+                    let removed = thread_pool_lists.waiting_to_be_processed_set.remove(
+                        &child_id
+                    );
+
+                    if let Some(_) = removed {
+                        //Instead of searching through the gates Vec, it will instead skip any values inside
+                        // the gates Vec that is not inside waiting_to_be_processed.
+                        continue;
+                    }
+
+                    let child_processing_gate = thread_pool_lists.processing_set.get_mut(
+                        &child_id
+                    );
+
+                    if let Some(child_processing_gate) = child_processing_gate {
+                        child_processing_gate.status = ProcessingGateStatus::Cancel;
+                    } else {
+                        panic!("A child ID was found inside \"parental_id\" structure but was not in processing or waiting to be processed sets.")
+                    }
+
+                    remove_children(
+                        thread_pool_lists,
+                        child_id,
+                    );
+                }
+            }
+
+            remove_children(
+                &mut thread_pool_lists,
+                gate_element.gate_id.clone(),
+            );
+
+            //Do not want the current gate removed because it is going to redo. But want it to be empty.
+            thread_pool_lists
+                .parental_tree
+                .insert(
+                    gate_element.gate_id,
+                    HashSet::new(),
+                );
+
+            condvar_wrapper.cond.notify_one();
+
+            //No need to add the gate, it is currently processing. This means that it will 'Redo'
+            // itself.
+        }
 
 
         //TODO: Remember that a child gate will need to check and see if its parent was canceled.
@@ -836,7 +839,8 @@ pub fn run_circuit<F>(
                         if print_output {
                             println!("Connected(gate_output): {:?}", next_gate_info);
                         }
-                        let next_gate = Arc::clone(&next_gate_info.gate);
+
+                        let next_gate = next_gate_info.gate.clone();
                         let mut mutable_next_gate = next_gate.lock().unwrap();
 
                         let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
@@ -845,24 +849,20 @@ pub fn run_circuit<F>(
 
                         let contains_id = next_gates_set.contains(&gate_id);
 
+                        let should_update_gate = check_if_next_gate_should_be_stored(
+                            input_signal_updated,
+                            changed_count_this_tick,
+                            contains_id,
+                            propagate_signal_through_circuit,
+                        );
+
                         if print_output {
                             println!("checking gate {} tag {} signal {:?}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag(), next_gate_info.throughput.signal.clone());
                             // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
-                            println!("input_signal_updated: {input_signal_updated} propagate_signal_through_circuit: {propagate_signal_through_circuit} changed_count_this_tick {changed_count_this_tick} contains_id {contains_id}");
+                            // println!("input_signal_updated: {input_signal_updated} propagate_signal_through_circuit: {propagate_signal_through_circuit} changed_count_this_tick {changed_count_this_tick} contains_id {contains_id}");
                         }
 
-                        //It is important to remember that a situation such as an OR gate feeding
-                        // back into itself is perfectly valid. This can be interpreted that if the
-                        // input was not changed, the output was not changed either and so nothing
-                        // needs to be done with this gate.
-                        //The first tick is a bit special, because the circuit needs to propagate
-                        // the signal regardless of if the gates change or not. This leads to
-                        // checking if it is the first time the gate is updated on the first
-                        // clock tick.
-                        //Also each gate only needs to be stored inside the map once. All changed
-                        // inputs are saved as part of the state, so collect_output() only needs
-                        // to run once.
-                        if (input_signal_updated || (propagate_signal_through_circuit && changed_count_this_tick == 1)) && !contains_id {
+                        if should_update_gate {
                             if print_output {
                                 println!("Pushing gate {} tag {}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag());
                             }
@@ -897,6 +897,27 @@ pub fn run_circuit<F>(
     );
 
     continue_clock
+}
+
+fn check_if_next_gate_should_be_stored(
+    input_signal_updated: bool,
+    changed_count_this_tick: usize,
+    contains_id: bool,
+    propagate_signal: bool,
+) -> bool {
+
+    //It is important to remember that a situation such as an OR gate feeding
+    // back into itself is perfectly valid. This can be interpreted that if the
+    // input was not changed, the output was not changed either and so nothing
+    // needs to be done with this gate.
+    //The first tick is a bit special, because the circuit needs to propagate
+    // the signal regardless of if the gates change or not. This leads to
+    // checking if it is the first time the gate is updated on the first
+    // clock tick.
+    //Also each gate only needs to be stored inside the map once. All changed
+    // inputs are saved as part of the state, so collect_output() only needs
+    // to run once.
+    input_signal_updated || (propagate_signal && changed_count_this_tick == 1) && !contains_id
 }
 
 pub fn count_gates_in_circuit(
