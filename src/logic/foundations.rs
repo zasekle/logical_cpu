@@ -133,6 +133,8 @@ pub trait LogicGate: Send {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool);
 
     fn num_children_gates(&self) -> usize;
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>>;
 }
 
 #[derive(Debug, Clone)]

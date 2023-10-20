@@ -75,6 +75,10 @@ impl LogicGate for Or {
     fn num_children_gates(&self) -> usize {
         self.members.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
+    }
 }
 
 pub struct And {
@@ -149,6 +153,10 @@ impl LogicGate for And {
 
     fn num_children_gates(&self) -> usize {
        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -225,6 +233,10 @@ impl LogicGate for Not {
     fn num_children_gates(&self) -> usize {
         self.members.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
+    }
 }
 
 pub struct Nor {
@@ -299,6 +311,10 @@ impl LogicGate for Nor {
 
     fn num_children_gates(&self) -> usize {
         self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -375,6 +391,10 @@ impl LogicGate for Nand {
     fn num_children_gates(&self) -> usize {
         self.members.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
+    }
 }
 
 pub struct XOr {
@@ -448,6 +468,10 @@ impl LogicGate for XOr {
 
     fn num_children_gates(&self) -> usize {
         self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -598,6 +622,10 @@ impl LogicGate for Splitter {
 
     fn num_children_gates(&self) -> usize {
         self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -758,6 +786,10 @@ impl LogicGate for ControlledBuffer {
 
     fn num_children_gates(&self) -> usize {
         self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -1413,8 +1445,13 @@ mod tests {
             fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
                 self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
             }
+
             fn num_children_gates(&self) -> usize {
                 self.complex_gate.simple_gate.number_child_gates
+            }
+
+            fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+                self.complex_gate.input_gates.clone()
             }
         }
 

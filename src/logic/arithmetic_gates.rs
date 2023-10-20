@@ -168,6 +168,10 @@ impl LogicGate for HalfAdder {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct FullAdder {
@@ -352,6 +356,10 @@ impl LogicGate for FullAdder {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -565,6 +573,10 @@ impl LogicGate for VariableBitAdder {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitShiftLeft<const LEFT_SHIFT: bool> {
@@ -768,6 +780,10 @@ impl<const LEFT_SHIFT: bool> LogicGate for VariableBitShiftLeft<LEFT_SHIFT> {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitNot {
@@ -905,6 +921,10 @@ impl LogicGate for VariableBitNot {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -1062,6 +1082,10 @@ impl LogicGate for VariableBitAnd {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitOr {
@@ -1217,6 +1241,10 @@ impl LogicGate for VariableBitOr {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -1443,6 +1471,10 @@ impl LogicGate for XOrLE {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -1673,6 +1705,10 @@ impl LogicGate for VariableBitXOrLE {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitZ {
@@ -1812,6 +1848,10 @@ impl LogicGate for VariableBitZ {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -1953,6 +1993,10 @@ impl LogicGate for VariableBitEnable {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -2966,6 +3010,10 @@ impl LogicGate for ArithmeticLogicUnit {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 

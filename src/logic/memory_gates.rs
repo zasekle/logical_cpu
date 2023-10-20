@@ -192,6 +192,10 @@ impl LogicGate for SRLatch {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct ActiveLowSRLatch {
@@ -376,6 +380,10 @@ impl LogicGate for ActiveLowSRLatch {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -610,6 +618,10 @@ impl LogicGate for OneBitMemoryCell {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitMemoryCell {
@@ -779,6 +791,10 @@ impl LogicGate for VariableBitMemoryCell {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 

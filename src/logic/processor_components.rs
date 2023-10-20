@@ -203,6 +203,10 @@ impl LogicGate for VariableBitRegister {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableDecoder {
@@ -381,6 +385,10 @@ impl LogicGate for VariableDecoder {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -650,6 +658,10 @@ impl LogicGate for SingleRAMCell {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -1012,6 +1024,10 @@ impl LogicGate for RAMUnit {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 //This is a higher level thing for the CPU to connect to and add one.
@@ -1193,6 +1209,10 @@ impl LogicGate for VariableBitBusOne {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 

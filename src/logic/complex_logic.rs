@@ -388,6 +388,10 @@ impl LogicGate for VariableOutputStepper {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitCPUEnable {
@@ -531,6 +535,10 @@ impl LogicGate for VariableBitCPUEnable {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -686,6 +694,10 @@ impl LogicGate for SignalGatekeeper {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -1014,6 +1026,10 @@ impl LogicGate for MasterSlaveJKFlipFlop {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct FourCycleClockHookup {
@@ -1315,6 +1331,10 @@ impl LogicGate for FourCycleClockHookup {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitMultiplexer {
@@ -1607,6 +1627,10 @@ impl LogicGate for VariableBitMultiplexer {
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitCounter {
@@ -1837,6 +1861,10 @@ impl LogicGate for VariableBitCounter {
 
     fn num_children_gates(&self) -> usize {
         self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 

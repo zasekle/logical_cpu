@@ -150,6 +150,10 @@ impl LogicGate for Clock {
     fn num_children_gates(&self) -> usize {
         0
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Input gates do not have input gates");
+    }
 }
 
 pub struct AutomaticInput {
@@ -298,6 +302,10 @@ impl LogicGate for AutomaticInput {
     fn num_children_gates(&self) -> usize {
         0
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Input gates do not have input gates");
+    }
 }
 
 pub struct SimpleInput {
@@ -396,6 +404,10 @@ impl LogicGate for SimpleInput {
 
     fn num_children_gates(&self) -> usize {
         0
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Input gates do not have input gates");
     }
 }
 

@@ -141,4 +141,8 @@ impl LogicGate for SimpleOutput {
     fn num_children_gates(&self) -> usize {
         0
     }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Output gates do not have input gates");
+    }
 }
