@@ -95,8 +95,8 @@ pub struct ThreadPoolLists {
 
 impl ThreadPoolLists {
     pub fn clear(&mut self) {
-        //TODO: Do I want to clear the parental_tree? Will it mess with what happens to the
-        // processing stuff?
+        //This needs to be cleared, all gates are assumed to be removed from parental_tree when
+        // Cancel is set as the status.
         self.parental_tree.clear();
 
         for (_id, processing_gate) in self.processing_set.iter_mut() {
@@ -190,7 +190,7 @@ impl RunCircuitThreadPool {
                                             let parent_id = &gate.parent_id;
 
                                             if parent_id.id() == 0 {
-                                                //TODO: Do something if no parent, maybe continue?
+                                                continue;
                                             }
 
                                             Self::update_parent_gate(
@@ -215,8 +215,9 @@ impl RunCircuitThreadPool {
                                     if gate_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
                                         ProcessingSizeOfGate::Small
                                     } else {
+                                        //outstanding_children will be updated below when the input gates are added.
                                         ProcessingSizeOfGate::Large {
-                                            outstanding_children: 0, //TODO: Set this somewhere, I think it is set below, but if there is an easy way to set it, the consistency would be nice.
+                                            outstanding_children: 0,
                                             gate: gate.gate.clone(),
                                             multiple_valid_input_gates: Vec::new(),
                                         }
@@ -308,6 +309,7 @@ impl RunCircuitThreadPool {
                                 }
                             } else {
                                 let mutable_running_gate = running_gate.gate.lock().unwrap();
+                                //When the gates are added below, the parent id will be the current gate for a large gate.
                                 parent_id = mutable_running_gate.get_unique_id();
                                 let input_gates = mutable_running_gate.get_input_gates();
                                 drop(mutable_running_gate);
@@ -347,24 +349,22 @@ impl RunCircuitThreadPool {
 
                             match processing_element.status {
                                 ProcessingGateStatus::Running => {
-                                    thread_pool_lists.parental_tree.remove(
-                                        &gate_id
-                                    );
-
-                                    //TODO: Remember that the highest level gate will have a
-                                    // parent_id of ZERO.
-                                    if parent_id.id() == 0 {
-                                        //TODO: what to do here?
+                                    if number_gates_that_ran > 0 {
+                                        thread_pool_lists.parental_tree.remove(
+                                            &gate_id
+                                        );
                                     }
 
-                                    Self::update_parent_gate(
-                                        thread_pool_lists,
-                                        next_gates.len(),
-                                        number_gates_that_ran,
-                                        &gate_id,
-                                        &parent_id,
-                                        multiple_valid_signals,
-                                    );
+                                    if parent_id.id() != 0 {
+                                        Self::update_parent_gate(
+                                            thread_pool_lists,
+                                            next_gates.len(),
+                                            number_gates_that_ran,
+                                            &gate_id,
+                                            &parent_id,
+                                            multiple_valid_signals,
+                                        );
+                                    }
 
                                     Self::add_to_queue_internal(
                                         thread_pool_lists_guard,
@@ -418,15 +418,17 @@ impl RunCircuitThreadPool {
         parent_id: &UniqueID,
         mut passed_multiple_valid_input_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        let siblings = thread_pool_lists.parental_tree.get_mut(
-            parent_id
-        ).expect(
-            "A sibling completed when its parent tree \
+        if num_completed_children == 0 {
+            let siblings = thread_pool_lists.parental_tree.get_mut(
+                parent_id
+            ).expect(
+                "A sibling completed when its parent tree \
                 was removed. This should never happen because the parent tree should \
                 never be completed before the children tree is."
-        );
+            );
 
-        siblings.remove(&gate_id);
+            siblings.remove(&gate_id);
+        }
 
         let parent_processing_gate = thread_pool_lists
             .processing_set
@@ -562,14 +564,15 @@ impl RunCircuitThreadPool {
                     processing_gate.status = ProcessingGateStatus::Redo;
                 }
             } else { //Gate is not in queue.
-                let parental_set = thread_pool_lists
-                    .parental_tree
-                    .get_mut(&gate_element.parent_id)
-                    .expect("Parental tree should always exist when calling a child tree.");
 
-                parental_set.insert(gate_element.gate_id.clone());
+                if gate_element.parent_id.id() != 0 {
+                    let parental_set = thread_pool_lists
+                        .parental_tree
+                        .get_mut(&gate_element.parent_id)
+                        .expect("Parental tree should always exist when calling a child tree.");
 
-                //TODO: take care of the case where parent_id is 0
+                    parental_set.insert(gate_element.gate_id.clone());
+                }
 
                 //waiting_to_be_processed_set was inserted to above.
 
@@ -639,114 +642,6 @@ impl RunCircuitThreadPool {
             //No need to add the gate, it is currently processing. This means that it will 'Redo'
             // itself.
         }
-
-
-        //TODO: Remember that a child gate will need to check and see if its parent was canceled.
-        // This is an interesting point, if I get a parent gate that is 'processing' and it has
-        //  outstanding children, I need to cancel all of the outstanding children right?
-        // This can be done in two ways.
-        //  When the parent gate is received, it can iterate through
-        //  and set each child to canceled. This requires storing the processing and waiting to be
-        //  processed gates that relate back to the parent gate.
-        //  OR
-        //  The child gate can check the status of its parent gate when it completes and cancel
-        //  itself. It will need to keep a hierarchy of all of its parents so that if any of them
-        //  are canceled, it will need to automatically stop. I think that when the gate is canceled
-        //  it will still need a way to go through and remove any children gates from the waiting_to_be_processed
-        //  and gates queue.
-
-        //TODO: There is another problem. Say I get a large gate and I queue up all its input gates,
-        // what is the flow like here? When does it go back into the waiting_to_be_processed queue?
-        // I guess when the outstanding_number hits zero, but where is it stored until then?
-
-        //Small gates
-        // Actually run the gate.
-        // When the gate completes, fetch will be called for each gate added to the queue, the
-        //  parent number will need to be incremented.
-        // When the run_circuit completes, the new gates will need to be added using add_to_queue().
-        // No need to cancel a small gate (they should be fast), but when fetch_output_signals is
-        //  called, if ANY parent gate of this is cancelled or set to retry, it will need to abandon
-        //  adding any new gates.
-
-        //Large gates
-        // This will not actually run, It will need to increment its own outstanding_number by the
-        //  number of input gates, then add each input gate to the 'gates' queue with the parent id.
-        // If a retry comes for this gate
-
-        //TODO: In order for the outstanding_number to have meaning, it will have to be incremented
-        // as it is stored (so when the parent gate is pushed OR when fetch is returned from a
-        // sibling gate).
-
-        //TODO: The gates array will need the direct parent unique_id or zero if it has no parent.
-        // This will allow for the outstanding_number to be incremented and decremented at the
-        // start and end.
-
-        //TODO: Lets say I have Grandparent Gate A -> Parent Gate B -> Child Gate C. Assume B and C
-        // are large gates.
-        // If I cancel Grandparent Gate A, the parent gate B would still run to completion, this
-        //  means child gate C would run to completion. Instead, maybe I can just query the map over
-        //  and over because each higher level gate should have child gates. No, I can't do this,
-        //  it requires knowing the children gates when the parent gate is passed to this method.
-        //  I need to somehow build an object that shows relationships to the children and parents.
-        //  Then cancel all children and parents that are outstanding when this function is called
-        //  on that child.
-
-        //TODO: Need a structure that can keep track of all children relationships. For now lets
-        // say a map of vectors. Then each Id can store the child Ids that are outstanding. But
-        // I can't use this to go 'up' the tree.
-
-        //TODO: Need to go 'down' the tree when the canceled gate is pushed on to it. This will
-        // avoid going 'up' the tree each time any gate is called to see if any parent was canceled.
-
-        //TODO: So need a map of sets, the key is the parent id and the value is the child id.
-        // Whenever a gate is called that is 'processing', it will need to iterate through all of
-        // its outstanding children (and grandchildren etc...) and cancel them using the map.
-        // Whenever a gate is called at all, it will need to add the next gates that are returned
-        // from fetch to the vector for the parent ID AND it will need to remove itself.
-
-
-        //TODO: Steps
-        // Need to check if this gate should run in a single-threaded or multi-threaded way.
-        // If single-threaded, run it (should be cancellable by checking the status of its parent)
-        // If multi-threaded, store it in a separate Vec and run its children gates
-        //  This needs to include a status (for CANCELLED or ACTIVE)
-        //  When its outstanding children gates hit 0, it will need to be reloaded and be
-        //   waiting_to_be_processed (maybe something different for ACTIVE and CANCELLED)
-
-        // let _guard = self.mutex.lock().expect("Mutex failed to lock.");
-        //
-        //TODO: If contained in currently_processing_set
-        // Interrupt the running thread that is doing it and have it restart
-        // Need to take into account that the interrupt could happen as the thread running it is
-        //  completing.
-        // TODO: Maybe interrupting the smaller gates isn't a big deal, but should probably
-        //  somehow interrupt the bigger gates This would mean that they need to somehow
-        //   1) Add the larger gate to a queue (This needs to be done anyway in order to tell which
-        //    gates are currently being processed).
-        //   2) Pop them from the processed queue and if anything that is working on a small gate
-        //    doesn't find them, don't complete.
-        //  So I am thinking that there will be a distinction between simple and complex gates.
-        //   Simple gates will just be added to a queue and directly worked by the threads. Complex
-        //   Gates will be saved somewhere else. Then they can be either CANCELED or COMPLETED and
-        //   the threads running the internal simple gates for the complex gate will react
-        //   accordingly.
-        //
-        //
-        // let inserted = self.waiting_to_be_processed_set.insert(
-        //     gate_id
-        // );
-        //
-        // if inserted {
-        //     //If the gate is already in the queue, but not being processed, no need to do anything.
-        //     return;
-        // }
-        //
-        // self.gates.push(gate);
-        //
-        // //TODO: Will need to do something to activate the thread pool. If I use channels, I will
-        // // have a 'gap' in between when the instance is retrieved from the thread pool and when the
-        // // unique_id is moved from waiting to processing. So I probably need to use the same Mutex
-        // // to protect the thread pool as I am using here and use the 'standard' thread pool design.
     }
 }
 
