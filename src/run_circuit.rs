@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread;
 use std::thread::JoinHandle;
@@ -15,6 +14,7 @@ use crate::logic::variable_bit_cpu::VariableBitCPU;
 use crate::{ALU_TIME, CONTROL_SECTION_TIME, RAM_TIME};
 use crate::shared_mutex::SharedMutex;
 use crate::test_stuff::extract_output_tags_sorted_by_index;
+use num_cpus;
 
 static NUM_CHILDREN_GATES_FOR_LARGE_GATE: usize = 7;
 
@@ -91,6 +91,7 @@ pub struct ThreadPoolLists {
     // usize is 'outstanding_children' it will be 0 if the gate is completed.
     waiting_to_be_processed_set: HashMap<UniqueID, WaitingSizeOfGate>,
     gates: VecDeque<ParentIdAndGate>,
+    input_gate_output_states: Vec<(String, Vec<GateOutputState>)>,
 }
 
 impl ThreadPoolLists {
@@ -117,6 +118,9 @@ pub struct RunCircuitThreadPool {
     // it to true on initialization too depending on implementation.
     propagate_signal: Arc<AtomicBool>,
     condvar_wrapper: Arc<CondvarWrapper>,
+    num_threads_running: Arc<AtomicI32>,
+    processing_completed: Mutex<bool>,
+    wait_for_completion: Condvar,
 }
 
 pub struct QueueElement {
@@ -128,7 +132,8 @@ pub struct QueueElement {
 
 //TODO: For now the goal here is to get a working interface. Performance can be improved upon later.
 impl RunCircuitThreadPool {
-    pub fn new(size: NonZeroUsize) -> Self {
+    pub fn new(size: usize) -> Self {
+        assert_ne!(size, 0);
         let mut thread_pool = RunCircuitThreadPool {
             thread_pool_lists: Arc::new(
                 Mutex::new(
@@ -137,6 +142,7 @@ impl RunCircuitThreadPool {
                         processing_set: HashMap::new(),
                         waiting_to_be_processed_set: HashMap::new(),
                         gates: VecDeque::new(),
+                        input_gate_output_states: Vec::new(),
                     }
                 )
             ),
@@ -151,10 +157,12 @@ impl RunCircuitThreadPool {
             let mut thread_pool_lists_clone = thread_pool.thread_pool_lists.clone();
             let mut signal_clone = thread_pool.condvar_wrapper.clone();
             let mut propagate_signal_clone = thread_pool.propagate_signal.clone();
+            let mut num_threads_running_clone = thread_pool.num_threads_running.clone();
             thread_pool.threads.push(
                 thread::spawn(move || {
                     println!("Thread {i} started");
 
+                    num_threads_running_clone.fetch_add(1, Ordering::Acquire);
                     loop {
                         if shutdown_clone.load(Ordering::Acquire) {
                             println!("Thread {i} shutting down");
@@ -242,21 +250,35 @@ impl RunCircuitThreadPool {
 
                             let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
 
+                            let mut clock_tick_inputs = Vec::new();
                             let mut next_gates = Vec::new();
                             let mut next_gates_set = HashSet::new();
                             let mut multiple_valid_signals = Vec::new();
                             let mut number_gates_that_ran = 0;
                             let mut parent_id = running_gate.parent_id;
                             if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
+                                let mut mutable_running_gate = running_gate.gate.lock().unwrap();
                                 let fetched_signals =
-                                    running_gate.gate.lock().unwrap().fetch_output_signals();
+                                    mutable_running_gate.fetch_output_signals();
+
+                                let is_input_gate = mutable_running_gate.is_input_gate();
+                                let gate_tag = mutable_running_gate.get_tag();
+
+                                drop(mutable_running_gate);
 
                                 match fetched_signals {
                                     Ok(output_states) => {
+                                        if is_input_gate {
+                                            clock_tick_inputs.push(
+                                                (gate_tag, output_states.clone())
+                                            );
+                                        }
+
                                         for gate_output_state in output_states {
                                             match gate_output_state {
                                                 GateOutputState::NotConnected(_) => {}
                                                 GateOutputState::Connected(next_gate_info) => {
+
                                                     let next_gate = next_gate_info.gate.clone();
                                                     let mut mutable_next_gate = next_gate.lock().unwrap();
 
@@ -294,6 +316,7 @@ impl RunCircuitThreadPool {
                                         match err {
                                             GateLogicError::NoMoreAutomaticInputsRemaining => {
                                                 println!("No More AutomaticInputs remaining. Shutting down.");
+                                                //TODO: probably just call the new wait of ending it right?
                                                 Self::internal_shutdown(
                                                     &mut shutdown_clone,
                                                     &mut signal_clone,
@@ -347,6 +370,10 @@ impl RunCircuitThreadPool {
                                 &gate_id
                             ).expect("A gate was removed from the processing_set while it was running.");
 
+                            thread_pool_lists.input_gate_output_states.append(
+                                &mut clock_tick_inputs
+                            );
+
                             match processing_element.status {
                                 ProcessingGateStatus::Running => {
                                     if number_gates_that_ran > 0 {
@@ -398,9 +425,19 @@ impl RunCircuitThreadPool {
                                     // parental_tree.
                                 }
                             }
+
+                            if thread_pool_lists.waiting_to_be_processed_set.is_empty()
+                                && num_threads_running_clone.load(Ordering::Relaxed) == 0
+                            {
+                                //TODO: end it
+                            }
+
                         } else {
                             println!("Thread {i} sleeping");
+
+                            num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
                             signal_clone.wait();
+                            num_threads_running_clone.fetch_add(1, Ordering::Acquire);
                         }
                     }
                 })
@@ -522,6 +559,17 @@ impl RunCircuitThreadPool {
         );
     }
 
+    pub fn join(&mut self) {
+        //Pause until the thread pool is completed.
+        let mut guard = self.processing_completed.lock().unwrap();
+        while !*guard {
+            guard = self.wait_for_completion.wait(guard).unwrap();
+        }
+
+        //TODO: Panic if there are any gates with too many inputs (maybe if any gates are left in
+        // processing).
+    }
+
     pub fn add_to_queue(
         &mut self,
         queue_elements: Vec<QueueElement>,
@@ -533,6 +581,11 @@ impl RunCircuitThreadPool {
             queue_elements,
             &mut signal_clone,
         );
+    }
+
+    pub fn get_input_gate_outputs(&self) -> Vec<(String, Vec<GateOutputState>)> {
+        let thread_pool_lists_guard = self.thread_pool_lists.lock().unwrap();
+        thread_pool_lists_guard.input_gate_output_states.clone()
     }
 
     fn add_to_queue_internal(
@@ -675,6 +728,52 @@ pub fn start_clock<F>(
     }
 }
 
+pub fn run_circuit_multi_thread<F>(
+    input_gates: &Vec<SharedMutex<dyn LogicGate>>,
+    output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>,
+    propagate_signal_through_circuit: bool,
+    handle_output: &mut F,
+) -> bool
+    where
+        F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<SharedMutex<dyn LogicGateAndOutputGate>>)
+{
+    //TODO: Probably want to pass this in, don't need to initialize the threads each time.
+    let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get());
+
+    let mut queue_gates = Vec::new();
+    for input_gate in input_gates.iter() {
+        let gate_id = input_gate.lock().unwrap().get_unique_id();
+        let number_children_in_gate = input_gate.lock().unwrap().num_children_gates();
+
+        queue_gates.push(
+            QueueElement {
+                gate: input_gate.clone(),
+                parent_id: UniqueID::zero_id(),
+                gate_id,
+                number_children_in_gate,
+            }
+        );
+    }
+
+    thread_pool.add_to_queue(
+        queue_gates
+    );
+
+    //TODO: handle propagate variable
+
+    //TODO: May need to add something like thread_pool.join() to check if its done. Inside this
+    // I can make it so that it also checks to make sure it didn't get stuck on multi-gate input.
+
+    let input_gate_outputs = thread_pool.get_input_gate_outputs();
+
+    handle_output(
+        &input_gate_outputs,
+        &output_gates,
+    );
+
+    false
+}
+
 //Returns true if the circuit has input remaining, false if it does not.
 //Note that elements must be ordered so that some of the undetermined gates such as SR latches can
 // have a defined starting state. Therefore, vectors are used even though they must be iterated
@@ -743,6 +842,7 @@ pub fn run_circuit<F>(
                     (gate.get_tag(), gate_output.clone())
                 );
             }
+
             if print_output {
                 println!("gate_output.len(): {:?}", gate_output.len());
             }
@@ -969,7 +1069,10 @@ pub fn generate_default_output(cpu: &SharedMutex<VariableBitCPU>) -> Vec<Signal>
     generated_signals
 }
 
-pub fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cells: usize) -> Vec<SharedMutex<AutomaticInput>> {
+pub fn convert_binary_to_inputs_for_load(
+    binary_strings: Vec<&str>,
+    num_ram_cells: usize,
+) -> Vec<SharedMutex<AutomaticInput>> {
     assert_ne!(binary_strings.len(), 0);
     assert!(binary_strings.len() <= num_ram_cells);
 
@@ -1016,7 +1119,9 @@ pub fn convert_binary_to_inputs_for_load(binary_strings: Vec<&str>, num_ram_cell
     automatic_inputs
 }
 
-pub fn collect_signals_from_logic_gate(gate: SharedMutex<dyn LogicGate>) -> Vec<Signal> {
+pub fn collect_signals_from_logic_gate(
+    gate: SharedMutex<dyn LogicGate>
+) -> Vec<Signal> {
     let cpu_output = gate.lock().unwrap().fetch_output_signals().unwrap();
     let mut collected_signals = Vec::new();
     for out in cpu_output.into_iter() {
