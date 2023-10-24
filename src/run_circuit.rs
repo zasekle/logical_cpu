@@ -114,13 +114,11 @@ pub struct RunCircuitThreadPool {
 
     threads: Vec<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
-    //TODO: This will need to be set to false after the first clock tick. Might just be able to set
-    // it to true on initialization too depending on implementation.
     propagate_signal: Arc<AtomicBool>,
     condvar_wrapper: Arc<CondvarWrapper>,
     num_threads_running: Arc<AtomicI32>,
-    processing_completed: Mutex<bool>,
-    wait_for_completion: Condvar,
+    processing_completed: Arc<Mutex<bool>>,
+    wait_for_completion: Arc<Condvar>,
 }
 
 pub struct QueueElement {
@@ -150,6 +148,9 @@ impl RunCircuitThreadPool {
             shutdown: Arc::new(AtomicBool::from(false)),
             propagate_signal: Arc::new(AtomicBool::from(false)),
             condvar_wrapper: Arc::new(CondvarWrapper::new()),
+            num_threads_running: Arc::new(AtomicI32::new(0)),
+            processing_completed: Arc::new(Mutex::new(false)),
+            wait_for_completion: Arc::new(Condvar::new()),
         };
 
         for i in 0..size.into() {
@@ -158,6 +159,9 @@ impl RunCircuitThreadPool {
             let mut signal_clone = thread_pool.condvar_wrapper.clone();
             let mut propagate_signal_clone = thread_pool.propagate_signal.clone();
             let mut num_threads_running_clone = thread_pool.num_threads_running.clone();
+
+            let mut processing_completed_clone = thread_pool.processing_completed.clone();
+            let mut wait_for_completion_clone = thread_pool.wait_for_completion.clone();
             thread_pool.threads.push(
                 thread::spawn(move || {
                     println!("Thread {i} started");
@@ -278,7 +282,6 @@ impl RunCircuitThreadPool {
                                             match gate_output_state {
                                                 GateOutputState::NotConnected(_) => {}
                                                 GateOutputState::Connected(next_gate_info) => {
-
                                                     let next_gate = next_gate_info.gate.clone();
                                                     let mut mutable_next_gate = next_gate.lock().unwrap();
 
@@ -316,7 +319,6 @@ impl RunCircuitThreadPool {
                                         match err {
                                             GateLogicError::NoMoreAutomaticInputsRemaining => {
                                                 println!("No More AutomaticInputs remaining. Shutting down.");
-                                                //TODO: probably just call the new wait of ending it right?
                                                 Self::internal_shutdown(
                                                     &mut shutdown_clone,
                                                     &mut signal_clone,
@@ -364,7 +366,7 @@ impl RunCircuitThreadPool {
 
                             let gate_id = running_gate.gate.lock().unwrap().get_unique_id();
 
-                            let thread_pool_lists: &mut ThreadPoolLists = &mut thread_pool_lists_guard;
+                            let mut thread_pool_lists: &mut ThreadPoolLists = &mut thread_pool_lists_guard;
 
                             let processing_element = thread_pool_lists.processing_set.get(
                                 &gate_id
@@ -394,7 +396,7 @@ impl RunCircuitThreadPool {
                                     }
 
                                     Self::add_to_queue_internal(
-                                        thread_pool_lists_guard,
+                                        &mut thread_pool_lists,
                                         next_gates,
                                         &mut signal_clone,
                                     );
@@ -426,18 +428,22 @@ impl RunCircuitThreadPool {
                                 }
                             }
 
+                            //This is the only thread running and there are no more elements to be
+                            // processed.
                             if thread_pool_lists.waiting_to_be_processed_set.is_empty()
-                                && num_threads_running_clone.load(Ordering::Relaxed) == 0
+                                && num_threads_running_clone.load(Ordering::Relaxed) == 1
                             {
-                                //TODO: end it
+                                Self::complete_queue(
+                                    &mut processing_completed_clone,
+                                    &mut wait_for_completion_clone,
+                                );
                             }
-
                         } else {
                             println!("Thread {i} sleeping");
 
                             num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
                             signal_clone.wait();
-                            num_threads_running_clone.fetch_add(1, Ordering::Acquire);
+                            num_threads_running_clone.fetch_add(1, Ordering::Release);
                         }
                     }
                 })
@@ -445,6 +451,13 @@ impl RunCircuitThreadPool {
         }
 
         thread_pool
+    }
+
+    fn update_propagate_signal(&mut self, propagate_signal: bool) {
+        self.propagate_signal.store(
+            propagate_signal,
+            Ordering::Relaxed,
+        );
     }
 
     fn update_parent_gate(
@@ -559,6 +572,16 @@ impl RunCircuitThreadPool {
         );
     }
 
+    pub fn complete_queue(
+        processing_completed: &mut Arc<Mutex<bool>>,
+        wait_for_completion: &mut Arc<Condvar>,
+    ) {
+        let mut completed = processing_completed.lock().unwrap();
+        *completed = true;
+
+        wait_for_completion.notify_all();
+    }
+
     pub fn join(&mut self) {
         //Pause until the thread pool is completed.
         let mut guard = self.processing_completed.lock().unwrap();
@@ -566,18 +589,21 @@ impl RunCircuitThreadPool {
             guard = self.wait_for_completion.wait(guard).unwrap();
         }
 
-        //TODO: Panic if there are any gates with too many inputs (maybe if any gates are left in
-        // processing).
+        let thread_pool_list = self.thread_pool_lists.lock().unwrap();
+        if !thread_pool_list.processing_set.is_empty() {
+            panic!("There were gates still processing when the thread pool completed. This could \
+                mean that some gates had multiple inputs.")
+        }
     }
 
     pub fn add_to_queue(
         &mut self,
         queue_elements: Vec<QueueElement>,
     ) {
-        let thread_pool_lists_guard = self.thread_pool_lists.lock().unwrap();
+        let mut thread_pool_lists_guard = self.thread_pool_lists.lock().unwrap();
         let mut signal_clone = self.condvar_wrapper.clone();
         Self::add_to_queue_internal(
-            thread_pool_lists_guard,
+            &mut thread_pool_lists_guard,
             queue_elements,
             &mut signal_clone,
         );
@@ -588,8 +614,9 @@ impl RunCircuitThreadPool {
         thread_pool_lists_guard.input_gate_output_states.clone()
     }
 
+    //The mutex is expected to be locked over thread_pool_lists to call this function.
     fn add_to_queue_internal(
-        mut thread_pool_lists: MutexGuard<ThreadPoolLists>,
+        mut thread_pool_lists: &mut ThreadPoolLists,
         mut queue_elements: Vec<QueueElement>,
         condvar_wrapper: &mut Arc<CondvarWrapper>,
     ) {
@@ -731,14 +758,14 @@ pub fn start_clock<F>(
 pub fn run_circuit_multi_thread<F>(
     input_gates: &Vec<SharedMutex<dyn LogicGate>>,
     output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>,
+    thread_pool: &mut RunCircuitThreadPool,
     propagate_signal_through_circuit: bool,
     handle_output: &mut F,
 ) -> bool
     where
         F: FnMut(&Vec<(String, Vec<GateOutputState>)>, &Vec<SharedMutex<dyn LogicGateAndOutputGate>>)
 {
-    //TODO: Probably want to pass this in, don't need to initialize the threads each time.
-    let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get());
+    // let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get());
 
     let mut queue_gates = Vec::new();
     for input_gate in input_gates.iter() {
@@ -755,14 +782,15 @@ pub fn run_circuit_multi_thread<F>(
         );
     }
 
+    thread_pool.update_propagate_signal(
+        propagate_signal_through_circuit
+    );
+
     thread_pool.add_to_queue(
         queue_gates
     );
 
-    //TODO: handle propagate variable
-
-    //TODO: May need to add something like thread_pool.join() to check if its done. Inside this
-    // I can make it so that it also checks to make sure it didn't get stuck on multi-gate input.
+    thread_pool.join();
 
     let input_gate_outputs = thread_pool.get_input_gate_outputs();
 
@@ -770,6 +798,11 @@ pub fn run_circuit_multi_thread<F>(
         &input_gate_outputs,
         &output_gates,
     );
+
+    //TODO: how do I know if it is completed? There are two cases.
+    // if gate_cell.lock().unwrap().get_tag() == END_OUTPUT_GATE_TAG
+    //     && signal == HIGH {
+    // GateLogicError::NoMoreAutomaticInputsRemaining => {
 
     false
 }
