@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use std::thread;
+use std::{fmt, thread};
+use std::fmt::Formatter;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
@@ -36,7 +37,7 @@ impl CondvarWrapper {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ProcessingGateStatus {
     Running,
     Redo,
@@ -50,6 +51,33 @@ enum ProcessingSizeOfGate {
         multiple_valid_input_gates: Vec<SharedMutex<dyn LogicGate>>,
     },
     Small,
+}
+
+impl fmt::Debug for ProcessingSizeOfGate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let output_str =
+            match self {
+                ProcessingSizeOfGate::Large {
+                    outstanding_children,
+                    gate,
+                    multiple_valid_input_gates,
+                } => {
+                    let mut_gate = gate.lock().unwrap();
+                    let gate_type = mut_gate.get_gate_type();
+                    let tag = mut_gate.get_tag();
+                    let id = mut_gate.get_unique_id();
+
+                    drop(mut_gate);
+                    format!("'ProcessingSizeOfGate::Large' {} gate with tag {}; id {}\noutstanding_children: {}\nmultiple_valid_input_gates.len(): {}", gate_type, tag, id.id(), outstanding_children, multiple_valid_input_gates.len())
+                }
+                ProcessingSizeOfGate::Small => {
+                    format!("'ProcessingSizeOfGate::Small'")
+                }
+            };
+
+        f.debug_struct(&output_str)
+            .finish()
+    }
 }
 
 enum WaitingSizeOfGate {
@@ -70,6 +98,7 @@ impl WaitingSizeOfGate {
     }
 }
 
+#[derive(Debug)]
 struct ProcessingGate {
     parent_id: UniqueID,
     processing_type: ProcessingSizeOfGate,
@@ -161,11 +190,14 @@ impl RunCircuitThreadPool {
 
             let mut processing_completed_clone = thread_pool.processing_completed.clone();
             let mut wait_for_completion_clone = thread_pool.wait_for_completion.clone();
+            //This must be set before the thread starts. That way it can be used below in this function
+            // to check when all threads are initialized.
+            num_threads_running_clone.fetch_add(1, Ordering::Acquire);
+
             thread_pool.threads.push(
                 thread::spawn(move || {
                     println!("Thread {i} started");
 
-                    num_threads_running_clone.fetch_add(1, Ordering::Acquire);
                     loop {
                         if shutdown_clone.load(Ordering::Acquire) {
                             println!("Thread {i} shutting down");
@@ -338,9 +370,9 @@ impl RunCircuitThreadPool {
                                                 multiple_valid_signals.push(running_gate.gate.clone());
                                             }
                                         }
-                                        number_gates_that_ran = 1;
                                     }
                                 }
+                                number_gates_that_ran = 1;
                             } else {
                                 let mutable_running_gate = running_gate.gate.lock().unwrap();
                                 //When the gates are added below, the parent id will be the current gate for a large gate.
@@ -389,6 +421,10 @@ impl RunCircuitThreadPool {
                                 ProcessingGateStatus::Running => {
                                     if number_gates_that_ran > 0 {
                                         thread_pool_lists.parental_tree.remove(
+                                            &gate_id
+                                        );
+
+                                        thread_pool_lists.processing_set.remove(
                                             &gate_id
                                         );
                                     }
@@ -442,6 +478,7 @@ impl RunCircuitThreadPool {
                             if thread_pool_lists.waiting_to_be_processed_set.is_empty()
                                 && num_threads_running_clone.load(Ordering::Relaxed) == 1
                             {
+                                println!("complete_queue() called");
                                 Self::complete_queue(
                                     &mut processing_completed_clone,
                                     &mut wait_for_completion_clone,
@@ -457,6 +494,10 @@ impl RunCircuitThreadPool {
                     }
                 })
             );
+        }
+
+        while thread_pool.num_threads_running.load(Ordering::Relaxed) > 0 {
+            thread::sleep(Duration::from_nanos(1));
         }
 
         thread_pool
@@ -594,14 +635,17 @@ impl RunCircuitThreadPool {
     pub fn join(&mut self) -> bool {
         //Pause until the thread pool is completed.
         let mut guard = self.processing_completed.lock().unwrap();
+        println!("guard initial value {}", *guard);
         while !*guard {
             guard = self.wait_for_completion.wait(guard).unwrap();
         }
 
         let thread_pool_list = self.thread_pool_lists.lock().unwrap();
         if !thread_pool_list.processing_set.is_empty() {
-            panic!("There were gates still processing when the thread pool completed. This could \
-                mean that some gates had multiple inputs.")
+            panic!(
+                "There were gates still processing when the thread pool completed. This could \
+                mean that some gates had multiple inputs.\n{:#?}", thread_pool_list.processing_set
+            )
         }
 
         //If shutdown was called internally, this is completed.
@@ -807,7 +851,7 @@ pub fn run_circuit_multi_thread<F>(
         queue_gates
     );
 
-    let completed= thread_pool.join();
+    let completed = thread_pool.join();
 
     let input_gate_outputs = thread_pool.get_input_gate_outputs();
 
@@ -1453,9 +1497,10 @@ pub fn compare_generate_and_collected_output(
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
-    use crate::logic::basic_gates::{Not, Or};
+    use crate::logic::basic_gates::{And, Not, Or};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::AutomaticInput;
+    use crate::logic::memory_gates::VariableBitMemoryCell;
     use crate::logic::output_gates::SimpleOutput;
     use crate::run_circuit::run_circuit;
     use crate::test_stuff::{check_for_single_element_signal, run_test_with_timeout};
@@ -1712,12 +1757,7 @@ mod tests {
             0,
         );
 
-        //TODO: set this to num_cpus thread number
-        let mut thread_pool = RunCircuitThreadPool::new(2);
-
-        //TODO: Do something with this, its here to make sure the threads will get to waiting at
-        // the cond variable before the thread pool is created.
-        thread::sleep(Duration::from_secs(2));
+        let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get() - 1);
 
         let completed = run_circuit_multi_thread(
             &input_gates,
@@ -1729,6 +1769,183 @@ mod tests {
             },
         );
 
-        assert!(false);
+        assert!(completed);
     }
+
+    #[test]
+    fn single_small_gate_multi_thread() {
+        let input_gate_a = AutomaticInput::new(vec![HIGH], 1, "");
+        let input_gate_b = AutomaticInput::new(vec![HIGH], 1, "");
+        let output_gate = SimpleOutput::new("");
+        let and_gate = And::new(2, 1);
+
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+
+        input_gates.push(input_gate_a.clone());
+        input_gates.push(input_gate_b.clone());
+        output_gates.push(output_gate.clone());
+
+        connect_gates(
+            input_gate_a.clone(),
+            0,
+            and_gate.clone(),
+            0,
+        );
+
+        connect_gates(
+            input_gate_b.clone(),
+            0,
+            and_gate.clone(),
+            1,
+        );
+
+        connect_gates(
+            and_gate.clone(),
+            0,
+            output_gate.clone(),
+            0,
+        );
+
+        let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get() - 1);
+
+        let completed = run_circuit_multi_thread(
+            &input_gates,
+            &output_gates,
+            &mut thread_pool,
+            false,
+            &mut |_clock_tick_inputs, output_gates| {
+                check_for_single_element_signal(output_gates, HIGH);
+            },
+        );
+
+        assert!(completed);
+    }
+
+    #[test]
+    fn single_large_gate_multi_thread() {
+
+        //TODO: Extract this to a function. create_large_gate() or something, maybe hook up the input
+        // and output as well.
+        let mut number_bits = 1;
+        let mut variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
+        let mut number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
+        while number_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
+            number_bits += 1;
+            variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
+            number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
+            //TODO: Something is wrong with the num_children_gates() function. Each OneBitMemoryCell
+            // has 4 gates inside it. So each 'bit' here should increase the total gate count by 4,
+            // but it is only increasing the gate count by 1.
+            println!("number_bits {}", number_bits);
+            println!("number_children {}", number_children);
+        }
+
+        let input_gate_a = AutomaticInput::new(vec![HIGH], 1, "");
+        let input_gate_b = AutomaticInput::new(vec![HIGH], 1, "");
+        let output_gate = SimpleOutput::new("");
+        let and_gate = And::new(2, 1);
+
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+
+        input_gates.push(input_gate_a.clone());
+        input_gates.push(input_gate_b.clone());
+        output_gates.push(output_gate.clone());
+
+        connect_gates(
+            input_gate_a.clone(),
+            0,
+            and_gate.clone(),
+            0,
+        );
+
+        connect_gates(
+            input_gate_b.clone(),
+            0,
+            and_gate.clone(),
+            1,
+        );
+
+        connect_gates(
+            and_gate.clone(),
+            0,
+            output_gate.clone(),
+            0,
+        );
+
+        let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get() - 1);
+
+        let completed = run_circuit_multi_thread(
+            &input_gates,
+            &output_gates,
+            &mut thread_pool,
+            false,
+            &mut |_clock_tick_inputs, output_gates| {
+                check_for_single_element_signal(output_gates, HIGH);
+            },
+        );
+
+        assert!(completed);
+    }
+
+    //TODO: tests
+    // single large gate
+    // small and large gate
+
+    //TODO: finish this
+    // #[test]
+    // #[should_panic]
+    fn oscillation_multi_thread() {
+        let input_gate = AutomaticInput::new(vec![HIGH], 1, "");
+        let output_gate = SimpleOutput::new("");
+        let not_gate = Not::new(2);
+
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+
+        input_gates.push(input_gate.clone());
+        output_gates.push(output_gate.clone());
+
+        connect_gates(
+            input_gate.clone(),
+            0,
+            not_gate.clone(),
+            0,
+        );
+
+        connect_gates(
+            not_gate.clone(),
+            0,
+            output_gate.clone(),
+            0,
+        );
+
+        //Create a loop.
+        connect_gates(
+            not_gate.clone(),
+            1,
+            not_gate.clone(),
+            0,
+        );
+
+        let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get() - 1);
+
+        let completed = run_circuit_multi_thread(
+            &input_gates,
+            &output_gates,
+            &mut thread_pool,
+            false,
+            &mut |_clock_tick_inputs, output_gates| {
+                check_for_single_element_signal(output_gates, HIGH);
+            },
+        );
+
+        assert!(completed);
+    }
+
+    //TODO: tests
+    // simple loop
+    // first tick propagates
+    // multiple ticks
 }
