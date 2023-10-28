@@ -16,6 +16,7 @@ use crate::{ALU_TIME, CONTROL_SECTION_TIME, RAM_TIME};
 use crate::shared_mutex::SharedMutex;
 use crate::test_stuff::extract_output_tags_sorted_by_index;
 
+//TODO: set this to a higher value
 static NUM_CHILDREN_GATES_FOR_LARGE_GATE: usize = 7;
 
 pub struct CondvarWrapper {
@@ -83,6 +84,7 @@ impl fmt::Debug for ProcessingSizeOfGate {
 enum WaitingSizeOfGate {
     Large {
         outstanding_children: usize,
+        initially_added: bool,
     },
     Small,
 }
@@ -92,6 +94,7 @@ impl WaitingSizeOfGate {
         match size {
             ProcessingSizeOfGate::Large { outstanding_children, .. } => Self::Large {
                 outstanding_children: *outstanding_children,
+                initially_added: false,
             },
             ProcessingSizeOfGate::Small => Self::Small
         }
@@ -126,7 +129,7 @@ impl ThreadPoolLists {
     pub fn clear(&mut self) {
         //This needs to be cleared, all gates are assumed to be removed from parental_tree when
         // Cancel is set as the status.
-        self.parental_tree.clear();
+        self.parental_tree = HashMap::from([(UniqueID::zero_id(), HashSet::new())]);
 
         for (_id, processing_gate) in self.processing_set.iter_mut() {
             processing_gate.status = ProcessingGateStatus::Cancel;
@@ -164,7 +167,7 @@ impl RunCircuitThreadPool {
             thread_pool_lists: Arc::new(
                 Mutex::new(
                     ThreadPoolLists {
-                        parental_tree: HashMap::new(),
+                        parental_tree: HashMap::from([(UniqueID::zero_id(), HashSet::new())]),
                         processing_set: HashMap::new(),
                         waiting_to_be_processed_set: HashMap::new(),
                         gates: VecDeque::new(),
@@ -219,28 +222,26 @@ impl RunCircuitThreadPool {
                                 let gate_num_children = mutable_gate.num_children_gates();
                                 drop(mutable_gate);
 
+                                println!("popped_element gate_id {}", gate_id.id());
+
                                 let waiting_to_be_processed = thread_pool_lists.waiting_to_be_processed_set.remove(
                                     &gate_id
                                 );
 
                                 if let Some(waiting_element) = waiting_to_be_processed {
-                                    if let WaitingSizeOfGate::Large { outstanding_children } = waiting_element
+                                    if let WaitingSizeOfGate::Large { outstanding_children, initially_added } = waiting_element
                                     {
-                                        if outstanding_children == 0 {
+                                        if outstanding_children == 0 && !initially_added {
+                                            println!("0 outstanding_children");
                                             //If it is a large gate and has no outstanding children, update the
                                             // parent and end the current gate.
 
                                             let parent_id = &gate.parent_id;
 
-                                            if parent_id.id() == 0 {
-                                                continue;
-                                            }
-
                                             Self::update_parent_gate(
                                                 &mut thread_pool_lists,
                                                 0,
                                                 1,
-                                                &gate_id,
                                                 parent_id,
                                                 Vec::new(),
                                             );
@@ -249,6 +250,7 @@ impl RunCircuitThreadPool {
                                         }
                                     }
                                 } else {
+                                    println!("not in waiting_to_be_processed_set");
                                     //If the gate was canceled, then it will not exist inside the
                                     // waiting_to_be_processed_set.
                                     continue;
@@ -283,6 +285,16 @@ impl RunCircuitThreadPool {
                         if let Some(running_gate) = popped_element {
                             println!("Thread {i} running task");
 
+                            //todo: delete
+                            let processing_set_len = thread_pool_lists_clone.lock().unwrap().processing_set.len();
+                            let waiting_to_pro_set_len = thread_pool_lists_clone.lock().unwrap().waiting_to_be_processed_set.len();
+
+                            println!("processing_set_len {processing_set_len} waiting_to_pro_set_len {waiting_to_pro_set_len} parental_tree {:#?}", thread_pool_lists_clone.lock().unwrap().parental_tree);
+                            //TODO: working on problems,
+                            // items are not removed from the parental tree after they have completed (small gates finishing for their large gate parents)
+                            // the large gate is never removed from the processing queue
+                            // it seems to be that when waiting_to_process is empty, the queue automatically ends without handling the processing gate
+
                             let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
 
                             let mut clock_tick_inputs = Vec::new();
@@ -308,6 +320,7 @@ impl RunCircuitThreadPool {
                                                 (gate_tag.clone(), output_states.clone())
                                             );
                                         }
+                                        println!("output_states {:#?}", output_states);
 
                                         for gate_output_state in output_states {
                                             match gate_output_state {
@@ -332,12 +345,24 @@ impl RunCircuitThreadPool {
 
                                                     let contains_id = next_gates_set.contains(&gate_id);
 
+                                                    println!(
+                                                        "input_signal_updated: {input_signal_updated} \
+                                                         propagated_signal: {} \
+                                                         changed_count_this_tick: {} \
+                                                         contains_id: {}",
+                                                        propagate_signal_clone.load(Ordering::Relaxed),
+                                                        changed_count_this_tick,
+                                                        contains_id,
+                                                    );
+                                                    // input_signal_updated || (propagate_signal && changed_count_this_tick == 1) && !contains_id
+
                                                     let should_update_gate = check_if_next_gate_should_be_stored(
                                                         input_signal_updated,
                                                         changed_count_this_tick,
                                                         contains_id,
                                                         propagate_signal_clone.load(Ordering::Relaxed),
                                                     );
+
 
                                                     if should_update_gate {
                                                         let number_children_in_gate = mutable_next_gate.num_children_gates();
@@ -394,7 +419,7 @@ impl RunCircuitThreadPool {
                                         next_gates.push(
                                             QueueElement {
                                                 gate: input_gate,
-                                                parent_id: running_gate.parent_id,
+                                                parent_id,
                                                 gate_id,
                                                 number_children_in_gate,
                                             }
@@ -402,6 +427,8 @@ impl RunCircuitThreadPool {
                                     }
                                 }
                             }
+
+                            println!("next_gates.len() {}", next_gates.len());
 
                             let mut thread_pool_lists_guard = thread_pool_lists_clone.lock().unwrap();
 
@@ -427,18 +454,31 @@ impl RunCircuitThreadPool {
                                         thread_pool_lists.processing_set.remove(
                                             &gate_id
                                         );
+                                    } else { //Large gate was inserted into processing.
+                                        //Insert gate as a parent.
+                                        thread_pool_lists.parental_tree.insert(
+                                            gate_id.clone(), HashSet::new()
+                                        );
+
+                                        //Insert gate as a sibling
+                                        let siblings = thread_pool_lists.parental_tree.get_mut(
+                                            &parent_id
+                                        ).expect(
+                                            "A sibling completed when its parent tree \
+                                                    was removed. This should never happen because the parent tree should \
+                                                    never be completed before the children tree is."
+                                        );
+
+                                        siblings.insert(gate_id.clone());
                                     }
 
-                                    if parent_id.id() != 0 {
-                                        Self::update_parent_gate(
-                                            thread_pool_lists,
-                                            next_gates.len(),
-                                            number_gates_that_ran,
-                                            &gate_id,
-                                            &parent_id,
-                                            multiple_valid_signals,
-                                        );
-                                    }
+                                    Self::update_parent_gate(
+                                        thread_pool_lists,
+                                        next_gates.len(),
+                                        number_gates_that_ran,
+                                        &parent_id,
+                                        multiple_valid_signals,
+                                    );
 
                                     Self::add_to_queue_internal(
                                         &mut thread_pool_lists,
@@ -487,6 +527,12 @@ impl RunCircuitThreadPool {
                         } else {
                             println!("Thread {i} sleeping");
 
+                            //todo: delete
+                            let processing_set_len = thread_pool_lists_clone.lock().unwrap().processing_set.len();
+                            let waiting_to_pro_set_len = thread_pool_lists_clone.lock().unwrap().waiting_to_be_processed_set.len();
+
+                            println!("processing_set_len {processing_set_len} waiting_to_pro_set_len {waiting_to_pro_set_len} parental_tree {:#?}", thread_pool_lists_clone.lock().unwrap().parental_tree);
+
                             num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
                             signal_clone.wait();
                             num_threads_running_clone.fetch_add(1, Ordering::Release);
@@ -514,20 +560,11 @@ impl RunCircuitThreadPool {
         thread_pool_lists: &mut ThreadPoolLists,
         num_new_children: usize,
         num_completed_children: usize,
-        gate_id: &UniqueID,
         parent_id: &UniqueID,
         mut passed_multiple_valid_input_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        if num_completed_children == 0 {
-            let siblings = thread_pool_lists.parental_tree.get_mut(
-                parent_id
-            ).expect(
-                "A sibling completed when its parent tree \
-                was removed. This should never happen because the parent tree should \
-                never be completed before the children tree is."
-            );
-
-            siblings.remove(&gate_id);
+        if parent_id.id() == 0 {
+            return;
         }
 
         let parent_processing_gate = thread_pool_lists
@@ -563,14 +600,15 @@ impl RunCircuitThreadPool {
             let parent_gate = parent_gate.clone();
 
             if multiple_valid_input_gates.is_empty() { //No invalid gates.
-                thread_pool_lists.processing_set.remove(
+                let parent_processing_gate = thread_pool_lists.processing_set.remove(
                     parent_id
                 ).expect("The parent gate was found above and now it is not found.");
 
                 thread_pool_lists.waiting_to_be_processed_set.insert(
                     parent_id.clone(),
                     WaitingSizeOfGate::Large {
-                        outstanding_children: 0
+                        outstanding_children: 0,
+                        initially_added: false,
                     },
                 );
 
@@ -635,7 +673,6 @@ impl RunCircuitThreadPool {
     pub fn join(&mut self) -> bool {
         //Pause until the thread pool is completed.
         let mut guard = self.processing_completed.lock().unwrap();
-        println!("guard initial value {}", *guard);
         while !*guard {
             guard = self.wait_for_completion.wait(guard).unwrap();
         }
@@ -656,7 +693,6 @@ impl RunCircuitThreadPool {
         &mut self,
         queue_elements: Vec<QueueElement>,
     ) {
-        println!("add_to_queue()");
         let mut thread_pool_lists_guard = self.thread_pool_lists.lock().unwrap();
         let mut signal_clone = self.condvar_wrapper.clone();
         Self::add_to_queue_internal(
@@ -677,18 +713,21 @@ impl RunCircuitThreadPool {
         queue_elements: Vec<QueueElement>,
         condvar_wrapper: &mut Arc<CondvarWrapper>,
     ) {
-        println!("add_to_queue_internal()");
         for gate_element in queue_elements.into_iter() {
             let inserted = thread_pool_lists.waiting_to_be_processed_set.insert(
                 gate_element.gate_id.clone(),
                 if gate_element.number_children_in_gate < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
                     WaitingSizeOfGate::Small
                 } else {
-                    WaitingSizeOfGate::Large { outstanding_children: 0 }
+                    WaitingSizeOfGate::Large {
+                        outstanding_children: 0,
+                        initially_added: true,
+                    }
                 },
             );
 
             if let Some(_) = inserted {
+                println!("add_to_queue() Already in waiting_to_be_processed_set");
                 //If the gate is already in the queue, but not being processed, no need to do anything.
                 continue;
             }
@@ -696,6 +735,7 @@ impl RunCircuitThreadPool {
             let mut processing = thread_pool_lists.processing_set.get_mut(&gate_element.gate_id);
 
             if let Some(processing_gate) = processing.take() {
+                println!("add_to_queue() Inside processing_set");
                 if gate_element.number_children_in_gate < NUM_CHILDREN_GATES_FOR_LARGE_GATE { //small gate
                     processing_gate.status = ProcessingGateStatus::Cancel;
                 } else {
@@ -703,14 +743,14 @@ impl RunCircuitThreadPool {
                 }
             } else { //Gate is not in queue.
 
-                if gate_element.parent_id.id() != 0 {
-                    let parental_set = thread_pool_lists
-                        .parental_tree
-                        .get_mut(&gate_element.parent_id)
-                        .expect("Parental tree should always exist when calling a child tree.");
+                println!("add_to_queue() Not yet inside processing_set");
 
-                    parental_set.insert(gate_element.gate_id.clone());
-                }
+                let parental_set = thread_pool_lists
+                    .parental_tree
+                    .get_mut(&gate_element.parent_id)
+                    .expect("Parental tree should always exist when calling a child tree.");
+
+                parental_set.insert(gate_element.gate_id.clone());
 
                 //waiting_to_be_processed_set was inserted to above.
 
@@ -721,7 +761,7 @@ impl RunCircuitThreadPool {
                     }
                 );
 
-                println!("notify_one Called line: {}", line!());
+                // println!("notify_one Called line: {}", line!());
                 condvar_wrapper.cond.notify_one();
 
                 continue;
@@ -735,6 +775,7 @@ impl RunCircuitThreadPool {
                     .parental_tree
                     .remove(&gate_id)
                     .expect("Child ID did not exist in parental_tree.");
+
                 for child_id in children.into_iter() {
                     let removed = thread_pool_lists.waiting_to_be_processed_set.remove(
                         &child_id
@@ -776,13 +817,12 @@ impl RunCircuitThreadPool {
                     HashSet::new(),
                 );
 
-            println!("notify_one Called line: {}", line!());
+            // println!("notify_one Called line: {}", line!());
             condvar_wrapper.cond.notify_one();
 
             //No need to add the gate, it is currently processing. This means that it will 'Redo'
             // itself.
         }
-        println!("add_to_queue_internal() completed");
     }
 }
 
@@ -1079,30 +1119,12 @@ pub fn count_gates_in_circuit(
                     GateOutputState::NotConnected(_signal) => {}
                     GateOutputState::Connected(next_gate_info) => {
                         let next_gate = Arc::clone(&next_gate_info.gate);
-                        let mut mutable_next_gate = next_gate.lock().unwrap();
 
-                        unique_gates.insert(mutable_next_gate.get_unique_id());
+                        let gate_id = next_gate.lock().unwrap().get_unique_id();
 
-                        let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
-                            mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
-                        let gate_id = mutable_next_gate.get_unique_id();
+                        let inserted = unique_gates.insert(gate_id.clone());
 
-                        let contains_id = next_gates_set.contains(&gate_id);
-
-                        //It is important to remember that a situation such as an OR gate feeding
-                        // back into itself is perfectly valid. This can be interpreted that if the
-                        // input was not changed, the output was not changed either and so nothing
-                        // needs to be done with this gate.
-                        //The first tick is a bit special, because the circuit needs to propagate
-                        // the signal regardless of if the gates change or not. This leads to
-                        // checking if it is the first time the gate is updated on the first
-                        // clock tick.
-                        //Also each gate only needs to be stored inside the map once. All changed
-                        // inputs are saved as part of the state, so collect_output() only needs
-                        // to run once.
-                        if (input_signal_updated || changed_count_this_tick == 1) && !contains_id {
-                            drop(mutable_next_gate);
-                            // println!("next_gates.insert()");
+                        if inserted {
                             next_gates_set.insert(gate_id);
                             next_gates.push(next_gate);
                         }
@@ -1500,7 +1522,7 @@ mod tests {
     use crate::logic::basic_gates::{And, Not, Or};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::AutomaticInput;
-    use crate::logic::memory_gates::VariableBitMemoryCell;
+    use crate::logic::memory_gates::{OneBitMemoryCell, VariableBitMemoryCell};
     use crate::logic::output_gates::SimpleOutput;
     use crate::run_circuit::run_circuit;
     use crate::test_stuff::{check_for_single_element_signal, run_test_with_timeout};
@@ -1824,65 +1846,131 @@ mod tests {
 
     #[test]
     fn single_large_gate_multi_thread() {
+        //TODO: Run this test over and over, sometimes it gets stuck.
 
         //TODO: Extract this to a function. create_large_gate() or something, maybe hook up the input
         // and output as well.
-        let mut number_bits = 1;
-        let mut variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
-        let mut number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
-        while number_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
-            number_bits += 1;
-            variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
-            number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
-            //TODO: Something is wrong with the num_children_gates() function. Each OneBitMemoryCell
-            // has 4 gates inside it. So each 'bit' here should increase the total gate count by 4,
-            // but it is only increasing the gate count by 1.
-            println!("number_bits {}", number_bits);
-            println!("number_children {}", number_children);
-        }
-
-        let input_gate_a = AutomaticInput::new(vec![HIGH], 1, "");
-        let input_gate_b = AutomaticInput::new(vec![HIGH], 1, "");
-        let output_gate = SimpleOutput::new("");
-        let and_gate = And::new(2, 1);
+        // let mut number_bits = 1;
+        // let mut variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
+        // let mut number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
+        // while number_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
+        //     number_bits += 1;
+        //     variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
+        //     number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
+        // }
+        //
+        // let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        // let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        //
+        // let input_gate = AutomaticInput::new(vec![HIGH], 1, "S");
+        // input_gates.push(input_gate.clone());
+        //
+        // let input_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
+        //     "S"
+        // );
+        //
+        // connect_gates(
+        //     input_gate.clone(),
+        //     0,
+        //     variable_bit_mem_cell.clone(),
+        //     input_index,
+        // );
+        //
+        // for i in 0..number_bits {
+        //     let input_tag = format!("i_{}", i);
+        //     let input_gate = AutomaticInput::new(
+        //         vec![HIGH], 1, input_tag.as_str(),
+        //     );
+        //     input_gates.push(input_gate.clone());
+        //
+        //     let input_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
+        //         input_tag.as_str()
+        //     );
+        //
+        //     connect_gates(
+        //         input_gate.clone(),
+        //         0,
+        //         variable_bit_mem_cell.clone(),
+        //         input_index,
+        //     );
+        //
+        //     let output_tag = format!("o_{}", i);
+        //     let output_gate = SimpleOutput::new(output_tag.as_str());
+        //     output_gates.push(output_gate.clone());
+        //
+        //     let output_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
+        //         output_tag.as_str()
+        //     );
+        //
+        //     connect_gates(
+        //         variable_bit_mem_cell.clone(),
+        //         output_index,
+        //         output_gate.clone(),
+        //         0,
+        //     );
+        // }
 
         let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
         let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
-        input_gates.push(input_gate_a.clone());
-        input_gates.push(input_gate_b.clone());
+        let one_bit_memory_cell = OneBitMemoryCell::new(1);
+
+        let set_input_gate = AutomaticInput::new(vec![HIGH], 1, "S");
+        input_gates.push(set_input_gate.clone());
+
+        let input_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag(
+            "S"
+        );
+
+        connect_gates(
+            set_input_gate.clone(),
+            0,
+            one_bit_memory_cell.clone(),
+            input_index,
+        );
+
+        let output_gate = SimpleOutput::new("o");
         output_gates.push(output_gate.clone());
 
         connect_gates(
-            input_gate_a.clone(),
-            0,
-            and_gate.clone(),
-            0,
-        );
-
-        connect_gates(
-            input_gate_b.clone(),
-            0,
-            and_gate.clone(),
-            1,
-        );
-
-        connect_gates(
-            and_gate.clone(),
+            one_bit_memory_cell.clone(),
             0,
             output_gate.clone(),
             0,
         );
 
-        let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get() - 1);
+        println!("one_bit_memory_cell id {}", one_bit_memory_cell.lock().unwrap().get_unique_id().id());
+        println!("one_bit_memory_cell num_children_gates {}", one_bit_memory_cell.lock().unwrap().num_children_gates());
+
+        let mut thread_pool = RunCircuitThreadPool::new(1); //todo num_cpus::get() - 1);
+
+        //TODO: probably make this easier on myself and just
 
         let completed = run_circuit_multi_thread(
             &input_gates,
             &output_gates,
             &mut thread_pool,
-            false,
+            true,
             &mut |_clock_tick_inputs, output_gates| {
-                check_for_single_element_signal(output_gates, HIGH);
+                for output_gate in output_gates {
+                    let mut output_gate = output_gates.first().unwrap().lock().unwrap();
+                    let output_signals = output_gate.fetch_output_signals().unwrap();
+
+                    assert_eq!(output_signals.len(), 1);
+
+                    let gate_output_state = output_signals.first().unwrap();
+
+                    //TODO: All of the inputs including the set input are HIGH, this means that the
+                    // outputs should all be HIGH as well. So in other words something is wrong.
+                    match gate_output_state {
+                        GateOutputState::NotConnected(signal) => {
+                            assert_eq!(*signal, HIGH)
+                        }
+                        GateOutputState::Connected(_) => {
+                            panic!("The output gate should never be connected.");
+                        }
+                    }
+                }
             },
         );
 
@@ -1890,7 +1978,6 @@ mod tests {
     }
 
     //TODO: tests
-    // single large gate
     // small and large gate
 
     //TODO: finish this

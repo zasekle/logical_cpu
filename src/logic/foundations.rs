@@ -544,7 +544,6 @@ impl ComplexGateMembers {
         //Make sure there are enough tags for each gate.
         assert_eq!(gate_tags_to_index.len(), input_num + output_num);
 
-
         ComplexGateMembers {
             simple_gate: BasicGateMembers::new(
                 input_num,
