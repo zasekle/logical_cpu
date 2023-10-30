@@ -222,7 +222,7 @@ impl RunCircuitThreadPool {
                                 let gate_num_children = mutable_gate.num_children_gates();
                                 drop(mutable_gate);
 
-                                println!("popped_element gate_id {}", gate_id.id());
+                                println!("\n\npopped_element gate_id {} parent_id {}", gate_id.id(), gate.parent_id.id());
 
                                 let waiting_to_be_processed = thread_pool_lists.waiting_to_be_processed_set.remove(
                                     &gate_id
@@ -237,6 +237,22 @@ impl RunCircuitThreadPool {
                                             // parent and end the current gate.
 
                                             let parent_id = &gate.parent_id;
+
+                                            //Remove gate as a sibling.
+                                            let siblings = thread_pool_lists.parental_tree.get_mut(
+                                                &parent_id
+                                            ).expect(
+                                                format!(
+                                                    "A sibling completed when its parent tree \
+                                                    was removed. This should never happen because the parent tree should \
+                                                    never be completed before the children tree is. parent_id {}",
+                                                    parent_id.id()
+                                                ).as_str()
+                                            );
+
+                                            siblings.remove(
+                                                &gate_id
+                                            );
 
                                             Self::update_parent_gate(
                                                 &mut thread_pool_lists,
@@ -291,7 +307,7 @@ impl RunCircuitThreadPool {
 
                             println!("processing_set_len {processing_set_len} waiting_to_pro_set_len {waiting_to_pro_set_len} parental_tree {:#?}", thread_pool_lists_clone.lock().unwrap().parental_tree);
                             //TODO: working on problems,
-                            // items are not removed from the parental tree after they have completed (small gates finishing for their large gate parents)
+                            // the parent_id is not properly added to the 'gates' Deque, this is because below in the condition, parent_id is changed to be the gate id and somewhere it doesn't like this, but if I just change it to be the actual parent_id, it breaks.
                             // the large gate is never removed from the processing queue
                             // it seems to be that when waiting_to_process is empty, the queue automatically ends without handling the processing gate
 
@@ -345,15 +361,15 @@ impl RunCircuitThreadPool {
 
                                                     let contains_id = next_gates_set.contains(&gate_id);
 
-                                                    println!(
-                                                        "input_signal_updated: {input_signal_updated} \
-                                                         propagated_signal: {} \
-                                                         changed_count_this_tick: {} \
-                                                         contains_id: {}",
-                                                        propagate_signal_clone.load(Ordering::Relaxed),
-                                                        changed_count_this_tick,
-                                                        contains_id,
-                                                    );
+                                                    // println!(
+                                                    //     "input_signal_updated: {input_signal_updated} \
+                                                    //      propagated_signal: {} \
+                                                    //      changed_count_this_tick: {} \
+                                                    //      contains_id: {}",
+                                                    //     propagate_signal_clone.load(Ordering::Relaxed),
+                                                    //     changed_count_this_tick,
+                                                    //     contains_id,
+                                                    // );
                                                     // input_signal_updated || (propagate_signal && changed_count_this_tick == 1) && !contains_id
 
                                                     let should_update_gate = check_if_next_gate_should_be_stored(
@@ -403,6 +419,9 @@ impl RunCircuitThreadPool {
                                 //When the gates are added below, the parent id will be the current gate for a large gate.
                                 parent_id = mutable_running_gate.get_unique_id();
                                 let input_gates = mutable_running_gate.get_input_gates();
+
+                                println!("LARGE GATE {} input_gates_size {}", mutable_running_gate.get_unique_id().id(), input_gates.len());
+
                                 drop(mutable_running_gate);
 
                                 for input_gate in input_gates.into_iter() {
@@ -446,35 +465,54 @@ impl RunCircuitThreadPool {
 
                             match processing_element.status {
                                 ProcessingGateStatus::Running => {
-                                    if number_gates_that_ran > 0 {
-                                        thread_pool_lists.parental_tree.remove(
-                                            &gate_id
-                                        );
+                                    let num_new_children =
+                                        if number_gates_that_ran > 0 {
+                                            //Small gates do not have their own set in the parental tree.
+                                            // thread_pool_lists.parental_tree.remove(
+                                            //     &gate_id
+                                            // );
 
-                                        thread_pool_lists.processing_set.remove(
-                                            &gate_id
-                                        );
-                                    } else { //Large gate was inserted into processing.
-                                        //Insert gate as a parent.
-                                        thread_pool_lists.parental_tree.insert(
-                                            gate_id.clone(), HashSet::new()
-                                        );
+                                            thread_pool_lists.processing_set.remove(
+                                                &gate_id
+                                            );
 
-                                        //Insert gate as a sibling
-                                        let siblings = thread_pool_lists.parental_tree.get_mut(
-                                            &parent_id
-                                        ).expect(
-                                            "A sibling completed when its parent tree \
+                                            //Remove gate as a sibling.
+                                            let siblings = thread_pool_lists.parental_tree.get_mut(
+                                                &parent_id
+                                            ).expect(
+                                                "A sibling completed when its parent tree \
                                                     was removed. This should never happen because the parent tree should \
                                                     never be completed before the children tree is."
-                                        );
+                                            );
 
-                                        siblings.insert(gate_id.clone());
-                                    }
+                                            siblings.remove(
+                                                &gate_id
+                                            );
 
+                                            //Keep only the gates that are not already being processed.
+                                            let mut num_new_children = next_gates.len();
+
+                                            for next_gate in next_gates.iter() {
+                                                if siblings.contains(&next_gate.gate_id) {
+                                                    num_new_children -= 1;
+                                                }
+                                            }
+
+                                            num_new_children
+                                        } else { //Large gate was inserted into processing.
+                                            //Insert gate as a parent.
+                                            thread_pool_lists.parental_tree.insert(
+                                                gate_id.clone(), HashSet::new(),
+                                            );
+
+                                            next_gates.len()
+                                        };
+
+
+                                    println!("num_new_children {} number_gates_that_ran {}", next_gates.len(), number_gates_that_ran);
                                     Self::update_parent_gate(
                                         thread_pool_lists,
-                                        next_gates.len(),
+                                        num_new_children,
                                         number_gates_that_ran,
                                         &parent_id,
                                         multiple_valid_signals,
@@ -567,6 +605,8 @@ impl RunCircuitThreadPool {
             return;
         }
 
+        println!("parent_id {} processing_set {:#?}", parent_id.id(), thread_pool_lists.processing_set);
+
         let parent_processing_gate = thread_pool_lists
             .processing_set
             .get_mut(parent_id)
@@ -583,8 +623,8 @@ impl RunCircuitThreadPool {
                 multiple_valid_input_gates,
             } => {
                 //Subtract the current gate from the number of outstanding children.
-                *outstanding_children -= num_completed_children;
                 *outstanding_children += num_new_children;
+                *outstanding_children -= num_completed_children;
 
                 multiple_valid_input_gates.append(&mut passed_multiple_valid_input_gates);
 
@@ -593,6 +633,7 @@ impl RunCircuitThreadPool {
             ProcessingSizeOfGate::Small => panic!("A parent gate should always be a large gate")
         };
 
+        println!("parent_id {} parent_outstanding_children {parent_outstanding_children}", parent_id.id());
         if *parent_outstanding_children == 0 {
             //This was the last gate that needed to be run. There are no children to push into the
             // queue.
@@ -600,7 +641,7 @@ impl RunCircuitThreadPool {
             let parent_gate = parent_gate.clone();
 
             if multiple_valid_input_gates.is_empty() { //No invalid gates.
-                let parent_processing_gate = thread_pool_lists.processing_set.remove(
+                thread_pool_lists.processing_set.remove(
                     parent_id
                 ).expect("The parent gate was found above and now it is not found.");
 
@@ -767,6 +808,7 @@ impl RunCircuitThreadPool {
                 continue;
             }
 
+            //TODO: Do outstanding children need to be updated here?
             fn remove_children(
                 thread_pool_lists: &mut ThreadPoolLists,
                 gate_id: UniqueID,
