@@ -347,8 +347,14 @@ impl LogicGate for VariableOutputStepper {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -495,8 +501,14 @@ impl LogicGate for VariableBitCPUEnable {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -606,6 +618,38 @@ impl SignalGatekeeper {
             true,
         );
     }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
+
+        let e_output = e_input_gate.lock().unwrap().fetch_output_signals_calculate()?;
+
+        //The SimpleInput only has one output.
+        let output = e_output.first().unwrap();
+
+        let e_signal =
+            match output {
+                GateOutputState::NotConnected(signal) => {
+                    signal
+                }
+                GateOutputState::Connected(connected_output) => panic!("The enable of SignalGatekeeper is never meant to be connected {:?}.", connected_output)
+            };
+
+        if *e_signal == HIGH { //Gate is enabled.
+            self.complex_gate.fetch_output_signals_calculate(
+                &self.get_tag(),
+            )
+        } else {
+            let input_signals = calculate_input_signals_from_all_inputs(&self.complex_gate.simple_gate.input_signals)?;
+            let mut output = Vec::new();
+            for input in input_signals {
+                output.push(
+                    GateOutputState::NotConnected(input)
+                );
+            }
+            Ok(output)
+        }
+    }
 }
 
 impl LogicGate for SignalGatekeeper {
@@ -628,36 +672,12 @@ impl LogicGate for SignalGatekeeper {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
 
-        let e_output = e_input_gate.lock().unwrap().fetch_output_signals()?;
-
-        //The SimpleInput only has one output.
-        let output = e_output.first().unwrap();
-
-        let e_signal =
-            match output {
-                GateOutputState::NotConnected(signal) => {
-                    signal
-                }
-                GateOutputState::Connected(connected_output) => panic!("The enable of SignalGatekeeper is never meant to be connected {:?}.", connected_output)
-            };
-
-        if *e_signal == HIGH { //Gate is enabled.
-            self.complex_gate.fetch_output_signals(
-                &self.get_tag(),
-            )
-        } else {
-            let input_signals = calculate_input_signals_from_all_inputs(&self.complex_gate.simple_gate.input_signals)?;
-            let mut output = Vec::new();
-            for input in input_signals {
-                output.push(
-                    GateOutputState::NotConnected(input)
-                );
-            }
-            Ok(output)
-        }
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -985,8 +1005,14 @@ impl LogicGate for MasterSlaveJKFlipFlop {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -1290,8 +1316,14 @@ impl LogicGate for FourCycleClockHookup {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -1586,8 +1618,14 @@ impl LogicGate for VariableBitMultiplexer {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -1821,8 +1859,14 @@ impl LogicGate for VariableBitCounter {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -1881,7 +1925,7 @@ mod tests {
         let num_bits = rand::thread_rng().gen_range(1..=16);
         let cpu_enable = VariableBitCPUEnable::new(num_bits);
 
-        let output = cpu_enable.lock().unwrap().fetch_output_signals().unwrap();
+        let output = cpu_enable.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), num_bits);
         for out in output {
@@ -1976,7 +2020,7 @@ mod tests {
     fn master_slave_jk_flip_flop_initialization() {
         let flip_flop = MasterSlaveJKFlipFlop::new();
 
-        let clock_output = flip_flop.lock().unwrap().fetch_output_signals().unwrap();
+        let clock_output = flip_flop.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         let mut output_signals = Vec::new();
         for out in clock_output {
@@ -2020,7 +2064,7 @@ mod tests {
     fn four_cycle_clock_hookup_initialization() {
         let clock = FourCycleClockHookup::new();
 
-        let clock_output = clock.lock().unwrap().fetch_output_signals().unwrap();
+        let clock_output = clock.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         let mut output_signals = Vec::new();
         for out in clock_output {
@@ -2063,7 +2107,7 @@ mod tests {
     fn multiplexer_init() {
         let multiplexer = VariableBitMultiplexer::new(3, 2);
 
-        let multiplexer_output = multiplexer.lock().unwrap().fetch_output_signals().unwrap();
+        let multiplexer_output = multiplexer.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         let mut output_signals = Vec::new();
         for out in multiplexer_output {
@@ -2134,7 +2178,7 @@ mod tests {
     fn variable_bit_counter_initialization() {
         let counter = VariableBitCounter::new(4);
 
-        let counter_output = counter.lock().unwrap().fetch_output_signals().unwrap();
+        let counter_output = counter.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         let mut output_signals = Vec::new();
         for out in counter_output {

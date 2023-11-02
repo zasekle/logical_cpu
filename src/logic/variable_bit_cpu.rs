@@ -1501,7 +1501,7 @@ impl VariableBitCPU {
         clock: &SharedMutex<Clock>,
     ) {
         let input_index = self.get_index_from_tag(VariableBitCPU::CLK_IN);
-        let output_signals = self.complex_gate.input_gates[input_index].lock().unwrap().fetch_output_signals().unwrap();
+        let output_signals = self.complex_gate.input_gates[input_index].lock().unwrap().fetch_output_signals_calculate().unwrap();
         //SimpleInput outputs all have the same value.
         let output_signal =
             match output_signals.first().unwrap() {
@@ -1536,8 +1536,14 @@ impl LogicGate for VariableBitCPU {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }

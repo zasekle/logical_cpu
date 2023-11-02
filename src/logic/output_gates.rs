@@ -36,6 +36,23 @@ impl SimpleOutput {
             }
         )
     }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        let output_clone = calculate_input_signal_from_single_inputs(&self.output_state)?;
+        // println!("SimpleOutput id {} output_clone: {:#?}", self.unique_id.id() ,output_clone);
+
+        if self.should_print_output && self.print_each_input_output_gate {
+            GateLogic::print_gate_output(
+                &self.gate_type,
+                &self.unique_id,
+                &self.get_tag(),
+                &None::<Signal>,
+                &output_clone,
+            );
+        }
+
+        Ok(vec![GateOutputState::NotConnected(output_clone)])
+    }
 }
 
 impl OutputGate for SimpleOutput {
@@ -84,21 +101,12 @@ impl LogicGate for SimpleOutput {
         }
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        let output_clone = calculate_input_signal_from_single_inputs(&self.output_state)?;
-        // println!("SimpleOutput id {} output_clone: {:#?}", self.unique_id.id() ,output_clone);
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
 
-        if self.should_print_output && self.print_each_input_output_gate {
-            GateLogic::print_gate_output(
-                &self.gate_type,
-                &self.unique_id,
-                &self.get_tag(),
-                &None::<Signal>,
-                &output_clone,
-            );
-        }
-
-        Ok(vec![GateOutputState::NotConnected(output_clone)])
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
     }
 
     fn get_gate_type(&self) -> GateType {

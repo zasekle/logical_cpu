@@ -17,7 +17,7 @@ pub fn check_for_single_element_signal(
 ) {
     assert_eq!(output_gates.len(), 1);
     let mut output_gate = output_gates.first().unwrap().lock().unwrap();
-    let output_signals = output_gate.fetch_output_signals().unwrap();
+    let output_signals = output_gate.fetch_output_signals_calculate().unwrap();
 
     assert_eq!(output_signals.len(), 1);
 
@@ -225,7 +225,7 @@ pub fn collect_outputs_from_output_gates(output_gates: &&Vec<SharedMutex<dyn Log
     for output in output_gates.iter() {
         let mut output = output.lock().unwrap();
 
-        let output = output.fetch_output_signals().unwrap();
+        let output = output.fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), 1);
 

@@ -151,8 +151,14 @@ impl LogicGate for SRLatch {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -340,8 +346,14 @@ impl LogicGate for ActiveLowSRLatch {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -577,8 +589,14 @@ impl LogicGate for OneBitMemoryCell {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -751,8 +769,14 @@ impl LogicGate for VariableBitMemoryCell {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -883,8 +907,8 @@ mod tests {
                     let mut q_output = output_gates[0].lock().unwrap();
                     let mut not_q_output = output_gates[1].lock().unwrap();
 
-                    let q_output = q_output.fetch_output_signals().unwrap();
-                    let not_q_output = not_q_output.fetch_output_signals().unwrap();
+                    let q_output = q_output.fetch_output_signals_calculate().unwrap();
+                    let not_q_output = not_q_output.fetch_output_signals_calculate().unwrap();
 
                     assert_eq!(q_output.len(), 1);
                     assert_eq!(not_q_output.len(), 1);
@@ -987,7 +1011,7 @@ mod tests {
                     for out in output_gates.iter() {
                         let mut q_output = out.lock().unwrap();
 
-                        let q_output = q_output.fetch_output_signals().unwrap();
+                        let q_output = q_output.fetch_output_signals_calculate().unwrap();
 
                         assert_eq!(q_output.len(), 1);
 
@@ -1018,7 +1042,7 @@ mod tests {
     fn sr_gate_initialization() {
         let sr_latch = SRLatch::new();
 
-        let output = sr_latch.lock().unwrap().fetch_output_signals().unwrap();
+        let output = sr_latch.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), 2);
 
@@ -1095,7 +1119,7 @@ mod tests {
     fn active_low_sr_gate_initialization() {
         let sr_latch = ActiveLowSRLatch::new();
 
-        let output = sr_latch.lock().unwrap().fetch_output_signals().unwrap();
+        let output = sr_latch.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), 2);
 
@@ -1173,7 +1197,7 @@ mod tests {
         //initialization
         let one_bit_memory_cell = OneBitMemoryCell::new(1);
 
-        let output = one_bit_memory_cell.lock().unwrap().fetch_output_signals().unwrap();
+        let output = one_bit_memory_cell.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), 1);
 
@@ -1271,7 +1295,7 @@ mod tests {
         let num_bits = rand::thread_rng().gen_range(2..=16);
         let variable_bit_memory_cell = VariableBitMemoryCell::new(num_bits);
 
-        let output = variable_bit_memory_cell.lock().unwrap().fetch_output_signals().unwrap();
+        let output = variable_bit_memory_cell.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), 2 * num_bits);
         for out in output {

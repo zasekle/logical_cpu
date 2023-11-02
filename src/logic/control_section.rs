@@ -3162,10 +3162,10 @@ impl LogicGate for ControlSection {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         let start = Instant::now();
 
-        let result = self.complex_gate.fetch_output_signals(
+        let result = self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
         );
 
@@ -3174,6 +3174,12 @@ impl LogicGate for ControlSection {
         }
 
         result
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -3380,7 +3386,7 @@ mod tests {
 
         let tags_sorted_by_index = extract_output_tags_sorted_by_index(&control_section.lock().unwrap().complex_gate);
 
-        let collected_output = control_section.lock().unwrap().fetch_output_signals().unwrap();
+        let collected_output = control_section.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         let mut generated_output = vec![LOW_; tags_sorted_by_index.len()];
         generated_output[0] = HIGH; //Set BUS_1 high

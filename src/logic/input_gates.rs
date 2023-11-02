@@ -93,9 +93,9 @@ impl LogicGate for Clock {
         }
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         let input_signals = &self.get_formatted_input();
-        let fetch_result = GateLogic::fetch_output_signals(
+        let fetch_result = GateLogic::fetch_output_signals_calculate(
             &self.gate_type,
             &input_signals,
             &mut self.output_states,
@@ -111,6 +111,21 @@ impl LogicGate for Clock {
         )?;
 
         self.previous_signal = output_signal;
+
+        fetch_result
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        let input_signals = &self.get_formatted_input();
+        let fetch_result = GateLogic::fetch_output_signals_no_calculate(
+            &self.gate_type,
+            &input_signals,
+            &mut self.output_states,
+            self.unique_id,
+            self.should_print_output,
+            self.print_each_input_output_gate,
+            self.tag.as_str(),
+        );
 
         fetch_result
     }
@@ -212,6 +227,29 @@ impl AutomaticInput {
             self.tag.as_str(),
         );
     }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        if let Some(_) = self.values_to_be_output.get(0) {
+            let values_to_be_output = self.get_formatted_input();
+
+            let result = GateLogic::fetch_output_signals_calculate(
+                &self.gate_type,
+                &values_to_be_output,
+                &mut self.output_states,
+                self.unique_id,
+                self.should_print_output,
+                self.print_each_input_output_gate,
+                self.tag.as_str(),
+            );
+
+            // println!("AutomaticInput id {} fetch_output \n{:#?}", self.unique_id.id(), result);
+
+            self.values_to_be_output.remove(0);
+            result
+        } else {
+            Err(GateLogicError::NoMoreAutomaticInputsRemaining)
+        }
+    }
 }
 
 impl LogicGate for AutomaticInput {
@@ -244,27 +282,12 @@ impl LogicGate for AutomaticInput {
         }
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        if let Some(_) = self.values_to_be_output.get(0) {
-            let values_to_be_output = self.get_formatted_input();
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
 
-            let result = GateLogic::fetch_output_signals(
-                &self.gate_type,
-                &values_to_be_output,
-                &mut self.output_states,
-                self.unique_id,
-                self.should_print_output,
-                self.print_each_input_output_gate,
-                self.tag.as_str(),
-            );
-
-            // println!("AutomaticInput id {} fetch_output \n{:#?}", self.unique_id.id(), result);
-
-            self.values_to_be_output.remove(0);
-            result
-        } else {
-            Err(GateLogicError::NoMoreAutomaticInputsRemaining)
-        }
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -356,8 +379,20 @@ impl LogicGate for SimpleInput {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate(
+            &self.members.gate_type,
+            &self.members.input_signals,
+            &mut self.members.output_states,
+            self.members.unique_id,
+            self.members.should_print_output,
+            self.members.print_each_input_output_gate,
+            self.tag.as_str(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate(
             &self.members.gate_type,
             &self.members.input_signals,
             &mut self.members.output_states,

@@ -108,7 +108,9 @@ pub trait LogicGate: Send {
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn;
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError>;
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError>;
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError>;
 
     fn get_gate_type(&self) -> GateType;
 
@@ -603,7 +605,7 @@ impl ComplexGateMembers {
         for (i, output_state) in self.simple_gate.output_states.iter_mut().enumerate() {
             let mut output_gate = self.output_gates[i].lock().unwrap();
 
-            let output_signals = output_gate.fetch_output_signals().unwrap();
+            let output_signals = output_gate.fetch_output_signals_calculate().unwrap();
 
             //The SimpleOutput should always have exactly one output.
             let gate_output_state = output_signals.first().unwrap();
@@ -701,13 +703,26 @@ impl ComplexGateMembers {
         )
     }
 
-    pub fn fetch_output_signals(
+    pub fn fetch_output_signals_calculate(
         &mut self,
         tag: &String,
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
         self.calculate_output_from_inputs(
             false,
         );
+
+        self.fetch_output_signals_no_calculate(
+            tag
+        )
+    }
+
+    pub fn fetch_output_signals_no_calculate(
+        &mut self,
+        tag: &String,
+    ) -> Result<Vec<GateOutputState>, GateLogicError> {
+        //This must be run because the multithreaded version will not calculate the output states
+        // themselves.
+        self.convert_output_gates_to_output_states();
 
         let output_clone = self.simple_gate.output_states.clone();
 
@@ -838,10 +853,10 @@ impl GateLogic {
         input_signals.first().unwrap().clone()
     }
 
-    pub fn fetch_output_signals_basic_gate(
+    pub fn fetch_output_signals_calculate_basic_gate(
         basic_gate: &mut BasicGateMembers,
     ) -> Result<Vec<GateOutputState>, GateLogicError> {
-        Self::fetch_output_signals(
+        Self::fetch_output_signals_calculate(
             &basic_gate.gate_type,
             &basic_gate.input_signals,
             &mut basic_gate.output_states,
@@ -852,7 +867,7 @@ impl GateLogic {
         )
     }
 
-    pub fn fetch_output_signals(
+    pub fn fetch_output_signals_calculate(
         gate_type: &GateType,
         input_signals: &Vec<HashMap<UniqueID, Signal>>,
         output_states: &mut Vec<GateOutputState>,
@@ -868,6 +883,44 @@ impl GateLogic {
             output_signal.clone(),
         );
 
+        let output_clone = output_states.clone();
+
+        if should_print_output && print_each_input_output_gate {
+            GateLogic::print_gate_output(
+                gate_type,
+                &unique_id,
+                tag,
+                &input_signals,
+                &output_clone,
+            );
+        }
+
+        Ok(output_clone)
+    }
+
+    pub fn fetch_output_signals_no_calculate_basic_gate(
+        basic_gate: &mut BasicGateMembers,
+    ) -> Result<Vec<GateOutputState>, GateLogicError> {
+        Self::fetch_output_signals_no_calculate(
+            &basic_gate.gate_type,
+            &basic_gate.input_signals,
+            &mut basic_gate.output_states,
+            basic_gate.unique_id,
+            basic_gate.should_print_output,
+            basic_gate.print_each_input_output_gate,
+            basic_gate.tag.as_str(),
+        )
+    }
+
+    pub fn fetch_output_signals_no_calculate(
+        gate_type: &GateType,
+        input_signals: &Vec<HashMap<UniqueID, Signal>>,
+        output_states: &mut Vec<GateOutputState>,
+        unique_id: UniqueID,
+        should_print_output: bool,
+        print_each_input_output_gate: bool,
+        tag: &str,
+    ) -> Result<Vec<GateOutputState>, GateLogicError> {
         let output_clone = output_states.clone();
 
         if should_print_output && print_each_input_output_gate {
@@ -1044,7 +1097,7 @@ pub fn pretty_print_output(
         println!("{}", output_string);
         for output_gate in output_gates.iter() {
             let mut output_gate = output_gate.lock().unwrap();
-            let fetched_signal = output_gate.fetch_output_signals().unwrap();
+            let fetched_signal = output_gate.fetch_output_signals_calculate().unwrap();
             let output = fetched_signal.first().unwrap();
 
             if let GateOutputState::NotConnected(signal) = output {

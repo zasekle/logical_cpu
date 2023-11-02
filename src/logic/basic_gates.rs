@@ -40,8 +40,12 @@ impl LogicGate for Or {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -119,8 +123,12 @@ impl LogicGate for And {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -198,8 +206,12 @@ impl LogicGate for Not {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -277,8 +289,12 @@ impl LogicGate for Nor {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -356,8 +372,12 @@ impl LogicGate for Nand {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -434,8 +454,12 @@ impl LogicGate for XOr {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -510,42 +534,8 @@ impl Splitter {
     pub fn pull_output(&mut self, signal: Signal) {
         self.pull_output = Some(signal);
     }
-}
-
-impl LogicGate for Splitter {
-    //current_gate_output_key is meant to be extracted from Splitter::get_index_for_output()
-    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
-        //When gates are being connected, there should be no issues with this error.
-        let output_signal = calculate_input_signal_from_single_inputs(
-            &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
-            // &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
-        ).unwrap();
-
-        GateLogic::connect_output_no_calculate(
-            self.get_unique_id(),
-            &mut self.members.output_states,
-            current_gate_output_key,
-            next_gate_input_key,
-            next_gate,
-            output_signal.clone(),
-            self.members.gate_type,
-            &self.members.tag,
-            self.members.should_print_output,
-        );
-
-        output_signal
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
-    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        self.members.update_input_signal(input)
-    }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-
         //output_states is outputs_per_input*num_inputs length and input_states is num_inputs length.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
 
@@ -586,6 +576,47 @@ impl LogicGate for Splitter {
         }
 
         Ok(self.members.output_states.clone())
+    }
+}
+
+impl LogicGate for Splitter {
+    //current_gate_output_key is meant to be extracted from Splitter::get_index_for_output()
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        //When gates are being connected, there should be no issues with this error.
+        let output_signal = calculate_input_signal_from_single_inputs(
+            &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
+            // &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
+        ).unwrap();
+
+        GateLogic::connect_output_no_calculate(
+            self.get_unique_id(),
+            &mut self.members.output_states,
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+            output_signal.clone(),
+            self.members.gate_type,
+            &self.members.tag,
+            self.members.should_print_output,
+        );
+
+        output_signal
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        self.members.update_input_signal(input)
+    }
+
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -648,50 +679,8 @@ impl ControlledBuffer {
             }
         )
     }
-}
-
-impl LogicGate for ControlledBuffer {
-    fn internal_connect_output(
-        &mut self,
-        current_gate_output_key: usize,
-        next_gate_input_key: usize,
-        next_gate: SharedMutex<dyn LogicGate>,
-    ) -> Signal {
-        let enable_index = self.get_index_from_tag("E");
-        //When gates are being connected, there should be no issues with this error.
-        let input_signals =
-            calculate_input_signals_from_all_inputs(&self.members.input_signals).unwrap();
-        let output_signal = if input_signals[enable_index] == HIGH {
-            input_signals[current_gate_output_key].clone()
-        } else {
-            NONE
-        };
-
-        GateLogic::connect_output_no_calculate(
-            self.get_unique_id(),
-            &mut self.members.output_states,
-            current_gate_output_key,
-            next_gate_input_key,
-            next_gate,
-            output_signal.clone(),
-            self.members.gate_type,
-            &self.members.tag,
-            self.members.should_print_output,
-        );
-
-        output_signal
-    }
-
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
-    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        self.members.update_input_signal(input)
-    }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-
         //When input index 0 is HIGH, allow the signal through, otherwise return NotConnected.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
         let enable_index = self.get_index_from_tag("E");
@@ -746,6 +735,55 @@ impl LogicGate for ControlledBuffer {
         }
 
         Ok(output)
+    }
+}
+
+impl LogicGate for ControlledBuffer {
+    fn internal_connect_output(
+        &mut self,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
+        next_gate: SharedMutex<dyn LogicGate>,
+    ) -> Signal {
+        let enable_index = self.get_index_from_tag("E");
+        //When gates are being connected, there should be no issues with this error.
+        let input_signals =
+            calculate_input_signals_from_all_inputs(&self.members.input_signals).unwrap();
+        let output_signal = if input_signals[enable_index] == HIGH {
+            input_signals[current_gate_output_key].clone()
+        } else {
+            NONE
+        };
+
+        GateLogic::connect_output_no_calculate(
+            self.get_unique_id(),
+            &mut self.members.output_states,
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+            output_signal.clone(),
+            self.members.gate_type,
+            &self.members.tag,
+            self.members.should_print_output,
+        );
+
+        output_signal
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        self.members.update_input_signal(input)
+    }
+
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -835,7 +873,7 @@ mod tests {
             )
         );
 
-        let output = controlled_buffer.lock().unwrap().fetch_output_signals().unwrap();
+        let output = controlled_buffer.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         for gate_output_state in output {
             match gate_output_state {
@@ -1143,7 +1181,7 @@ mod tests {
             )
         );
 
-        let output = controlled_buffer.lock().unwrap().fetch_output_signals().unwrap();
+        let output = controlled_buffer.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         for gate_output_state in output {
             match gate_output_state {
@@ -1408,8 +1446,14 @@ mod tests {
                 self.complex_gate.update_input_signal(input)
             }
 
-            fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-                self.complex_gate.fetch_output_signals(
+            fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+                self.complex_gate.fetch_output_signals_calculate(
+                    &self.get_tag(),
+                )
+            }
+
+            fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+                self.complex_gate.fetch_output_signals_no_calculate(
                     &self.get_tag(),
                 )
             }

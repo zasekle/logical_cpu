@@ -17,6 +17,7 @@ use crate::shared_mutex::SharedMutex;
 use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 //TODO: set this to a higher value
+//TODO: assert somewhere that this value is greater than 0
 static NUM_CHILDREN_GATES_FOR_LARGE_GATE: usize = 7;
 
 pub struct CondvarWrapper {
@@ -208,6 +209,7 @@ impl RunCircuitThreadPool {
                             break;
                         }
 
+                        let mut large_gate_completed = false;
                         let popped_element;
                         loop {
                             //The lock will be held as long as the MutexGuard is alive. So I
@@ -236,56 +238,9 @@ impl RunCircuitThreadPool {
                                             println!("0 outstanding_children gate_id {}", gate_id.id());
                                             println!("waiting_to_be_processed_set {:#?}", thread_pool_lists.waiting_to_be_processed_set);
 
-                                            //TODO: Right now, when a large gate is completed, it will simply remove it. What actually has to
-                                            // happen is that it needs to run through the same process as a small gate. It will need to
-                                            // fetch the output, then run this and the add_queue stuff.
-
-                                            //If it is a large gate and has no outstanding children, update the
-                                            // parent and end the current gate.
-
-                                            thread_pool_lists.parental_tree.remove(
-                                                &gate_id
-                                            );
-
-                                            let parent_id = &gate.parent_id;
-
-                                            //Remove gate as a sibling.
-                                            let siblings = thread_pool_lists.parental_tree.get_mut(
-                                                &parent_id
-                                            ).expect(
-                                                format!(
-                                                    "A sibling completed when its parent tree \
-                                                    was removed. This should never happen because the parent tree should \
-                                                    never be completed before the children tree is. parent_id {}",
-                                                    parent_id.id()
-                                                ).as_str()
-                                            );
-
-                                            siblings.remove(
-                                                &gate_id
-                                            );
-
-                                            Self::update_parent_gate(
-                                                &mut thread_pool_lists,
-                                                0,
-                                                1,
-                                                parent_id,
-                                                Vec::new(),
-                                            );
-
-                                            // This is the only thread running and there are no more elements to be
-                                            // processed.
-                                            if thread_pool_lists.waiting_to_be_processed_set.is_empty()
-                                                && num_threads_running_clone.load(Ordering::Relaxed) == 1
-                                            {
-                                                println!("complete_queue() called");
-                                                Self::complete_queue(
-                                                    &mut processing_completed_clone,
-                                                    &mut wait_for_completion_clone,
-                                                );
-                                            }
-
-                                            continue;
+                                            // popped_element = front_gate;
+                                            large_gate_completed = true;
+                                            // break;
                                         }
                                     }
                                 } else {
@@ -324,14 +279,6 @@ impl RunCircuitThreadPool {
                         if let Some(running_gate) = popped_element {
                             println!("Thread {i} running task");
 
-                            //todo: delete
-                            let processing_set_len = thread_pool_lists_clone.lock().unwrap().processing_set.len();
-                            let waiting_to_pro_set_len = thread_pool_lists_clone.lock().unwrap().waiting_to_be_processed_set.len();
-
-                            println!("processing_set_len {processing_set_len} waiting_to_pro_set_len {waiting_to_pro_set_len} parental_tree {:#?}", thread_pool_lists_clone.lock().unwrap().parental_tree);
-                            //TODO: working on problems,
-                            // The large gate itself will have proper output. However, it will not propagate the signal to the next gate.
-
                             let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
 
                             let mut clock_tick_inputs = Vec::new();
@@ -340,10 +287,15 @@ impl RunCircuitThreadPool {
                             let mut multiple_valid_signals = Vec::new();
                             let mut number_gates_that_ran = 0;
                             let mut parent_id = running_gate.parent_id;
-                            if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
+                            if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE
+                                || large_gate_completed {
                                 let mut mutable_running_gate = running_gate.gate.lock().unwrap();
                                 let fetched_signals =
-                                    mutable_running_gate.fetch_output_signals();
+                                    if large_gate_completed {
+                                        mutable_running_gate.fetch_output_signals_no_calculate()
+                                    } else {
+                                        mutable_running_gate.fetch_output_signals_calculate()
+                                    };
 
                                 let is_input_gate = mutable_running_gate.is_input_gate();
                                 let gate_tag = mutable_running_gate.get_tag();
@@ -1026,7 +978,7 @@ pub fn run_circuit<F>(
             let mut gate = gate_cell.lock().unwrap();
             // unique_gates.insert(gate.get_unique_id());
 
-            let gate_output = gate.fetch_output_signals();
+            let gate_output = gate.fetch_output_signals_calculate();
 
             let gate_output = if let Err(err) = gate_output {
                 match err {
@@ -1175,7 +1127,7 @@ pub fn count_gates_in_circuit(
             let mut gate = gate_cell.lock().unwrap();
             unique_gates.insert(gate.get_unique_id());
 
-            let gate_output = gate.fetch_output_signals();
+            let gate_output = gate.fetch_output_signals_calculate();
 
             let gate_output = if let Err(err) = gate_output {
                 match err {
@@ -1314,7 +1266,7 @@ pub fn convert_binary_to_inputs_for_load(
 pub fn collect_signals_from_logic_gate(
     gate: SharedMutex<dyn LogicGate>
 ) -> Vec<Signal> {
-    let cpu_output = gate.lock().unwrap().fetch_output_signals().unwrap();
+    let cpu_output = gate.lock().unwrap().fetch_output_signals_calculate().unwrap();
     let mut collected_signals = Vec::new();
     for out in cpu_output.into_iter() {
         match out {
@@ -1815,7 +1767,7 @@ mod tests {
 
                 let value = output_gates.into_iter().next().unwrap();
                 let mut value = value.lock().unwrap();
-                let output_signals = value.fetch_output_signals().unwrap();
+                let output_signals = value.fetch_output_signals_calculate().unwrap();
 
                 assert_eq!(output_signals.len(), 1);
 
@@ -2046,7 +1998,7 @@ mod tests {
             &mut |_clock_tick_inputs, output_gates| {
                 for output_gate in output_gates {
                     let mut output_gate = output_gates.first().unwrap().lock().unwrap();
-                    let output_signals = output_gate.fetch_output_signals().unwrap();
+                    let output_signals = output_gate.fetch_output_signals_calculate().unwrap();
 
                     assert_eq!(output_signals.len(), 1);
 
@@ -2058,7 +2010,7 @@ mod tests {
                     match gate_output_state {
                         GateOutputState::NotConnected(signal) => {
                             println!("tag {} signal {:?}", output_gate.get_tag(), *signal);
-                            // assert_eq!(*signal, HIGH) todo uncomment
+                            assert_eq!(*signal, HIGH)
                         }
                         GateOutputState::Connected(_) => {
                             panic!("The output gate should never be connected.");

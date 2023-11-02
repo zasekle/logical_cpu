@@ -162,8 +162,13 @@ impl LogicGate for VariableBitRegister {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -345,8 +350,14 @@ impl LogicGate for VariableDecoder {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -618,8 +629,14 @@ impl LogicGate for SingleRAMCell {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -973,12 +990,12 @@ impl LogicGate for RAMUnit {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         let ram_start = Instant::now();
 
         //The second gate_type parameter will guarantee that all Single RAM cells run on the same
         // clock tick for efficiency.
-        let result = self.complex_gate.fetch_output_signals(
+        let result = self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
         );
 
@@ -987,6 +1004,12 @@ impl LogicGate for RAMUnit {
         }
 
         result
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -1169,8 +1192,14 @@ impl LogicGate for VariableBitBusOne {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
+            &self.get_tag(),
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
             &self.get_tag(),
         )
     }
@@ -1229,7 +1258,7 @@ mod tests {
         let num_bits = rand::thread_rng().gen_range(1..=16);
         let register = VariableBitRegister::new(num_bits);
 
-        let output = register.lock().unwrap().fetch_output_signals().unwrap();
+        let output = register.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), 2 * num_bits);
         for (i, out) in output.into_iter().enumerate() {
@@ -1322,7 +1351,7 @@ mod tests {
         let num_bits = rand::thread_rng().gen_range(1..=8);
         let register = VariableDecoder::new(num_bits);
 
-        let output = register.lock().unwrap().fetch_output_signals().unwrap();
+        let output = register.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), usize::pow(2, num_bits as u32));
         for (i, out) in output.into_iter().enumerate() {
