@@ -416,8 +416,8 @@ impl OneBitMemoryCell {
         let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
         let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
-        let set_input_gate = SimpleInput::new(1, "S");
         let enable_input_gate = SimpleInput::new(2, "E");
+        let set_input_gate = SimpleInput::new(1, "S");
 
         //Order of input gates is important here to force the circuit into a deterministic state.
         input_gates.push(enable_input_gate.clone());
@@ -433,6 +433,12 @@ impl OneBitMemoryCell {
             output_gates.push(q_output_gate.clone());
             output_gates_logic.push(q_output_gate);
         }
+
+        //todo: delete
+        println!("OneBitMemoryCellGate ids");
+        println!("enable_input_gate {}", input_gates[0].lock().unwrap().get_unique_id().id());
+        println!("set_input_gate {}", input_gates[1].lock().unwrap().get_unique_id().id());
+        println!("output_gate {}", output_gates[0].lock().unwrap().get_unique_id().id());
 
         let mut one_bit_memory_cell = OneBitMemoryCell {
             complex_gate: ComplexGateMembers::new(
@@ -455,6 +461,13 @@ impl OneBitMemoryCell {
                 2, 1,
             ),
         };
+
+        //todo: delete
+
+        println!("set_enable_nand_gate {}", one_bit_memory_cell.set_enable_nand_gate.lock().unwrap().get_unique_id().id());
+        println!("enable_nand_gate {}", one_bit_memory_cell.enable_nand_gate.lock().unwrap().get_unique_id().id());
+        println!("sr_top_nand_gate {}", one_bit_memory_cell.sr_top_nand_gate.lock().unwrap().get_unique_id().id());
+        println!("sr_bottom_nand_gate {}", one_bit_memory_cell.sr_bottom_nand_gate.lock().unwrap().get_unique_id().id());
 
         //This will allow the circuit to be primed to the LOW output state.
         enable_input_gate.lock().unwrap().update_input_signal(

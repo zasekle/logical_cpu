@@ -49,6 +49,7 @@ enum ProcessingGateStatus {
 enum ProcessingSizeOfGate {
     Large {
         outstanding_children: usize,
+        held_by_thread: bool,
         gate: SharedMutex<dyn LogicGate>,
         multiple_valid_input_gates: Vec<SharedMutex<dyn LogicGate>>,
     },
@@ -61,6 +62,7 @@ impl fmt::Debug for ProcessingSizeOfGate {
             match self {
                 ProcessingSizeOfGate::Large {
                     outstanding_children,
+                    held_by_thread,
                     gate,
                     multiple_valid_input_gates,
                 } => {
@@ -70,7 +72,7 @@ impl fmt::Debug for ProcessingSizeOfGate {
                     let id = mut_gate.get_unique_id();
 
                     drop(mut_gate);
-                    format!("'ProcessingSizeOfGate::Large' {} gate with tag {}; id {}\noutstanding_children: {}\nmultiple_valid_input_gates.len(): {}", gate_type, tag, id.id(), outstanding_children, multiple_valid_input_gates.len())
+                    format!("'ProcessingSizeOfGate::Large' {} gate with tag {}; id {}\noutstanding_children: {}\nheld_by_thread: {}\nmultiple_valid_input_gates.len(): {}", gate_type, tag, id.id(), outstanding_children, held_by_thread, multiple_valid_input_gates.len())
                 }
                 ProcessingSizeOfGate::Small => {
                     format!("'ProcessingSizeOfGate::Small'")
@@ -204,6 +206,7 @@ impl RunCircuitThreadPool {
                     println!("Thread {i} started");
 
                     loop {
+                        println!("\n");
                         if shutdown_clone.load(Ordering::Acquire) {
                             println!("Thread {i} shutting down");
                             break;
@@ -217,6 +220,9 @@ impl RunCircuitThreadPool {
                             // duration of the task being run.
                             let mut thread_pool_lists = thread_pool_lists_clone.lock().unwrap();
 
+                            //todo delete
+                            println!("Thread {i}\nparental_tree {:#?}", thread_pool_lists.parental_tree);
+
                             let front_gate = thread_pool_lists.gates.pop_front();
 
                             if let Some(gate) = &front_gate {
@@ -225,7 +231,7 @@ impl RunCircuitThreadPool {
                                 let gate_num_children = mutable_gate.num_children_gates();
                                 drop(mutable_gate);
 
-                                println!("\n\npopped_element gate_id {} parent_id {}", gate_id.id(), gate.parent_id.id());
+                                println!("{i} popped_element gate_id {} parent_id {}", gate_id.id(), gate.parent_id.id());
 
                                 let waiting_to_be_processed = thread_pool_lists.waiting_to_be_processed_set.remove(
                                     &gate_id
@@ -257,6 +263,7 @@ impl RunCircuitThreadPool {
                                         //outstanding_children will be updated below when the input gates are added.
                                         ProcessingSizeOfGate::Large {
                                             outstanding_children: 0,
+                                            held_by_thread: true,
                                             gate: gate.gate.clone(),
                                             multiple_valid_input_gates: Vec::new(),
                                         }
@@ -418,7 +425,7 @@ impl RunCircuitThreadPool {
 
                             let processing_element = thread_pool_lists.processing_set.get(
                                 &gate_id
-                            ).expect("A gate was removed from the processing_set while it was running.");
+                            ).expect(format!("A gate was removed from the processing_set while it was running. gate_id {}", gate_id.id()).as_str());
 
                             thread_pool_lists.input_gate_output_states.append(
                                 &mut clock_tick_inputs
@@ -461,6 +468,20 @@ impl RunCircuitThreadPool {
 
                                             num_new_children
                                         } else { //Large gate was inserted into processing.
+
+                                            let processing_element = thread_pool_lists.processing_set.get_mut(
+                                                &gate_id
+                                            ).expect(
+                                                "A gate was not found in the processing set immediately after it completed."
+                                            );
+
+                                            match processing_element.processing_type {
+                                                ProcessingSizeOfGate::Large { ref mut held_by_thread, .. } => {
+                                                    *held_by_thread = false;
+                                                }
+                                                ProcessingSizeOfGate::Small => {}
+                                            }
+
                                             //Insert gate as a parent.
                                             thread_pool_lists.parental_tree.insert(
                                                 gate_id.clone(), HashSet::new(),
@@ -485,6 +506,9 @@ impl RunCircuitThreadPool {
                                     );
                                 }
                                 ProcessingGateStatus::Redo => {
+                                    //TODO: delete
+                                    println!("REDO REACHED for gate id {}", gate_id.id());
+
                                     thread_pool_lists.waiting_to_be_processed_set.insert(
                                         gate_id,
                                         WaitingSizeOfGate::convert_from_processing(
@@ -502,6 +526,9 @@ impl RunCircuitThreadPool {
                                     //If this gate needs to redo, it is still in parental_tree.
                                 }
                                 ProcessingGateStatus::Cancel => {
+                                    //TODO: delete
+                                    println!("CANCEL REACHED for gate id {}", gate_id.id());
+
                                     thread_pool_lists.processing_set.remove(
                                         &gate_id
                                     );
@@ -527,27 +554,6 @@ impl RunCircuitThreadPool {
                             }
                         } else {
                             println!("Thread {i} sleeping");
-
-                            let waiting_set_is_empty = {
-                                let mut thread_pool_lists_guard = thread_pool_lists_clone.lock().unwrap();
-                                println!("gates.len() {}", thread_pool_lists_guard.gates.len());
-
-                                thread_pool_lists_guard.waiting_to_be_processed_set.is_empty()
-                            };
-
-                            //TODO: the problem is that if I do this, then it will immediately end
-                            // if only one thread exists
-                            //This is the only thread running and there are no more elements to be
-                            // processed.
-                            // if waiting_set_is_empty
-                            //     && num_threads_running_clone.load(Ordering::Relaxed) == 1
-                            // {
-                            //     println!("complete_queue() called");
-                            //     Self::complete_queue(
-                            //         &mut processing_completed_clone,
-                            //         &mut wait_for_completion_clone,
-                            //     );
-                            // }
 
                             //todo: delete
                             let processing_set_len = thread_pool_lists_clone.lock().unwrap().processing_set.len();
@@ -603,6 +609,7 @@ impl RunCircuitThreadPool {
         ) = match &mut parent_processing_gate.processing_type {
             ProcessingSizeOfGate::Large {
                 outstanding_children,
+                held_by_thread,
                 gate,
                 multiple_valid_input_gates,
             } => {
@@ -764,13 +771,24 @@ impl RunCircuitThreadPool {
             }
 
             let mut processing = thread_pool_lists.processing_set.get_mut(&gate_element.gate_id);
+            let mut redo = false;
 
             if let Some(processing_gate) = processing.take() {
                 println!("add_to_queue() Inside processing_set");
                 if gate_element.number_children_in_gate < NUM_CHILDREN_GATES_FOR_LARGE_GATE { //small gate
                     processing_gate.status = ProcessingGateStatus::Cancel;
-                } else {
-                    processing_gate.status = ProcessingGateStatus::Redo;
+                } else { // large gate
+                    if let ProcessingSizeOfGate::Large { held_by_thread, .. } = processing_gate.processing_type {
+                        //TODO: handling held_by_thread
+                        // So what I need below is to check held_by_thread for children gates that are
+                        //  large gates, then I need to switch it to canceled if held_by_thread and make sure
+                        //  that cancel will handle all the other cases. If !held_by_thread, then can just remove the gate from
+                        //  the relevant sets.
+                        redo = held_by_thread;
+                        processing_gate.status = ProcessingGateStatus::Redo;
+                    } else {
+                        panic!("Large gate should always be a processing type of large")
+                    }
                 }
             } else { //Gate is not in queue.
 
@@ -798,41 +816,78 @@ impl RunCircuitThreadPool {
                 continue;
             }
 
-            //TODO: Do outstanding children need to be updated here?
+            //TODO problems
+            // Why aren't the other gates in the large gate being added to the parental tree at any point?
+            // The large gate was not removed from parental_tree, but its child was.
+            //  It was never removed from the waiting_to_be_processed_set
+            //  What I need to do is list out the steps a large gate goes through and record it somewhere
+            //   1) Large gate is added to the waiting_to_be_processed_set with initially_added==true and outstanding_children==0
+            //   2) Mutex is locked by thread X and Large gate is popped from the waiting_to_be_processed_set and added to the processing_set.
+            //   3) Mutex is unlocked by thread X and input gates are extracted from large gate.
+            //   4) Mutex is locked by thread X and large gate is given a set in parental tree while input gates are added to the waiting_to_be_processed_set.
+            //   5) Threads process child gates, each new child is added and each old child is removed.
+            //   6) When outstanding_children hits 0, the gate is removed from the processing_set and added to the waiting_to_be_processed_set.
+            //   7) Mutex is locked by thread Y and Large gate is popped from the waiting_to_be_processed_set and added to the processing_set.
+            //   8) Mutex is unlocked by thread Y and fetch_output() is run on Large gate to retrieve the output gates.
+            //   9) Mutex is locked by thread Y and large gate is removed from parental tree. Output gates are also added to the waiting_to_be_processed_set.
+            // Even though the final output gate was processed, the system did not end. There is something to do
+            //  with how the threads are counted as 'running'. They are running until they are asleep, so they
+            //  can be running while waiting at the mutex, then bypass the condition to shut down. However,
+            //  I believe that there was some reason I could not put the end condition under sleep.
+
+            //TODO so redo is not reached for gate 4, but cancel is reached for the input gate 1,
+            // I assume it is because I was assuming originally that a 'processing' gate was held
+            //  by a thread and this would force the gate to be attempted again, but it COULD be
+            //  held by the thread, however, there is no guarantee that it is. So what happens instead
+            //  is that when it is not held by the thread, it will fizzle because no thread is directly
+            //  in charge of restarting it.
+            // I could make it so that it is held outstanding by a thread, this could lead to deadlock if too many large gates exist, it essentially wastes a thread.
+            // I could make it so that there is a way to identify in the processing_set if it is held by a thread,
+            //  If it IS held by a thread, then do what I am doing.
+            //  If it is NOT held by a thread, then I will need to switch it up so that it is put back in the waiting to process queue (all its children will still need to be removed from
+            //   the parental_tree and it may need to be removed itself).
+
+            //TODO: It still isn't running the full OneBitMemory gate.
+
             fn remove_children(
                 thread_pool_lists: &mut ThreadPoolLists,
                 gate_id: UniqueID,
             ) {
-                let children = thread_pool_lists
+                //It is possible for this to fail. This is because when a large gate is processing,
+                // there is a time where it will not exist inside the tree. This is between the time
+                // that it is popped from the gates array and before it has completed processing.
+                println!("removing id {}", gate_id.id());
+                let children_option = thread_pool_lists
                     .parental_tree
-                    .remove(&gate_id)
-                    .expect("Child ID did not exist in parental_tree.");
+                    .remove(&gate_id);
 
-                for child_id in children.into_iter() {
-                    let removed = thread_pool_lists.waiting_to_be_processed_set.remove(
-                        &child_id
-                    );
+                if let Some(children) = children_option {
+                    for child_id in children.into_iter() {
+                        let removed = thread_pool_lists.waiting_to_be_processed_set.remove(
+                            &child_id
+                        );
 
-                    if let Some(_) = removed {
-                        //Instead of searching through the gates Vec, it will instead skip any values inside
-                        // the gates Vec that is not inside waiting_to_be_processed.
-                        continue;
+                        if let Some(_) = removed {
+                            //Instead of searching through the gates Vec, it will instead skip any values inside
+                            // the gates Vec that is not inside waiting_to_be_processed.
+                            continue;
+                        }
+
+                        let child_processing_gate = thread_pool_lists.processing_set.get_mut(
+                            &child_id
+                        );
+
+                        if let Some(child_processing_gate) = child_processing_gate {
+                            child_processing_gate.status = ProcessingGateStatus::Cancel;
+                        } else {
+                            panic!("A child ID was found inside \"parental_id\" structure but was not in processing or waiting to be processed sets.")
+                        }
+
+                        remove_children(
+                            thread_pool_lists,
+                            child_id,
+                        );
                     }
-
-                    let child_processing_gate = thread_pool_lists.processing_set.get_mut(
-                        &child_id
-                    );
-
-                    if let Some(child_processing_gate) = child_processing_gate {
-                        child_processing_gate.status = ProcessingGateStatus::Cancel;
-                    } else {
-                        panic!("A child ID was found inside \"parental_id\" structure but was not in processing or waiting to be processed sets.")
-                    }
-
-                    remove_children(
-                        thread_pool_lists,
-                        child_id,
-                    );
                 }
             }
 
@@ -841,13 +896,35 @@ impl RunCircuitThreadPool {
                 gate_element.gate_id.clone(),
             );
 
-            //Do not want the current gate removed because it is going to redo. But want it to be empty.
-            thread_pool_lists
-                .parental_tree
-                .insert(
-                    gate_element.gate_id,
-                    HashSet::new(),
+            if redo {
+                println!("redo is true");
+                //Do not want the current gate removed because it is going to redo. But want it to be empty.
+                thread_pool_lists
+                    .parental_tree
+                    .insert(
+                        gate_element.gate_id,
+                        HashSet::new(),
+                    );
+            } else {
+                println!("redo is false");
+                //The current gate was not held by a thread and so it must be removed complete and added
+                // to the waiting queue.
+                thread_pool_lists
+                    .processing_set
+                    .remove(
+                        &gate_element.gate_id
+                    )
+                    .expect(
+                        "The processing element was not found immediately after it was found above."
+                    );
+
+                thread_pool_lists.gates.push_back(
+                    ParentIdAndGate {
+                        parent_id: gate_element.parent_id,
+                        gate: gate_element.gate,
+                    }
                 );
+            }
 
             // println!("notify_one Called line: {}", line!());
             condvar_wrapper.cond.notify_one();
@@ -1876,20 +1953,23 @@ mod tests {
         assert!(completed);
     }
 
+    fn create_large_gate() -> (usize, SharedMutex<VariableBitMemoryCell>) {
+        let mut number_bits = 1;
+        let mut variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
+        let mut number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
+        while number_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
+            number_bits += 1;
+            variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
+            number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
+        }
+        (number_bits, variable_bit_mem_cell)
+    }
+
     #[test]
     fn single_large_gate_multi_thread() {
-        //TODO: Run this test over and over, sometimes it gets stuck.
 
-        //TODO: Extract this to a function. create_large_gate() or something, maybe hook up the input
-        // and output as well.
-        // let mut number_bits = 1;
-        // let mut variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
-        // let mut number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
-        // while number_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
-        //     number_bits += 1;
-        //     variable_bit_mem_cell = VariableBitMemoryCell::new(number_bits);
-        //     number_children = variable_bit_mem_cell.lock().unwrap().num_children_gates();
-        // }
+        //TODO: uncomment
+        // let (number_bits, variable_bit_mem_cell) = create_large_gate();
         //
         // let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
         // let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
@@ -1948,6 +2028,7 @@ mod tests {
         let one_bit_memory_cell = OneBitMemoryCell::new(1);
 
         let set_input_gate = AutomaticInput::new(vec![HIGH], 1, "S");
+        println!("set_input_gate {}", set_input_gate.lock().unwrap().get_unique_id().id());
         input_gates.push(set_input_gate.clone());
 
         let input_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag(
@@ -1962,6 +2043,7 @@ mod tests {
         );
 
         let enable_input_gate = AutomaticInput::new(vec![HIGH], 1, "E");
+        println!("enable_input_gate {}", enable_input_gate.lock().unwrap().get_unique_id().id());
         input_gates.push(enable_input_gate.clone());
 
         let input_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag(
@@ -1976,6 +2058,7 @@ mod tests {
         );
 
         let output_gate = SimpleOutput::new("o");
+        println!("output_gate {}", output_gate.lock().unwrap().get_unique_id().id());
         output_gates.push(output_gate.clone());
 
         connect_gates(
@@ -1988,7 +2071,7 @@ mod tests {
         println!("one_bit_memory_cell id {}", one_bit_memory_cell.lock().unwrap().get_unique_id().id());
         println!("one_bit_memory_cell num_children_gates {}", one_bit_memory_cell.lock().unwrap().num_children_gates());
 
-        let mut thread_pool = RunCircuitThreadPool::new(1); //todo num_cpus::get() - 1);
+        let mut thread_pool = RunCircuitThreadPool::new(2); //todo num_cpus::get() - 1);
 
         let completed = run_circuit_multi_thread(
             &input_gates,
@@ -2004,12 +2087,8 @@ mod tests {
 
                     let gate_output_state = output_signals.first().unwrap();
 
-                    //TODO: All of the inputs including the set input are HIGH, this means that the
-                    // outputs should all be HIGH as well. So in other words something is wrong.
-                    println!("line {}", line!());
                     match gate_output_state {
                         GateOutputState::NotConnected(signal) => {
-                            println!("tag {} signal {:?}", output_gate.get_tag(), *signal);
                             assert_eq!(*signal, HIGH)
                         }
                         GateOutputState::Connected(_) => {
@@ -2082,5 +2161,7 @@ mod tests {
     // first tick propagates
     // multiple ticks
     // GateLogicError::NoMoreAutomaticInputsRemaining works
-    // END_OUTPUT_GATE_TAG
+    // END_OUTPUT_GATE_TAG works
+
+    //TODO: remember to clean out all the println statements.
 }
