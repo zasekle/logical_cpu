@@ -203,7 +203,7 @@ impl RunCircuitThreadPool {
 
             thread_pool.threads.push(
                 thread::spawn(move || {
-                    println!("Thread {i} started");
+                    println!("Thread {i} started, id {:?}", thread::current().id());
 
                     loop {
                         println!("\n");
@@ -290,9 +290,11 @@ impl RunCircuitThreadPool {
                         };
 
                         if let Some(running_gate) = popped_element {
-                            println!("Thread {i} running task");
+                            println!("thread {i} running task");
 
                             let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
+
+                            println!("thread {i} extracted children");
 
                             let mut clock_tick_inputs = Vec::new();
                             let mut next_gates = Vec::new();
@@ -322,6 +324,9 @@ impl RunCircuitThreadPool {
                                                 (gate_tag.clone(), output_states.clone())
                                             );
                                         }
+                                        //TODO: Why isn't UniqueID 4 removed all the time?
+
+
                                         //TODO: Right now there is potential for deadlock here. Although
                                         // I am not sure where the other spot is at. But something will
                                         // stop running here and it will get stuck when the gate tries
@@ -333,7 +338,18 @@ impl RunCircuitThreadPool {
                                         // Thread 0 was what got stuck at this point and Thread 1 had already finished
                                         // processing gate 10. Thread 1 has not made it to the point that it printed
                                         // out the popped_element yet.
-                                        println!("output_states {:#?}", output_states);
+                                        //TODO: In order for deadlock to occur, two locks need to be locked, what is
+                                        // the second lock though?
+                                        //TODO: It pops siblings that are children of ID 0, it looks like the second
+                                        // input gate and the memory cell gate.
+                                        //TODO: So it deadlocks when the large gate is reached below at LARGE GATE,
+                                        // then the same gate is printed here
+
+                                        //TODO: Uncommenting this doesn't make the problem stop, it just makes it less likely.
+                                        // 1) The Mutex is locking on the same thread when it is already locked.
+                                        // 2) The Mutex is locking in the wrong order relative to another lock.
+                                        // 3) Maybe inside of where it is locking, another lock occurs.
+                                        println!("{i} output_states {:#?}", output_states);
 
                                         for gate_output_state in output_states {
                                             match gate_output_state {
@@ -350,14 +366,22 @@ impl RunCircuitThreadPool {
                                                 }
                                                 GateOutputState::Connected(next_gate_info) => {
                                                     let next_gate = next_gate_info.gate.clone();
+                                                    //TODO: remove prints
+                                                    println!("{i} Connected about to lock");
                                                     let mut mutable_next_gate = next_gate.lock().unwrap();
+                                                    println!("{i} Connected locked");
 
+                                                    //TODO: locking occurs inside update_input_signal, need to look at it
                                                     let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
                                                         mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
+
+                                                    println!("{i} Connected gate_id");
                                                     let gate_id = mutable_next_gate.get_unique_id();
 
+                                                    println!("{i} Connected contains_id");
                                                     let contains_id = next_gates_set.contains(&gate_id);
 
+                                                    println!("{i} Connected check_if_next_gate_should_be_stored");
                                                     let should_update_gate = check_if_next_gate_should_be_stored(
                                                         input_signal_updated,
                                                         changed_count_this_tick,
@@ -366,6 +390,7 @@ impl RunCircuitThreadPool {
                                                     );
 
                                                     if should_update_gate {
+                                                        println!("{i} Connected number_children_in_gate");
                                                         let number_children_in_gate = mutable_next_gate.num_children_gates();
                                                         drop(mutable_next_gate);
                                                         next_gates_set.insert(gate_id);
@@ -378,6 +403,8 @@ impl RunCircuitThreadPool {
                                                             }
                                                         );
                                                     }
+
+                                                    println!("{i} Connected unlocked");
                                                 }
                                             }
                                         }
@@ -400,12 +427,17 @@ impl RunCircuitThreadPool {
                                 }
                                 number_gates_that_ran = 1;
                             } else {
+                                println!("{i} LARGE GATE reached");
                                 let mutable_running_gate = running_gate.gate.lock().unwrap();
+                                println!("{i} locked");
                                 //When the gates are added below, the parent id will be the current gate for a large gate.
                                 parent_id = mutable_running_gate.get_unique_id();
+                                println!("{i} parent_id");
                                 let input_gates = mutable_running_gate.get_input_gates();
+                                println!("{i} input_gates");
 
-                                println!("LARGE GATE {} input_gates_size {}", mutable_running_gate.get_unique_id().id(), input_gates.len());
+                                println!("LARGE GATE {}", mutable_running_gate.get_unique_id().id());
+                                println!("LARGE GATE input_gates_size {}", input_gates.len());
 
                                 drop(mutable_running_gate);
 
@@ -583,13 +615,18 @@ impl RunCircuitThreadPool {
                         } else {
                             println!("Thread {i} sleeping");
 
+                            //NOTE: If thread_pool_lists is locked here, then it can end up in a situation
+                            // where the thread pool does not properly end. If I want to lock it, do it
+                            // after the fetch_add.
+
+                            num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
+
                             //todo: delete
                             let processing_set_len = thread_pool_lists_clone.lock().unwrap().processing_set.len();
                             let waiting_to_pro_set_len = thread_pool_lists_clone.lock().unwrap().waiting_to_be_processed_set.len();
 
                             println!("processing_set_len {processing_set_len} waiting_to_pro_set_len {waiting_to_pro_set_len} parental_tree {:#?}", thread_pool_lists_clone.lock().unwrap().parental_tree);
 
-                            num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
                             signal_clone.wait();
                         }
                     }
@@ -952,7 +989,7 @@ impl RunCircuitThreadPool {
                     .get_mut(
                         &gate_element.gate_id
                     );
-                    // .expect("The waiting to be processed element was added about and should exist here.");
+                // .expect("The waiting to be processed element was added about and should exist here.");
 
                 if let Some(WaitingSizeOfGate::Large { ref mut initially_added, .. }) = waiting_element {
                     *initially_added = true;
@@ -2007,193 +2044,194 @@ mod tests {
 
     #[test]
     fn single_large_gate_multi_thread() {
+        for _ in 0..100 {
+            //TODO: uncomment
+            // let (number_bits, variable_bit_mem_cell) = create_large_gate();
+            //
+            // let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+            // let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+            //
+            // let input_gate = AutomaticInput::new(vec![HIGH], 1, "S");
+            // input_gates.push(input_gate.clone());
+            //
+            // let input_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
+            //     "S"
+            // );
+            //
+            // connect_gates(
+            //     input_gate.clone(),
+            //     0,
+            //     variable_bit_mem_cell.clone(),
+            //     input_index,
+            // );
+            //
+            // for i in 0..number_bits {
+            //     let input_tag = format!("i_{}", i);
+            //     let input_gate = AutomaticInput::new(
+            //         vec![HIGH], 1, input_tag.as_str(),
+            //     );
+            //     input_gates.push(input_gate.clone());
+            //
+            //     let input_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
+            //         input_tag.as_str()
+            //     );
+            //
+            //     connect_gates(
+            //         input_gate.clone(),
+            //         0,
+            //         variable_bit_mem_cell.clone(),
+            //         input_index,
+            //     );
+            //
+            //     let output_tag = format!("o_{}", i);
+            //     let output_gate = SimpleOutput::new(output_tag.as_str());
+            //     output_gates.push(output_gate.clone());
+            //
+            //     let output_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
+            //         output_tag.as_str()
+            //     );
+            //
+            //     connect_gates(
+            //         variable_bit_mem_cell.clone(),
+            //         output_index,
+            //         output_gate.clone(),
+            //         0,
+            //     );
+            // }
 
-        //TODO: uncomment
-        // let (number_bits, variable_bit_mem_cell) = create_large_gate();
-        //
-        // let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
-        // let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
-        //
-        // let input_gate = AutomaticInput::new(vec![HIGH], 1, "S");
-        // input_gates.push(input_gate.clone());
-        //
-        // let input_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
-        //     "S"
-        // );
-        //
-        // connect_gates(
-        //     input_gate.clone(),
-        //     0,
-        //     variable_bit_mem_cell.clone(),
-        //     input_index,
-        // );
-        //
-        // for i in 0..number_bits {
-        //     let input_tag = format!("i_{}", i);
-        //     let input_gate = AutomaticInput::new(
-        //         vec![HIGH], 1, input_tag.as_str(),
-        //     );
-        //     input_gates.push(input_gate.clone());
-        //
-        //     let input_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
-        //         input_tag.as_str()
-        //     );
-        //
-        //     connect_gates(
-        //         input_gate.clone(),
-        //         0,
-        //         variable_bit_mem_cell.clone(),
-        //         input_index,
-        //     );
-        //
-        //     let output_tag = format!("o_{}", i);
-        //     let output_gate = SimpleOutput::new(output_tag.as_str());
-        //     output_gates.push(output_gate.clone());
-        //
-        //     let output_index = variable_bit_mem_cell.lock().unwrap().get_index_from_tag(
-        //         output_tag.as_str()
-        //     );
-        //
-        //     connect_gates(
-        //         variable_bit_mem_cell.clone(),
-        //         output_index,
-        //         output_gate.clone(),
-        //         0,
-        //     );
-        // }
+            let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+            let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
-        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
-        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+            let one_bit_memory_cell = OneBitMemoryCell::new(1);
 
-        let one_bit_memory_cell = OneBitMemoryCell::new(1);
+            let set_input_gate = AutomaticInput::new(vec![HIGH], 1, "S");
+            println!("set_input_gate {}", set_input_gate.lock().unwrap().get_unique_id().id());
+            input_gates.push(set_input_gate.clone());
 
-        let set_input_gate = AutomaticInput::new(vec![HIGH], 1, "S");
-        println!("set_input_gate {}", set_input_gate.lock().unwrap().get_unique_id().id());
-        input_gates.push(set_input_gate.clone());
+            let input_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag(
+                "S"
+            );
 
-        let input_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag(
-            "S"
-        );
+            connect_gates(
+                set_input_gate.clone(),
+                0,
+                one_bit_memory_cell.clone(),
+                input_index,
+            );
 
-        connect_gates(
-            set_input_gate.clone(),
-            0,
-            one_bit_memory_cell.clone(),
-            input_index,
-        );
+            let enable_input_gate = AutomaticInput::new(vec![HIGH], 1, "E");
+            println!("enable_input_gate {}", enable_input_gate.lock().unwrap().get_unique_id().id());
+            input_gates.push(enable_input_gate.clone());
 
-        let enable_input_gate = AutomaticInput::new(vec![HIGH], 1, "E");
-        println!("enable_input_gate {}", enable_input_gate.lock().unwrap().get_unique_id().id());
-        input_gates.push(enable_input_gate.clone());
+            let input_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag(
+                "E"
+            );
 
-        let input_index = one_bit_memory_cell.lock().unwrap().get_index_from_tag(
-            "E"
-        );
+            connect_gates(
+                enable_input_gate.clone(),
+                0,
+                one_bit_memory_cell.clone(),
+                input_index,
+            );
 
-        connect_gates(
-            enable_input_gate.clone(),
-            0,
-            one_bit_memory_cell.clone(),
-            input_index,
-        );
+            let output_gate = SimpleOutput::new("o");
+            println!("output_gate {}", output_gate.lock().unwrap().get_unique_id().id());
+            output_gates.push(output_gate.clone());
 
-        let output_gate = SimpleOutput::new("o");
-        println!("output_gate {}", output_gate.lock().unwrap().get_unique_id().id());
-        output_gates.push(output_gate.clone());
+            connect_gates(
+                one_bit_memory_cell.clone(),
+                0,
+                output_gate.clone(),
+                0,
+            );
 
-        connect_gates(
-            one_bit_memory_cell.clone(),
-            0,
-            output_gate.clone(),
-            0,
-        );
+            println!("one_bit_memory_cell id {}", one_bit_memory_cell.lock().unwrap().get_unique_id().id());
+            println!("one_bit_memory_cell num_children_gates {}", one_bit_memory_cell.lock().unwrap().num_children_gates());
 
-        println!("one_bit_memory_cell id {}", one_bit_memory_cell.lock().unwrap().get_unique_id().id());
-        println!("one_bit_memory_cell num_children_gates {}", one_bit_memory_cell.lock().unwrap().num_children_gates());
+            let mut thread_pool = RunCircuitThreadPool::new(2); //todo num_cpus::get() - 1);
 
-        let mut thread_pool = RunCircuitThreadPool::new(2); //todo num_cpus::get() - 1);
+            let completed = run_circuit_multi_thread(
+                &input_gates,
+                &output_gates,
+                &mut thread_pool,
+                true,
+                &mut |_clock_tick_inputs, output_gates| {
+                    for output_gate in output_gates {
+                        let mut output_gate = output_gates.first().unwrap().lock().unwrap();
+                        let output_signals = output_gate.fetch_output_signals_calculate().unwrap();
 
-        let completed = run_circuit_multi_thread(
-            &input_gates,
-            &output_gates,
-            &mut thread_pool,
-            true,
-            &mut |_clock_tick_inputs, output_gates| {
-                for output_gate in output_gates {
-                    let mut output_gate = output_gates.first().unwrap().lock().unwrap();
-                    let output_signals = output_gate.fetch_output_signals_calculate().unwrap();
+                        assert_eq!(output_signals.len(), 1);
 
-                    assert_eq!(output_signals.len(), 1);
+                        let gate_output_state = output_signals.first().unwrap();
 
-                    let gate_output_state = output_signals.first().unwrap();
-
-                    match gate_output_state {
-                        GateOutputState::NotConnected(signal) => {
-                            assert_eq!(*signal, HIGH)
-                        }
-                        GateOutputState::Connected(_) => {
-                            panic!("The output gate should never be connected.");
+                        match gate_output_state {
+                            GateOutputState::NotConnected(signal) => {
+                                assert_eq!(*signal, HIGH)
+                            }
+                            GateOutputState::Connected(_) => {
+                                panic!("The output gate should never be connected.");
+                            }
                         }
                     }
-                }
-            },
-        );
+                },
+            );
 
-        assert!(completed);
-    }
+            assert!(completed);
+        }
 
-    //TODO: tests
-    // small and large gate
+        //TODO: tests
+        // small and large gate
 
-    //TODO: finish this
-    // #[test]
-    // #[should_panic]
-    fn oscillation_multi_thread() {
-        let input_gate = AutomaticInput::new(vec![HIGH], 1, "");
-        let output_gate = SimpleOutput::new("");
-        let not_gate = Not::new(2);
+        //TODO: finish this
+        // #[test]
+        // #[should_panic]
+        fn oscillation_multi_thread() {
+            let input_gate = AutomaticInput::new(vec![HIGH], 1, "");
+            let output_gate = SimpleOutput::new("");
+            let not_gate = Not::new(2);
 
-        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
-        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+            let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+            let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
-        input_gates.push(input_gate.clone());
-        output_gates.push(output_gate.clone());
+            input_gates.push(input_gate.clone());
+            output_gates.push(output_gate.clone());
 
-        connect_gates(
-            input_gate.clone(),
-            0,
-            not_gate.clone(),
-            0,
-        );
+            connect_gates(
+                input_gate.clone(),
+                0,
+                not_gate.clone(),
+                0,
+            );
 
-        connect_gates(
-            not_gate.clone(),
-            0,
-            output_gate.clone(),
-            0,
-        );
+            connect_gates(
+                not_gate.clone(),
+                0,
+                output_gate.clone(),
+                0,
+            );
 
-        //Create a loop.
-        connect_gates(
-            not_gate.clone(),
-            1,
-            not_gate.clone(),
-            0,
-        );
+            //Create a loop.
+            connect_gates(
+                not_gate.clone(),
+                1,
+                not_gate.clone(),
+                0,
+            );
 
-        let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get() - 1);
+            let mut thread_pool = RunCircuitThreadPool::new(num_cpus::get() - 1);
 
-        let completed = run_circuit_multi_thread(
-            &input_gates,
-            &output_gates,
-            &mut thread_pool,
-            false,
-            &mut |_clock_tick_inputs, output_gates| {
-                check_for_single_element_signal(output_gates, HIGH);
-            },
-        );
+            let completed = run_circuit_multi_thread(
+                &input_gates,
+                &output_gates,
+                &mut thread_pool,
+                false,
+                &mut |_clock_tick_inputs, output_gates| {
+                    check_for_single_element_signal(output_gates, HIGH);
+                },
+            );
 
-        assert!(completed);
+            assert!(completed);
+        }
     }
 
     //TODO: tests

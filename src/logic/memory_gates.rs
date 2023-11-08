@@ -619,6 +619,7 @@ impl LogicGate for OneBitMemoryCell {
     }
 
     fn get_unique_id(&self) -> UniqueID {
+        println!("OneBitMemoryCell get_unique_id"); //todo delete
         self.complex_gate.simple_gate.unique_id
     }
 

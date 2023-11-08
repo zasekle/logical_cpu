@@ -153,12 +153,18 @@ pub struct ConnectedOutput {
 
 impl fmt::Debug for ConnectedOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        //todo delete println
+        println!("ConnectedOutput about to lock");
         let mut_gate = self.gate.lock().unwrap();
+        println!("ConnectedOutput gate_type");
         let gate_type = mut_gate.get_gate_type();
+        println!("ConnectedOutput tag");
         let tag = mut_gate.get_tag();
+        println!("ConnectedOutput id");
         let id = mut_gate.get_unique_id();
 
         drop(mut_gate);
+        println!("ConnectedOutput unlocked");
 
         let output_str =
             if tag.is_empty() {
