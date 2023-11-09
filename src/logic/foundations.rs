@@ -769,6 +769,23 @@ impl ComplexGateMembers {
     pub fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.simple_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    //TODO: rename this
+    // pub fn get_input_gates(&mut self) -> Vec<SharedMutex<dyn LogicGate>> {
+    //     //TODO: Is this actually possible?
+    //     //Cannot just copy the input_gates Vec. This is because the input_gates are locked inside
+    //     // the ComplexGate when calling various methods. This means that if the input_gates are
+    //     // returned they can be locked first, call their parent and deadlock can occur.
+    //     // for input_gate in self.input_gates {
+    //     //     //This is a SimpleInput gate
+    //     //     let output = input_gate.lock().unwrap().fetch_output_signals_calculate();
+    //     //
+    //     //     //TODO: In order to do this, I would need to call update_input_signal on the next gate.
+    //     //     // This means that I would be locking the next gate inside this lock as well which would
+    //     //     // potentially cause the same problem.
+    //     // }
+    //     // self.input_gates.clone()
+    // }
 }
 
 pub struct GateLogic;

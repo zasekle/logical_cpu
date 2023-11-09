@@ -367,11 +367,30 @@ impl RunCircuitThreadPool {
                                                 GateOutputState::Connected(next_gate_info) => {
                                                     let next_gate = next_gate_info.gate.clone();
                                                     //TODO: remove prints
+
+                                                    //TODO: There seems to be a problem here, it can get stuck here on the very first
+                                                    // move where Thread 0 holds the first input gate at this point and then Thread 1
+                                                    // holds the second input gate above at output_states. I don't see two different
+                                                    // gates being locked at all in this situation. Or at least not out of order.
                                                     println!("{i} Connected about to lock");
                                                     let mut mutable_next_gate = next_gate.lock().unwrap();
                                                     println!("{i} Connected locked");
 
-                                                    //TODO: locking occurs inside update_input_signal, need to look at it
+                                                    //TODO: Locking occurs inside update_input_signal, need to look at it.
+                                                    //TODO: So not sure if this is THE problem, but I do see a problem,
+                                                    // 1) I extract the input gates through get_input_gates.
+                                                    // 2) The parent gate has functions that directly work on and lock the input gates.
+                                                    //  This means there is a lock inside a lock and b/c no order is guaranteed, it can deadlock.
+                                                    // I suppose in an ideal world, the mutable data inside the gates would be the thing protected by
+                                                    //  the locks. This I could skip locking the gate in general. But I think this would require each
+                                                    //  and every child gate to have a lock around it instead of a single lock on the parent gate.
+                                                    // Right now, gate 4 will run get_input_gates and return its input gates. Then when the next gate
+                                                    //  calls update_input_signal, it will lock gate 4 and then lock the input gate. Then the input_gate
+                                                    //  can lock, followed by a lock of its parent?
+                                                    // Maybe there is a way for the input gates to share the same Mutex as the parent, then I can use a
+                                                    //  re-entrant Mutex?
+                                                    // So, is the only problem the order of locks? Can I somehow fix this so that I always access the
+                                                    //  parent lock internally?
                                                     let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
                                                         mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
 
