@@ -468,7 +468,7 @@ impl ControlSection {
 
         control_section.build_and_prime_circuit(output_gates_logic);
 
-        new_shared_mutex(control_section)
+        new_shared_mutex(control_section.get_unique_id().id(), control_section)
     }
 
     fn build_and_prime_circuit(

@@ -9,7 +9,7 @@ use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::{VariableBitRegister, VariableDecoder};
-use crate::shared_mutex::{new_shared_mutex, SharedMutex};
+use crate::shared_mutex::{LoggingMutexGuard, new_shared_mutex, SharedMutex};
 
 pub struct HalfAdder {
     complex_gate: ComplexGateMembers,
@@ -48,7 +48,7 @@ impl HalfAdder {
 
         half_adder.build_and_prime_circuit(output_gates_logic);
 
-        new_shared_mutex(half_adder)
+        new_shared_mutex(half_adder.get_unique_id().id(), half_adder)
     }
 
     fn build_and_prime_circuit(
@@ -220,7 +220,7 @@ impl FullAdder {
 
         full_adder.build_and_prime_circuit(output_gates_logic);
 
-        new_shared_mutex(full_adder)
+        new_shared_mutex(full_adder.get_unique_id().id(), full_adder)
     }
 
     fn build_and_prime_circuit(
@@ -438,7 +438,7 @@ impl VariableBitAdder {
         );
 
 
-        new_shared_mutex(variable_bit_adder)
+        new_shared_mutex(variable_bit_adder.get_unique_id().id(), variable_bit_adder)
     }
 
     fn build_and_prime_circuit(
@@ -642,7 +642,7 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_shift_left)
+        new_shared_mutex(variable_bit_shift_left.get_unique_id().id(), variable_bit_shift_left)
     }
 
     fn build_and_prime_circuit(
@@ -651,7 +651,7 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
         output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         fn tie_register_bits_high(
-            mut register: MutexGuard<VariableBitRegister>
+            mut register: LoggingMutexGuard<VariableBitRegister>
         ) {
             let set_index = register.get_index_from_tag("S");
             let enable_index = register.get_index_from_tag("E");
@@ -856,7 +856,7 @@ impl VariableBitNot {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_not)
+        new_shared_mutex(variable_bit_not.get_unique_id().id(), variable_bit_not)
     }
 
     fn build_and_prime_circuit(
@@ -1009,7 +1009,7 @@ impl VariableBitAnd {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_and)
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
@@ -1175,7 +1175,7 @@ impl VariableBitOr {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_and)
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
@@ -1341,7 +1341,7 @@ impl XOrLE {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_and)
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
@@ -1586,7 +1586,7 @@ impl VariableBitXOrLE {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_and)
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
@@ -1806,7 +1806,7 @@ impl VariableBitZ {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_z)
+        new_shared_mutex(variable_bit_z.get_unique_id().id(), variable_bit_z)
     }
 
     fn build_and_prime_circuit(
@@ -1954,7 +1954,7 @@ impl VariableBitEnable {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_bit_enable)
+        new_shared_mutex(variable_bit_enable. get_unique_id().id(), variable_bit_enable)
     }
 
     fn build_and_prime_circuit(
@@ -2253,7 +2253,7 @@ impl ArithmeticLogicUnit {
             output_gates_logic,
         );
 
-        new_shared_mutex(arithmetic_logic_unit)
+        new_shared_mutex(arithmetic_logic_unit.get_unique_id().id(), arithmetic_logic_unit)
     }
 
     fn build_and_prime_circuit(

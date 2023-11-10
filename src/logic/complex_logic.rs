@@ -132,7 +132,7 @@ impl VariableOutputStepper {
             output_gates_logic,
         );
 
-        new_shared_mutex(variable_output_stepper)
+        new_shared_mutex(variable_output_stepper.get_unique_id().id(), variable_output_stepper)
     }
 
     fn build_and_prime_circuit(
@@ -441,7 +441,7 @@ impl VariableBitCPUEnable {
 
         one_bit_memory_cell.build_and_prime_circuit(number_bits, output_gates_logic);
 
-        new_shared_mutex(one_bit_memory_cell)
+        new_shared_mutex(one_bit_memory_cell.get_unique_id().id(), one_bit_memory_cell)
     }
 
     fn build_and_prime_circuit(
@@ -596,7 +596,7 @@ impl SignalGatekeeper {
             output_gates_logic,
         );
 
-        new_shared_mutex(single_gate_keeper)
+        new_shared_mutex(single_gate_keeper.get_unique_id().id(), single_gate_keeper)
     }
 
     fn build_and_prime_circuit(
@@ -795,7 +795,7 @@ impl MasterSlaveJKFlipFlop {
 
         flip_flop.build_and_prime_circuit(output_gates_logic);
 
-        new_shared_mutex(flip_flop)
+        new_shared_mutex(flip_flop.get_unique_id().id(), flip_flop)
     }
 
     fn build_and_prime_circuit(
@@ -1121,7 +1121,7 @@ impl FourCycleClockHookup {
             output_gates_logic
         );
 
-        new_shared_mutex(clock_hookup)
+        new_shared_mutex(clock_hookup.get_unique_id().id(), clock_hookup)
     }
 
     fn build_and_prime_circuit(
@@ -1454,7 +1454,7 @@ impl VariableBitMultiplexer {
             output_gates_logic,
         );
 
-        new_shared_mutex(multiplexer)
+        new_shared_mutex(multiplexer.get_unique_id().id(), multiplexer)
     }
 
     fn build_and_prime_circuit(
@@ -1732,7 +1732,7 @@ impl VariableBitCounter {
             num_output_pins,
         );
 
-        new_shared_mutex(clock_hookup)
+        new_shared_mutex(clock_hookup.get_unique_id().id(), clock_hookup)
     }
 
     fn build_and_prime_circuit(

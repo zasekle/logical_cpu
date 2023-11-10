@@ -33,7 +33,7 @@ impl Clock {
             || GateOutputState::NotConnected(LOW_),
         );
 
-        new_shared_mutex(clock)
+        new_shared_mutex(clock.get_unique_id().id(), clock)
     }
 
     fn get_formatted_input(&self) -> Vec<HashMap<UniqueID, Signal>> {
@@ -199,7 +199,7 @@ impl AutomaticInput {
             || GateOutputState::NotConnected(HIGH),
         );
 
-        new_shared_mutex(automatic_input)
+        new_shared_mutex(automatic_input.get_unique_id().id(), automatic_input)
     }
 
     fn get_formatted_input(&self) -> Vec<HashMap<UniqueID, Signal>> {
@@ -340,18 +340,20 @@ pub struct SimpleInput {
 impl SimpleInput {
     pub fn new(output_num: usize, tag: &str) -> SharedMutex<Self> {
         assert_ne!(output_num, 0);
+        let simple_input = SimpleInput {
+            members: BasicGateMembers::new(
+                1,
+                output_num,
+                GateType::SimpleInputType,
+                0,
+                Some(LOW_),
+            ),
+            tag: String::from(tag),
+        };
 
         new_shared_mutex(
-            SimpleInput {
-                members: BasicGateMembers::new(
-                    1,
-                    output_num,
-                    GateType::SimpleInputType,
-                    0,
-                    Some(LOW_),
-                ),
-                tag: String::from(tag),
-            }
+            simple_input.get_unique_id().id(),
+            simple_input,
         )
     }
 }

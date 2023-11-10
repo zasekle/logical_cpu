@@ -326,7 +326,6 @@ impl RunCircuitThreadPool {
                                         }
                                         //TODO: Why isn't UniqueID 4 removed all the time?
 
-
                                         //TODO: Right now there is potential for deadlock here. Although
                                         // I am not sure where the other spot is at. But something will
                                         // stop running here and it will get stuck when the gate tries

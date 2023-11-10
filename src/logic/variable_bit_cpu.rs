@@ -360,7 +360,7 @@ impl VariableBitCPU {
             output_gates_logic,
         );
 
-        new_shared_mutex(cpu)
+        new_shared_mutex(cpu.get_unique_id().id(), cpu)
     }
 
     fn build_and_prime_circuit(

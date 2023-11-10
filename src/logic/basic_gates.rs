@@ -9,16 +9,18 @@ pub struct Or {
 #[allow(dead_code)]
 impl Or {
     pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let or_gate = Or {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::OrType,
+                0,
+                None,
+            )
+        };
         new_shared_mutex(
-            Or {
-                members: BasicGateMembers::new(
-                    input_num,
-                    output_num,
-                    GateType::OrType,
-                    0,
-                    None,
-                )
-            }
+            or_gate.get_unique_id().id(),
+            or_gate,
         )
     }
 }
@@ -92,16 +94,18 @@ pub struct And {
 #[allow(dead_code)]
 impl And {
     pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let and_gate = And {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::AndType,
+                0,
+                None,
+            )
+        };
         new_shared_mutex(
-            And {
-                members: BasicGateMembers::new(
-                    input_num,
-                    output_num,
-                    GateType::AndType,
-                    0,
-                    None,
-                )
-            }
+            and_gate.get_unique_id().id(),
+            and_gate,
         )
     }
 }
@@ -175,16 +179,18 @@ pub struct Not {
 #[allow(dead_code)]
 impl Not {
     pub fn new(output_num: usize) -> SharedMutex<Self> {
+        let not_gate = Not {
+            members: BasicGateMembers::new(
+                1,
+                output_num,
+                GateType::NotType,
+                0,
+                None,
+            )
+        };
         new_shared_mutex(
-            Not {
-                members: BasicGateMembers::new(
-                    1,
-                    output_num,
-                    GateType::NotType,
-                    0,
-                    None,
-                )
-            }
+            not_gate.get_unique_id().id(),
+            not_gate,
         )
     }
 }
@@ -258,16 +264,18 @@ pub struct Nor {
 #[allow(dead_code)]
 impl Nor {
     pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let nor_gate = Nor {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::NorType,
+                0,
+                None,
+            )
+        };
         new_shared_mutex(
-            Nor {
-                members: BasicGateMembers::new(
-                    input_num,
-                    output_num,
-                    GateType::NorType,
-                    0,
-                    None,
-                )
-            }
+            nor_gate.get_unique_id().id(),
+            nor_gate,
         )
     }
 }
@@ -341,16 +349,18 @@ pub struct Nand {
 #[allow(dead_code)]
 impl Nand {
     pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let nand_gate = Nand {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::NandType,
+                0,
+                None,
+            )
+        };
         new_shared_mutex(
-            Nand {
-                members: BasicGateMembers::new(
-                    input_num,
-                    output_num,
-                    GateType::NandType,
-                    0,
-                    None,
-                )
-            }
+            nand_gate.get_unique_id().id(),
+            nand_gate,
         )
     }
 }
@@ -423,16 +433,18 @@ pub struct XOr {
 
 impl XOr {
     pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let xor_gate = XOr {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::XOrType,
+                0,
+                None,
+            )
+        };
         new_shared_mutex(
-            XOr {
-                members: BasicGateMembers::new(
-                    input_num,
-                    output_num,
-                    GateType::XOrType,
-                    0,
-                    None,
-                )
-            }
+            xor_gate.get_unique_id().id(),
+            xor_gate,
         )
     }
 }
@@ -509,18 +521,20 @@ pub struct Splitter {
 impl Splitter {
     pub fn new(input_num: usize, outputs_per_input: usize) -> SharedMutex<Self> {
         assert_ne!(outputs_per_input, 0);
+        let splitter = Splitter {
+            members: BasicGateMembers::new(
+                input_num,
+                input_num * outputs_per_input,
+                GateType::SplitterType,
+                0,
+                Some(LOW_),
+            ),
+            outputs_per_input,
+            pull_output: None,
+        };
         new_shared_mutex(
-            Splitter {
-                members: BasicGateMembers::new(
-                    input_num,
-                    input_num * outputs_per_input,
-                    GateType::SplitterType,
-                    0,
-                    Some(LOW_),
-                ),
-                outputs_per_input,
-                pull_output: None,
-            }
+            splitter.get_unique_id().id(),
+            splitter,
         )
     }
 
@@ -667,16 +681,18 @@ pub struct ControlledBuffer {
 #[allow(dead_code)]
 impl ControlledBuffer {
     pub fn new(input_output_num: usize) -> SharedMutex<Self> {
+        let controlled_buffer = ControlledBuffer {
+            members: BasicGateMembers::new(
+                input_output_num + 1,
+                input_output_num,
+                GateType::ControlledBufferType,
+                0,
+                Some(NONE),
+            )
+        };
         new_shared_mutex(
-            ControlledBuffer {
-                members: BasicGateMembers::new(
-                    input_output_num + 1,
-                    input_output_num,
-                    GateType::ControlledBufferType,
-                    0,
-                    Some(NONE),
-                )
-            }
+            controlled_buffer.get_unique_id().id(),
+            controlled_buffer,
         )
     }
 
@@ -1385,7 +1401,7 @@ mod tests {
 
                 gate.build_and_prime_circuit(output_gates_logic);
 
-                new_shared_mutex(gate)
+                new_shared_mutex(gate.get_unique_id().id(), gate)
             }
 
             fn build_and_prime_circuit(

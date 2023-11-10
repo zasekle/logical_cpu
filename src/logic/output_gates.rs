@@ -24,16 +24,18 @@ pub struct SimpleOutput {
 #[allow(dead_code)]
 impl SimpleOutput {
     pub fn new(tag: &str) -> SharedMutex<Self> {
+        let simple_output = SimpleOutput {
+            output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW_)]),
+            unique_id: UniqueID::generate(),
+            oscillation_detection: OscillationDetection::new(),
+            should_print_output: false,
+            print_each_input_output_gate: true,
+            gate_type: GateType::SimpleOutputType,
+            tag: String::from(tag),
+        };
         new_shared_mutex(
-            SimpleOutput {
-                output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW_)]),
-                unique_id: UniqueID::generate(),
-                oscillation_detection: OscillationDetection::new(),
-                should_print_output: false,
-                print_each_input_output_gate: true,
-                gate_type: GateType::SimpleOutputType,
-                tag: String::from(tag),
-            }
+            simple_output.get_unique_id().id(),
+            simple_output,
         )
     }
 

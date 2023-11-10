@@ -69,7 +69,7 @@ impl SRLatch {
             )
         );
 
-        new_shared_mutex(sr_latch)
+        new_shared_mutex(sr_latch.get_unique_id().id(), sr_latch)
     }
 
     fn build_and_prime_circuit(
@@ -264,7 +264,7 @@ impl ActiveLowSRLatch {
 
         sr_latch.build_and_prime_circuit(output_gates_clone);
 
-        new_shared_mutex(sr_latch)
+        new_shared_mutex(sr_latch.get_unique_id().id(), sr_latch)
     }
 
     fn build_and_prime_circuit(
@@ -491,7 +491,7 @@ impl OneBitMemoryCell {
             )
         );
 
-        new_shared_mutex(one_bit_memory_cell)
+        new_shared_mutex(one_bit_memory_cell.get_unique_id().id(), one_bit_memory_cell)
     }
 
     fn build_and_prime_circuit(
@@ -709,7 +709,7 @@ impl VariableBitMemoryCell {
 
         one_bit_memory_cell.build_and_prime_circuit(number_bits, output_gates_logic);
 
-        new_shared_mutex(one_bit_memory_cell)
+        new_shared_mutex(one_bit_memory_cell.get_unique_id().id(), one_bit_memory_cell)
     }
 
     fn build_and_prime_circuit(

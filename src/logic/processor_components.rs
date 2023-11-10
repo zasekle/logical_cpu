@@ -61,7 +61,7 @@ impl VariableBitRegister {
 
         bit_register.build_and_prime_circuit(number_bits, output_gates_logic);
 
-        new_shared_mutex(bit_register)
+        new_shared_mutex(bit_register.get_unique_id().id(), bit_register)
     }
 
     fn build_and_prime_circuit(
@@ -267,7 +267,7 @@ impl VariableDecoder {
 
         decoder.build_and_prime_circuit(number_inputs, number_outputs, output_gates_logic);
 
-        new_shared_mutex(decoder)
+        new_shared_mutex(decoder.get_unique_id().id(), decoder)
     }
 
     fn build_and_prime_circuit(
@@ -468,7 +468,7 @@ impl SingleRAMCell {
             output_gates_logic,
         );
 
-        new_shared_mutex(ram_cell)
+        new_shared_mutex(ram_cell.get_unique_id().id(), ram_cell)
     }
 
     fn build_and_prime_circuit(
@@ -787,7 +787,7 @@ impl RAMUnit {
             output_gates_logic,
         );
 
-        new_shared_mutex(ram_cell)
+        new_shared_mutex(ram_cell.get_unique_id().id(), ram_cell)
     }
 
     fn build_and_prime_circuit(
@@ -1101,7 +1101,7 @@ impl VariableBitBusOne {
 
         bit_register.build_and_prime_circuit(number_bits, output_gates_logic);
 
-        new_shared_mutex(bit_register)
+        new_shared_mutex(bit_register.get_unique_id().id(), bit_register)
     }
 
     fn build_and_prime_circuit(
