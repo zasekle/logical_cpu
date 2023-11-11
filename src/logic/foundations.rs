@@ -695,10 +695,13 @@ impl ComplexGateMembers {
     }
 
     pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        println!("update_input_signal.simple_gate");
         //Updating the inner 'input_signals' vector for consistency.
         self.simple_gate.update_input_signal(input.clone());
 
+        println!("update_input_signal.lock()");
         let mut simple_input_gate = self.input_gates[input.input_index].lock().unwrap();
+        println!("update_input_signal.update_input_signal");
 
         simple_input_gate.update_input_signal(
             GateInput::new(

@@ -374,6 +374,7 @@ impl RunCircuitThreadPool {
                                                     println!("{i} Connected about to lock");
                                                     let mut mutable_next_gate = next_gate.lock().unwrap();
                                                     println!("{i} Connected locked");
+                                                    println!("{i} Connected locked type {}", mutable_next_gate.get_gate_type());
 
                                                     //TODO: Locking occurs inside update_input_signal, need to look at it.
                                                     //TODO: So not sure if this is THE problem, but I do see a problem,
@@ -1722,6 +1723,7 @@ pub fn compare_generate_and_collected_output(
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Deref;
     use std::time::Duration;
     use crate::logic::basic_gates::{And, Not, Or};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
@@ -1729,6 +1731,7 @@ mod tests {
     use crate::logic::memory_gates::{OneBitMemoryCell, VariableBitMemoryCell};
     use crate::logic::output_gates::SimpleOutput;
     use crate::run_circuit::run_circuit;
+    use crate::shared_mutex::new_shared_mutex;
     use crate::test_stuff::{check_for_single_element_signal, run_test_with_timeout};
     use super::*;
 
@@ -2251,6 +2254,102 @@ mod tests {
             assert!(completed);
         }
     }
+
+    //TODO: delete this test
+    #[test]
+    fn force_deadlock() {
+        let first = 1;
+        let second = 2;
+
+        let first_mutex = new_shared_mutex(1, first);
+        let second_mutex = new_shared_mutex(2, second);
+
+        let clone_one_one = first_mutex.clone();
+        let clone_two_one = second_mutex.clone();
+
+        let clone_one_two = first_mutex.clone();
+        let clone_two_two = second_mutex.clone();
+
+        struct HigherLevelObject {
+            lower_level: SharedMutex<i32>
+        }
+
+        let third = 3;
+        let high_object = HigherLevelObject {
+            lower_level: new_shared_mutex(3, third),
+        };
+
+        let testing_object = new_shared_mutex(4, high_object);
+        let testing_object_one = testing_object.clone();
+        let testing_object_two = testing_object.clone();
+
+        println!("First testing_object access.");
+        let object = testing_object.lock().unwrap();
+
+        let low_object = object.lower_level.lock().unwrap();
+
+        println!("First low_object {}.", *low_object);
+
+        drop(low_object);
+        drop(object);
+        println!("First testing_object finished.");
+
+        let first_thread = thread::spawn(move || {
+            println!("1 testing_object access.");
+            let object = testing_object_one.lock().unwrap();
+
+            let low_object = object.lower_level.lock().unwrap();
+
+            println!("1 low_object {}.", *low_object);
+
+            drop(low_object);
+            drop(object);
+            println!("1 testing_object finished.");
+
+            let mutex_guard_first = clone_one_one.lock();
+
+            thread::sleep(Duration::from_millis(200));
+
+            let mutex_guard_second = clone_two_one.lock();
+
+            println!("First Thread both locked!");
+
+        });
+
+        let second_thread = thread::spawn(move || {
+
+            println!("2 testing_object access.");
+            let object = testing_object_two.lock().unwrap();
+
+            let low_object = object.lower_level.lock().unwrap();
+
+            println!("2 low_object {}.", *low_object);
+            drop(low_object);
+            drop(object);
+            println!("2 testing_object finished.");
+
+            let mutex_guard_first = clone_two_two.lock();
+
+            thread::sleep(Duration::from_millis(200));
+
+            let mutex_guard_second = clone_one_two.lock();
+
+            println!("Second Thread both locked!");
+        });
+
+        first_thread.join().expect("First thread error");
+
+        second_thread.join().expect("Second thread error");
+    }
+
+
+
+
+
+
+
+
+
 
     //TODO: tests
     // simple loop
