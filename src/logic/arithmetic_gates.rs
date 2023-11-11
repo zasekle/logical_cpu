@@ -1,4 +1,3 @@
-use std::sync::{MutexGuard};
 use std::time::Instant;
 use crate::ALU_TIME;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not, Or, Splitter, XOr};

@@ -13,7 +13,7 @@ use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::RAMUnit;
 use crate::logic::variable_bit_cpu::VariableBitCPU;
 use crate::{ALU_TIME, CONTROL_SECTION_TIME, RAM_TIME};
-use crate::shared_mutex::SharedMutex;
+use crate::shared_mutex::{new_used_mutex, SharedMutex, UsedMutex};
 use crate::test_stuff::extract_output_tags_sorted_by_index;
 
 //TODO: set this to a higher value
@@ -22,20 +22,20 @@ static NUM_CHILDREN_GATES_FOR_LARGE_GATE: usize = 7;
 
 pub struct CondvarWrapper {
     cond: Condvar,
-    mutex: Mutex<()>,
+    mutex: UsedMutex<()>,
 }
 
 impl CondvarWrapper {
     fn new() -> Self {
         CondvarWrapper {
             cond: Condvar::new(),
-            mutex: Mutex::new(()),
+            mutex: new_used_mutex(-1, ()),
         }
     }
 
     fn wait(&self) {
-        let guard = self.mutex.lock().unwrap();
-        let _unused_guard = self.cond.wait(guard).unwrap();
+        let mut guard = self.mutex.lock().unwrap();
+        let _unused_guard = self.cond.wait(guard.take_guard()).unwrap();
     }
 }
 
@@ -145,14 +145,14 @@ impl ThreadPoolLists {
 }
 
 pub struct RunCircuitThreadPool {
-    thread_pool_lists: Arc<Mutex<ThreadPoolLists>>,
+    thread_pool_lists: Arc<UsedMutex<ThreadPoolLists>>,
 
     threads: Vec<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
     propagate_signal: Arc<AtomicBool>,
     condvar_wrapper: Arc<CondvarWrapper>,
     num_threads_running: Arc<AtomicI32>,
-    processing_completed: Arc<Mutex<bool>>,
+    processing_completed: Arc<UsedMutex<bool>>,
     wait_for_completion: Arc<Condvar>,
 }
 
@@ -169,14 +169,15 @@ impl RunCircuitThreadPool {
         assert_ne!(size, 0);
         let mut thread_pool = RunCircuitThreadPool {
             thread_pool_lists: Arc::new(
-                Mutex::new(
+                new_used_mutex(
+                    -2,
                     ThreadPoolLists {
                         parental_tree: HashMap::from([(UniqueID::zero_id(), HashSet::new())]),
                         processing_set: HashMap::new(),
                         waiting_to_be_processed_set: HashMap::new(),
                         gates: VecDeque::new(),
                         input_gate_output_states: Vec::new(),
-                    }
+                    },
                 )
             ),
             threads: Vec::new(),
@@ -184,7 +185,7 @@ impl RunCircuitThreadPool {
             propagate_signal: Arc::new(AtomicBool::from(false)),
             condvar_wrapper: Arc::new(CondvarWrapper::new()),
             num_threads_running: Arc::new(AtomicI32::new(0)),
-            processing_completed: Arc::new(Mutex::new(false)),
+            processing_completed: Arc::new(new_used_mutex(-2, false)),
             wait_for_completion: Arc::new(Condvar::new()),
         };
 
@@ -765,7 +766,7 @@ impl RunCircuitThreadPool {
     fn internal_shutdown(
         shutdown: &mut Arc<AtomicBool>,
         condvar_wrapper: &mut Arc<CondvarWrapper>,
-        thread_pool_lists: &mut Arc<Mutex<ThreadPoolLists>>,
+        thread_pool_lists: &mut Arc<UsedMutex<ThreadPoolLists>>,
     ) {
         let mut thread_pool_lists = thread_pool_lists.lock().unwrap();
         thread_pool_lists.clear();
@@ -782,7 +783,7 @@ impl RunCircuitThreadPool {
     }
 
     pub fn complete_queue(
-        processing_completed: &mut Arc<Mutex<bool>>,
+        processing_completed: &mut Arc<UsedMutex<bool>>,
         wait_for_completion: &mut Arc<Condvar>,
     ) {
         let mut completed = processing_completed.lock().unwrap();
@@ -793,7 +794,7 @@ impl RunCircuitThreadPool {
 
     pub fn join(&mut self) -> bool {
         //Pause until the thread pool is completed.
-        let mut guard = self.processing_completed.lock().unwrap();
+        let mut guard = self.processing_completed.lock().unwrap().take_guard();
         while !*guard {
             guard = self.wait_for_completion.wait(guard).unwrap();
         }
@@ -2271,7 +2272,7 @@ mod tests {
         let clone_two_two = second_mutex.clone();
 
         struct HigherLevelObject {
-            lower_level: SharedMutex<i32>
+            lower_level: SharedMutex<i32>,
         }
 
         let third = 3;
@@ -2313,11 +2314,9 @@ mod tests {
             let mutex_guard_second = clone_two_one.lock();
 
             println!("First Thread both locked!");
-
         });
 
         let second_thread = thread::spawn(move || {
-
             println!("2 testing_object access.");
             let object = testing_object_two.lock().unwrap();
 
@@ -2341,14 +2340,6 @@ mod tests {
 
         second_thread.join().expect("Second thread error");
     }
-
-
-
-
-
-
-
-
 
 
     //TODO: tests

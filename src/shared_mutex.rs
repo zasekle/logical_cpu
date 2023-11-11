@@ -4,14 +4,18 @@ use std::thread;
 
 //TODO: delete all of this and put the normal Mutex<T> back as the type.
 pub struct LoggingMutexGuard<'a, T: ?Sized> {
-    id: usize,
-    guard: MutexGuard<'a, T>,
+    id: i32,
+    pub guard: Option<MutexGuard<'a, T>>,
 }
 
 impl<'a, T: ?Sized> LoggingMutexGuard<'a, T> {
     // Constructor for the custom guard
-    fn new(id: usize, guard: MutexGuard<'a, T>) -> Self {
-        LoggingMutexGuard { id, guard }
+    fn new(id: i32, guard: MutexGuard<'a, T>) -> Self {
+        LoggingMutexGuard { id, guard: Some(guard) }
+    }
+
+    pub fn take_guard(&mut self) -> MutexGuard<'a, T> {
+        self.guard.take().expect("Could not take guard, it was already moved")
     }
 }
 
@@ -20,13 +24,14 @@ impl<'a, T: ?Sized> Deref for LoggingMutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &*self.guard
+        // &*self.guard.expect("Failed to deref guard (it was moved out)")
+        self.guard.as_ref().expect("Failed to deref guard (it was moved out)")
     }
 }
 
 impl<'a, T: ?Sized> DerefMut for LoggingMutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.guard
+        self.guard.as_mut().expect("Failed to deref_mut guard (it was moved out)")
     }
 }
 
@@ -37,13 +42,13 @@ impl<'a, T: ?Sized> Drop for LoggingMutexGuard<'a, T> {
 }
 
 pub struct LoggingMutex<T: ?Sized> {
-    id: usize,
+    id: i32,
     mutex: Mutex<T>,
 }
 
 impl<T: ?Sized> LoggingMutex<T> {
     // Constructor for the custom mutex
-    pub fn new(id: usize, data: T) -> Self
+    pub fn new(id: i32, data: T) -> Self
     where
         T: Sized,
     {
@@ -62,8 +67,17 @@ impl<T: ?Sized> LoggingMutex<T> {
     }
 }
 
-pub type SharedMutex<T> = Arc<LoggingMutex<T>>;
+// pub type UsedMutex<T> = Mutex<T>;
+pub type UsedMutex<T> = LoggingMutex<T>;
+
+pub fn new_used_mutex<T>(id: i32, data: T) -> UsedMutex<T> {
+    // Mutex::new(data)
+    LoggingMutex::new(id, data)
+}
+
+pub type SharedMutex<T> = Arc<UsedMutex<T>>;
 
 pub fn new_shared_mutex<T>(id: usize, data: T) -> SharedMutex<T> {
-    Arc::new(LoggingMutex::new(id, data))
+    Arc::new(new_used_mutex(id as i32, data))
 }
+
