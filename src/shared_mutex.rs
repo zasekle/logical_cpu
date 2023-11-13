@@ -2,10 +2,9 @@ use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 use std::thread;
 
-//TODO: delete all of this and put the normal Mutex<T> back as the type.
 pub struct LoggingMutexGuard<'a, T: ?Sized> {
     id: i32,
-    pub guard: Option<MutexGuard<'a, T>>,
+    guard: Option<MutexGuard<'a, T>>,
 }
 
 impl<'a, T: ?Sized> LoggingMutexGuard<'a, T> {
@@ -24,7 +23,6 @@ impl<'a, T: ?Sized> Deref for LoggingMutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        // &*self.guard.expect("Failed to deref guard (it was moved out)")
         self.guard.as_ref().expect("Failed to deref guard (it was moved out)")
     }
 }
@@ -67,7 +65,8 @@ impl<T: ?Sized> LoggingMutex<T> {
     }
 }
 
-// pub type UsedMutex<T> = Mutex<T>;
+//TODO: set this back to type Mutex
+//pub type UsedMutex<T> = Mutex<T>;
 pub type UsedMutex<T> = LoggingMutex<T>;
 
 pub fn new_used_mutex<T>(id: i32, data: T) -> UsedMutex<T> {

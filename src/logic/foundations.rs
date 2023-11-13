@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, thread};
 use std::fmt::Formatter;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::Ordering;
@@ -154,17 +154,17 @@ pub struct ConnectedOutput {
 impl fmt::Debug for ConnectedOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         //todo delete println
-        println!("ConnectedOutput about to lock");
+        println!("ConnectedOutput about to lock ThreadId({:?})", thread::current().id());
         let mut_gate = self.gate.lock().unwrap();
-        println!("ConnectedOutput gate_type");
+        println!("ConnectedOutput gate_type ThreadId({:?})", thread::current().id());
         let gate_type = mut_gate.get_gate_type();
-        println!("ConnectedOutput tag");
+        println!("ConnectedOutput tag ThreadId({:?})", thread::current().id());
         let tag = mut_gate.get_tag();
-        println!("ConnectedOutput id");
+        println!("ConnectedOutput id ThreadId({:?})", thread::current().id());
         let id = mut_gate.get_unique_id();
 
         drop(mut_gate);
-        println!("ConnectedOutput unlocked");
+        println!("ConnectedOutput unlocked ThreadId({:?})", thread::current().id());
 
         let output_str =
             if tag.is_empty() {
@@ -695,13 +695,13 @@ impl ComplexGateMembers {
     }
 
     pub fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        println!("update_input_signal.simple_gate");
+        println!("update_input_signal.simple_gate ThreadId({:?})", thread::current().id());
         //Updating the inner 'input_signals' vector for consistency.
         self.simple_gate.update_input_signal(input.clone());
 
-        println!("update_input_signal.lock()");
+        println!("update_input_signal.lock() ThreadId({:?})", thread::current().id());
         let mut simple_input_gate = self.input_gates[input.input_index].lock().unwrap();
-        println!("update_input_signal.update_input_signal");
+        println!("update_input_signal.update_input_signal ThreadId({:?})", thread::current().id());
 
         simple_input_gate.update_input_signal(
             GateInput::new(

@@ -204,450 +204,455 @@ impl RunCircuitThreadPool {
 
             thread_pool.threads.push(
                 thread::spawn(move || {
-                    println!("Thread {i} started, id {:?}", thread::current().id());
+                        let panic_result = std::panic::catch_unwind (move || {
+                            println!("Thread {i} started, id {:?}", thread::current().id());
 
-                    loop {
-                        println!("\n");
-                        if shutdown_clone.load(Ordering::Acquire) {
-                            println!("Thread {i} shutting down");
-                            break;
-                        }
-
-                        let mut increment_thread = true;
-                        let mut large_gate_completed = false;
-                        let popped_element;
-                        loop {
-                            //The lock will be held as long as the MutexGuard is alive. So I
-                            // need to create a scope to make sure the lock is not held for the
-                            // duration of the task being run.
-                            let mut thread_pool_lists = thread_pool_lists_clone.lock().unwrap();
-
-                            if increment_thread {
-                                num_threads_running_clone.fetch_add(1, Ordering::Release);
-                                increment_thread = false;
-                            }
-
-                            //todo delete
-                            println!("Thread {i}\nparental_tree {:#?}", thread_pool_lists.parental_tree);
-
-                            let front_gate = thread_pool_lists.gates.pop_front();
-
-                            if let Some(gate) = &front_gate {
-                                let mutable_gate = gate.gate.lock().unwrap();
-                                let gate_id = mutable_gate.get_unique_id().clone();
-                                let gate_num_children = mutable_gate.num_children_gates();
-                                drop(mutable_gate);
-
-                                println!("{i} popped_element gate_id {} parent_id {}", gate_id.id(), gate.parent_id.id());
-
-                                let waiting_to_be_processed = thread_pool_lists.waiting_to_be_processed_set.remove(
-                                    &gate_id
-                                );
-
-                                if let Some(waiting_element) = waiting_to_be_processed {
-                                    if let WaitingSizeOfGate::Large { outstanding_children, initially_added } = waiting_element
-                                    {
-                                        if outstanding_children == 0 && !initially_added {
-                                            println!("0 outstanding_children gate_id {}", gate_id.id());
-                                            println!("waiting_to_be_processed_set {:#?}", thread_pool_lists.waiting_to_be_processed_set);
-
-                                            // popped_element = front_gate;
-                                            large_gate_completed = true;
-                                            // break;
-                                        }
-                                    }
-                                } else {
-                                    println!("not in waiting_to_be_processed_set");
-                                    //If the gate was canceled, then it will not exist inside the
-                                    // waiting_to_be_processed_set.
-                                    continue;
+                            loop {
+                                println!("\n");
+                                if shutdown_clone.load(Ordering::Acquire) {
+                                    println!("Thread {i} shutting down");
+                                    break;
                                 }
 
-                                let processing_type =
-                                    if gate_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
-                                        ProcessingSizeOfGate::Small
-                                    } else {
-                                        //outstanding_children will be updated below when the input gates are added.
-                                        ProcessingSizeOfGate::Large {
-                                            outstanding_children: 0,
-                                            held_by_thread: true,
-                                            gate: gate.gate.clone(),
-                                            multiple_valid_input_gates: Vec::new(),
+                                let mut increment_thread = true;
+                                let mut large_gate_completed = false;
+                                let popped_element;
+                                loop {
+                                    //The lock will be held as long as the MutexGuard is alive. So I
+                                    // need to create a scope to make sure the lock is not held for the
+                                    // duration of the task being run.
+                                    let mut thread_pool_lists = thread_pool_lists_clone.lock().unwrap();
+
+                                    if increment_thread {
+                                        num_threads_running_clone.fetch_add(1, Ordering::Release);
+                                        increment_thread = false;
+                                    }
+
+                                    //todo delete
+                                    println!("Thread {i}\nparental_tree {:#?}", thread_pool_lists.parental_tree);
+
+                                    let front_gate = thread_pool_lists.gates.pop_front();
+
+                                    if let Some(gate) = &front_gate {
+                                        let gate_id = gate.gate.lock().unwrap().get_unique_id().clone();
+                                        let gate_num_children = gate.gate.lock().unwrap().num_children_gates();
+
+                                        println!("{i} popped_element gate_id {} parent_id {}", gate_id.id(), gate.parent_id.id());
+
+                                        let waiting_to_be_processed = thread_pool_lists.waiting_to_be_processed_set.remove(
+                                            &gate_id
+                                        );
+
+                                        if let Some(waiting_element) = waiting_to_be_processed {
+                                            if let WaitingSizeOfGate::Large { outstanding_children, initially_added } = waiting_element
+                                            {
+                                                if outstanding_children == 0 && !initially_added {
+                                                    println!("0 outstanding_children gate_id {}", gate_id.id());
+                                                    println!("waiting_to_be_processed_set {:#?}", thread_pool_lists.waiting_to_be_processed_set);
+
+                                                    // popped_element = front_gate;
+                                                    large_gate_completed = true;
+                                                    // break;
+                                                }
+                                            }
+                                        } else {
+                                            println!("not in waiting_to_be_processed_set");
+                                            //If the gate was canceled, then it will not exist inside the
+                                            // waiting_to_be_processed_set.
+                                            continue;
                                         }
-                                    };
 
-                                thread_pool_lists.processing_set.insert(
-                                    gate_id,
-                                    ProcessingGate {
-                                        parent_id: gate.parent_id.clone(),
-                                        processing_type,
-                                        status: ProcessingGateStatus::Running,
-                                    },
-                                );
-                            }
+                                        let processing_type =
+                                            if gate_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE {
+                                                ProcessingSizeOfGate::Small
+                                            } else {
+                                                //outstanding_children will be updated below when the input gates are added.
+                                                ProcessingSizeOfGate::Large {
+                                                    outstanding_children: 0,
+                                                    held_by_thread: true,
+                                                    gate: gate.gate.clone(),
+                                                    multiple_valid_input_gates: Vec::new(),
+                                                }
+                                            };
 
-                            popped_element = front_gate;
-                            break;
-                        };
+                                        thread_pool_lists.processing_set.insert(
+                                            gate_id,
+                                            ProcessingGate {
+                                                parent_id: gate.parent_id.clone(),
+                                                processing_type,
+                                                status: ProcessingGateStatus::Running,
+                                            },
+                                        );
+                                    }
 
-                        if let Some(running_gate) = popped_element {
-                            println!("thread {i} running task");
+                                    popped_element = front_gate;
+                                    break;
+                                };
 
-                            let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
+                                if let Some(running_gate) = popped_element {
+                                    println!("thread {i} running task ThreadId({:?})", thread::current().id());
 
-                            println!("thread {i} extracted children");
+                                    let element_num_children = running_gate.gate.lock().unwrap().num_children_gates();
 
-                            let mut clock_tick_inputs = Vec::new();
-                            let mut next_gates = Vec::new();
-                            let mut next_gates_set = HashSet::new();
-                            let mut multiple_valid_signals = Vec::new();
-                            let mut number_gates_that_ran = 0;
-                            let mut parent_id = running_gate.parent_id;
-                            if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE
-                                || large_gate_completed {
-                                let mut mutable_running_gate = running_gate.gate.lock().unwrap();
-                                let fetched_signals =
-                                    if large_gate_completed {
-                                        mutable_running_gate.fetch_output_signals_no_calculate()
-                                    } else {
-                                        mutable_running_gate.fetch_output_signals_calculate()
-                                    };
+                                    println!("thread {i} extracted children ThreadId({:?})", thread::current().id());
 
-                                let is_input_gate = mutable_running_gate.is_input_gate();
-                                let gate_tag = mutable_running_gate.get_tag();
+                                    let mut clock_tick_inputs = Vec::new();
+                                    let mut next_gates = Vec::new();
+                                    let mut next_gates_set = HashSet::new();
+                                    let mut multiple_valid_signals = Vec::new();
+                                    let mut number_gates_that_ran = 0;
+                                    let mut parent_id = running_gate.parent_id;
+                                    if element_num_children < NUM_CHILDREN_GATES_FOR_LARGE_GATE
+                                        || large_gate_completed {
+                                        let fetched_signals =
+                                            if large_gate_completed {
+                                                running_gate.gate.lock().unwrap().fetch_output_signals_no_calculate()
+                                            } else {
+                                                running_gate.gate.lock().unwrap().fetch_output_signals_calculate()
+                                            };
 
-                                drop(mutable_running_gate);
+                                        let is_input_gate = running_gate.gate.lock().unwrap().is_input_gate();
+                                        let gate_tag = running_gate.gate.lock().unwrap().get_tag();
 
-                                match fetched_signals {
-                                    Ok(output_states) => {
-                                        if is_input_gate {
-                                            clock_tick_inputs.push(
-                                                (gate_tag.clone(), output_states.clone())
-                                            );
-                                        }
-                                        //TODO: Why isn't UniqueID 4 removed all the time?
+                                        match fetched_signals {
+                                            Ok(output_states) => {
+                                                if is_input_gate {
+                                                    clock_tick_inputs.push(
+                                                        (gate_tag.clone(), output_states.clone())
+                                                    );
+                                                }
+                                                //TODO: Why isn't UniqueID 4 removed all the time?
 
-                                        //TODO: Right now there is potential for deadlock here. Although
-                                        // I am not sure where the other spot is at. But something will
-                                        // stop running here and it will get stuck when the gate tries
-                                        // to lock itself.
-                                        // It COULD also be that both threads are stopped and a third one
-                                        // would prevent this.
-                                        // It happened when gate 10 was popped, then gate 4 was popped afterwards.
-                                        // So I somewhere when gate 10 is called it must lock gate 4. It looks like
-                                        // Thread 0 was what got stuck at this point and Thread 1 had already finished
-                                        // processing gate 10. Thread 1 has not made it to the point that it printed
-                                        // out the popped_element yet.
-                                        //TODO: In order for deadlock to occur, two locks need to be locked, what is
-                                        // the second lock though?
-                                        //TODO: It pops siblings that are children of ID 0, it looks like the second
-                                        // input gate and the memory cell gate.
-                                        //TODO: So it deadlocks when the large gate is reached below at LARGE GATE,
-                                        // then the same gate is printed here
+                                                //TODO: Right now there is potential for deadlock here. Although
+                                                // I am not sure where the other spot is at. But something will
+                                                // stop running here and it will get stuck when the gate tries
+                                                // to lock itself.
+                                                // It COULD also be that both threads are stopped and a third one
+                                                // would prevent this.
+                                                // It happened when gate 10 was popped, then gate 4 was popped afterwards.
+                                                // So I somewhere when gate 10 is called it must lock gate 4. It looks like
+                                                // Thread 0 was what got stuck at this point and Thread 1 had already finished
+                                                // processing gate 10. Thread 1 has not made it to the point that it printed
+                                                // out the popped_element yet.
+                                                //TODO: In order for deadlock to occur, two locks need to be locked, what is
+                                                // the second lock though?
+                                                //TODO: It pops siblings that are children of ID 0, it looks like the second
+                                                // input gate and the memory cell gate.
+                                                //TODO: So it deadlocks when the large gate is reached below at LARGE GATE,
+                                                // then the same gate is printed here
 
-                                        //TODO: Uncommenting this doesn't make the problem stop, it just makes it less likely.
-                                        // 1) The Mutex is locking on the same thread when it is already locked.
-                                        // 2) The Mutex is locking in the wrong order relative to another lock.
-                                        // 3) Maybe inside of where it is locking, another lock occurs.
-                                        println!("{i} output_states {:#?}", output_states);
+                                                //TODO: Uncommenting this doesn't make the problem stop, it just makes it less likely.
+                                                // 1) The Mutex is locking on the same thread when it is already locked.
+                                                // 2) The Mutex is locking in the wrong order relative to another lock.
+                                                // 3) Maybe inside of where it is locking, another lock occurs.
+                                                println!("{i} output_states {:#?}", output_states);
 
-                                        for gate_output_state in output_states {
-                                            match gate_output_state {
-                                                GateOutputState::NotConnected(signal) => {
-                                                    if gate_tag == END_OUTPUT_GATE_TAG
-                                                        && signal == HIGH {
-                                                        println!("End of program reached on clock-tick {}. Stopping execution.", get_clock_tick_number());
+                                                for gate_output_state in output_states {
+                                                    match gate_output_state {
+                                                        GateOutputState::NotConnected(signal) => {
+                                                            if gate_tag == END_OUTPUT_GATE_TAG
+                                                                && signal == HIGH {
+                                                                println!("End of program reached on clock-tick {}. Stopping execution. ThreadId({:?})", get_clock_tick_number(), thread::current().id());
+                                                                Self::internal_shutdown(
+                                                                    &mut shutdown_clone,
+                                                                    &mut signal_clone,
+                                                                    &mut thread_pool_lists_clone,
+                                                                );
+                                                            }
+                                                        }
+                                                        GateOutputState::Connected(next_gate_info) => {
+                                                            let next_gate = next_gate_info.gate.clone();
+                                                            //TODO: remove prints
+
+                                                            //TODO: There seems to be a problem here, it can get stuck here on the very first
+                                                            // move where Thread 0 holds the first input gate at this point and then Thread 1
+                                                            // holds the second input gate above at output_states. I don't see two different
+                                                            // gates being locked at all in this situation. Or at least not out of order.
+                                                            println!("{i} Connected about to lock ThreadId({:?})", thread::current().id());
+                                                            // let mut mutable_next_gate = next_gate.lock().unwrap();
+                                                            println!("{i} Connected locked ThreadId({:?})", thread::current().id());
+                                                            // println!("{i} Connected locked type {} ThreadId({:?})", mutable_next_gate.get_gate_type(), thread::current().id());
+
+                                                            //TODO: Locking occurs inside update_input_signal, need to look at it.
+                                                            //TODO: So not sure if this is THE problem, but I do see a problem,
+                                                            // 1) I extract the input gates through get_input_gates.
+                                                            // 2) The parent gate has functions that directly work on and lock the input gates.
+                                                            //  This means there is a lock inside a lock and b/c no order is guaranteed, it can deadlock.
+                                                            // I suppose in an ideal world, the mutable data inside the gates would be the thing protected by
+                                                            //  the locks. This I could skip locking the gate in general. But I think this would require each
+                                                            //  and every child gate to have a lock around it instead of a single lock on the parent gate.
+                                                            // Right now, gate 4 will run get_input_gates and return its input gates. Then when the next gate
+                                                            //  calls update_input_signal, it will lock gate 4 and then lock the input gate. Then the input_gate
+                                                            //  can lock, followed by a lock of its parent?
+                                                            // Maybe there is a way for the input gates to share the same Mutex as the parent, then I can use a
+                                                            //  re-entrant Mutex?
+                                                            // So, is the only problem the order of locks? Can I somehow fix this so that I always access the
+                                                            //  parent lock internally?
+                                                            let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
+                                                                next_gate.lock().unwrap().update_input_signal(next_gate_info.throughput.clone());
+
+                                                            println!("{i} Connected gate_id ThreadId({:?})", thread::current().id());
+                                                            let gate_id = next_gate.lock().unwrap().get_unique_id();
+
+                                                            println!("{i} Connected contains_id ThreadId({:?})", thread::current().id());
+                                                            let contains_id = next_gates_set.contains(&gate_id);
+
+                                                            println!("{i} Connected check_if_next_gate_should_be_stored ThreadId({:?})", thread::current().id());
+                                                            let should_update_gate = check_if_next_gate_should_be_stored(
+                                                                input_signal_updated,
+                                                                changed_count_this_tick,
+                                                                contains_id,
+                                                                propagate_signal_clone.load(Ordering::Relaxed),
+                                                            );
+
+                                                            if should_update_gate {
+                                                                println!("{i} Connected number_children_in_gate ThreadId({:?})", thread::current().id());
+                                                                let number_children_in_gate = next_gate.lock().unwrap().num_children_gates();
+                                                                next_gates_set.insert(gate_id);
+                                                                next_gates.push(
+                                                                    QueueElement {
+                                                                        gate: next_gate,
+                                                                        parent_id: parent_id.clone(),
+                                                                        gate_id,
+                                                                        number_children_in_gate,
+                                                                    }
+                                                                );
+                                                            }
+
+                                                            println!("{i} Connected unlocked ThreadId({:?})", thread::current().id());
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Err(err) => {
+                                                match err {
+                                                    GateLogicError::NoMoreAutomaticInputsRemaining => {
+                                                        println!("No More AutomaticInputs remaining. Shutting down.");
                                                         Self::internal_shutdown(
                                                             &mut shutdown_clone,
                                                             &mut signal_clone,
                                                             &mut thread_pool_lists_clone,
                                                         );
                                                     }
-                                                }
-                                                GateOutputState::Connected(next_gate_info) => {
-                                                    let next_gate = next_gate_info.gate.clone();
-                                                    //TODO: remove prints
-
-                                                    //TODO: There seems to be a problem here, it can get stuck here on the very first
-                                                    // move where Thread 0 holds the first input gate at this point and then Thread 1
-                                                    // holds the second input gate above at output_states. I don't see two different
-                                                    // gates being locked at all in this situation. Or at least not out of order.
-                                                    println!("{i} Connected about to lock");
-                                                    let mut mutable_next_gate = next_gate.lock().unwrap();
-                                                    println!("{i} Connected locked");
-                                                    println!("{i} Connected locked type {}", mutable_next_gate.get_gate_type());
-
-                                                    //TODO: Locking occurs inside update_input_signal, need to look at it.
-                                                    //TODO: So not sure if this is THE problem, but I do see a problem,
-                                                    // 1) I extract the input gates through get_input_gates.
-                                                    // 2) The parent gate has functions that directly work on and lock the input gates.
-                                                    //  This means there is a lock inside a lock and b/c no order is guaranteed, it can deadlock.
-                                                    // I suppose in an ideal world, the mutable data inside the gates would be the thing protected by
-                                                    //  the locks. This I could skip locking the gate in general. But I think this would require each
-                                                    //  and every child gate to have a lock around it instead of a single lock on the parent gate.
-                                                    // Right now, gate 4 will run get_input_gates and return its input gates. Then when the next gate
-                                                    //  calls update_input_signal, it will lock gate 4 and then lock the input gate. Then the input_gate
-                                                    //  can lock, followed by a lock of its parent?
-                                                    // Maybe there is a way for the input gates to share the same Mutex as the parent, then I can use a
-                                                    //  re-entrant Mutex?
-                                                    // So, is the only problem the order of locks? Can I somehow fix this so that I always access the
-                                                    //  parent lock internally?
-                                                    let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
-                                                        mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
-
-                                                    println!("{i} Connected gate_id");
-                                                    let gate_id = mutable_next_gate.get_unique_id();
-
-                                                    println!("{i} Connected contains_id");
-                                                    let contains_id = next_gates_set.contains(&gate_id);
-
-                                                    println!("{i} Connected check_if_next_gate_should_be_stored");
-                                                    let should_update_gate = check_if_next_gate_should_be_stored(
-                                                        input_signal_updated,
-                                                        changed_count_this_tick,
-                                                        contains_id,
-                                                        propagate_signal_clone.load(Ordering::Relaxed),
-                                                    );
-
-                                                    if should_update_gate {
-                                                        println!("{i} Connected number_children_in_gate");
-                                                        let number_children_in_gate = mutable_next_gate.num_children_gates();
-                                                        drop(mutable_next_gate);
-                                                        next_gates_set.insert(gate_id);
-                                                        next_gates.push(
-                                                            QueueElement {
-                                                                gate: next_gate,
-                                                                parent_id: parent_id.clone(),
-                                                                gate_id,
-                                                                number_children_in_gate,
-                                                            }
-                                                        );
+                                                    GateLogicError::MultipleValidSignalsWhenCalculating => {
+                                                        multiple_valid_signals.push(running_gate.gate.clone());
                                                     }
-
-                                                    println!("{i} Connected unlocked");
                                                 }
                                             }
                                         }
-                                    }
-                                    Err(err) => {
-                                        match err {
-                                            GateLogicError::NoMoreAutomaticInputsRemaining => {
-                                                println!("No More AutomaticInputs remaining. Shutting down.");
-                                                Self::internal_shutdown(
-                                                    &mut shutdown_clone,
-                                                    &mut signal_clone,
-                                                    &mut thread_pool_lists_clone,
+                                        number_gates_that_ran = 1;
+                                    } else {
+                                        println!("{i} LARGE GATE reached ThreadId({:?})", thread::current().id());
+                                        // let mutable_running_gate = running_gate.gate.lock().unwrap();
+                                        println!("{i} locked ThreadId({:?})", thread::current().id());
+                                        //When the gates are added below, the parent id will be the current gate for a large gate.
+                                        parent_id = running_gate.gate.lock().unwrap().get_unique_id();
+                                        println!("{i} parent_id ThreadId({:?})", thread::current().id());
+                                        let input_gates = running_gate.gate.lock().unwrap().get_input_gates();
+                                        println!("{i} input_gates ThreadId({:?})", thread::current().id());
+
+                                        println!("LARGE GATE {} ThreadId({:?})", running_gate.gate.lock().unwrap().get_unique_id().id(), thread::current().id());
+                                        println!("LARGE GATE input_gates_size {} ThreadId({:?})", input_gates.len(), thread::current().id());
+
+                                        // drop(mutable_running_gate);
+
+                                        for input_gate in input_gates.into_iter() {
+                                            // let mutable_input_gate = input_gate.lock().unwrap();
+
+                                            let gate_id = input_gate.lock().unwrap().get_unique_id();
+
+                                            let contains_id = next_gates_set.contains(&gate_id);
+
+                                            if !contains_id {
+                                                let number_children_in_gate = input_gate.lock().unwrap().num_children_gates();
+                                                // drop(mutable_input_gate);
+                                                next_gates_set.insert(gate_id);
+                                                next_gates.push(
+                                                    QueueElement {
+                                                        gate: input_gate,
+                                                        parent_id,
+                                                        gate_id,
+                                                        number_children_in_gate,
+                                                    }
                                                 );
                                             }
-                                            GateLogicError::MultipleValidSignalsWhenCalculating => {
-                                                multiple_valid_signals.push(running_gate.gate.clone());
-                                            }
                                         }
                                     }
-                                }
-                                number_gates_that_ran = 1;
-                            } else {
-                                println!("{i} LARGE GATE reached");
-                                let mutable_running_gate = running_gate.gate.lock().unwrap();
-                                println!("{i} locked");
-                                //When the gates are added below, the parent id will be the current gate for a large gate.
-                                parent_id = mutable_running_gate.get_unique_id();
-                                println!("{i} parent_id");
-                                let input_gates = mutable_running_gate.get_input_gates();
-                                println!("{i} input_gates");
 
-                                println!("LARGE GATE {}", mutable_running_gate.get_unique_id().id());
-                                println!("LARGE GATE input_gates_size {}", input_gates.len());
+                                    println!("next_gates.len() {} ThreadId({:?})", next_gates.len(), thread::current().id());
 
-                                drop(mutable_running_gate);
+                                    let mut thread_pool_lists_guard = thread_pool_lists_clone.lock().unwrap();
 
-                                for input_gate in input_gates.into_iter() {
-                                    let mutable_input_gate = input_gate.lock().unwrap();
+                                    let gate_id = running_gate.gate.lock().unwrap().get_unique_id();
 
-                                    let gate_id = mutable_input_gate.get_unique_id();
+                                    let mut thread_pool_lists: &mut ThreadPoolLists = &mut thread_pool_lists_guard;
 
-                                    let contains_id = next_gates_set.contains(&gate_id);
+                                    let processing_element = thread_pool_lists.processing_set.get(
+                                        &gate_id
+                                    );
+                                    //.expect(format!("A gate was removed from the processing_set while it was running. gate_id {}", gate_id.id()).as_str());
 
-                                    if !contains_id {
-                                        let number_children_in_gate = mutable_input_gate.num_children_gates();
-                                        drop(mutable_input_gate);
-                                        next_gates_set.insert(gate_id);
-                                        next_gates.push(
-                                            QueueElement {
-                                                gate: input_gate,
-                                                parent_id,
-                                                gate_id,
-                                                number_children_in_gate,
+                                    thread_pool_lists.input_gate_output_states.append(
+                                        &mut clock_tick_inputs
+                                    );
+
+                                    if let Some(processing_element) = processing_element {
+                                        match processing_element.status {
+                                            ProcessingGateStatus::Running => {
+                                                let num_new_children =
+                                                    if number_gates_that_ran > 0 {
+                                                        //Small gates do not have their own set in the parental tree.
+                                                        // thread_pool_lists.parental_tree.remove(
+                                                        //     &gate_id
+                                                        // );
+
+                                                        thread_pool_lists.processing_set.remove(
+                                                            &gate_id
+                                                        );
+
+                                                        //Remove gate as a sibling.
+                                                        let siblings = thread_pool_lists.parental_tree.get_mut(
+                                                            &parent_id
+                                                        ).expect(
+                                                            "A sibling completed when its parent tree \
+                                                    was removed. This should never happen because the parent tree should \
+                                                    never be completed before the children tree is."
+                                                        );
+
+                                                        siblings.remove(
+                                                            &gate_id
+                                                        );
+
+                                                        //Keep only the gates that are not already being processed.
+                                                        let mut num_new_children = next_gates.len();
+
+                                                        for next_gate in next_gates.iter() {
+                                                            if siblings.contains(&next_gate.gate_id) {
+                                                                num_new_children -= 1;
+                                                            }
+                                                        }
+
+                                                        num_new_children
+                                                    } else { //Large gate was inserted into processing.
+
+                                                        let processing_element = thread_pool_lists.processing_set.get_mut(
+                                                            &gate_id
+                                                        ).expect(
+                                                            "A gate was not found in the processing set immediately after it completed."
+                                                        );
+
+                                                        match processing_element.processing_type {
+                                                            ProcessingSizeOfGate::Large { ref mut held_by_thread, .. } => {
+                                                                *held_by_thread = false;
+                                                            }
+                                                            ProcessingSizeOfGate::Small => {}
+                                                        }
+
+                                                        //Insert gate as a parent.
+                                                        thread_pool_lists.parental_tree.insert(
+                                                            gate_id.clone(), HashSet::new(),
+                                                        );
+
+                                                        next_gates.len()
+                                                    };
+
+                                                println!("num_new_children {} number_gates_that_ran {} ThreadId({:?})", next_gates.len(), number_gates_that_ran, thread::current().id());
+                                                Self::update_parent_gate(
+                                                    thread_pool_lists,
+                                                    num_new_children,
+                                                    number_gates_that_ran,
+                                                    &parent_id,
+                                                    multiple_valid_signals,
+                                                );
+
+                                                Self::add_to_queue_internal(
+                                                    &mut thread_pool_lists,
+                                                    next_gates,
+                                                    &mut signal_clone,
+                                                );
                                             }
-                                        );
-                                    }
-                                }
-                            }
+                                            ProcessingGateStatus::Redo => {
+                                                //TODO: delete
+                                                println!("REDO REACHED for gate id {}", gate_id.id());
 
-                            println!("next_gates.len() {}", next_gates.len());
-
-                            let mut thread_pool_lists_guard = thread_pool_lists_clone.lock().unwrap();
-
-                            let gate_id = running_gate.gate.lock().unwrap().get_unique_id();
-
-                            let mut thread_pool_lists: &mut ThreadPoolLists = &mut thread_pool_lists_guard;
-
-                            let processing_element = thread_pool_lists.processing_set.get(
-                                &gate_id
-                            );
-                            //.expect(format!("A gate was removed from the processing_set while it was running. gate_id {}", gate_id.id()).as_str());
-
-                            thread_pool_lists.input_gate_output_states.append(
-                                &mut clock_tick_inputs
-                            );
-
-                            if let Some(processing_element) = processing_element {
-                                match processing_element.status {
-                                    ProcessingGateStatus::Running => {
-                                        let num_new_children =
-                                            if number_gates_that_ran > 0 {
-                                                //Small gates do not have their own set in the parental tree.
-                                                // thread_pool_lists.parental_tree.remove(
-                                                //     &gate_id
-                                                // );
+                                                thread_pool_lists.waiting_to_be_processed_set.insert(
+                                                    gate_id,
+                                                    WaitingSizeOfGate::convert_from_processing(
+                                                        &processing_element.processing_type,
+                                                        true,
+                                                    ),
+                                                );
 
                                                 thread_pool_lists.processing_set.remove(
                                                     &gate_id
                                                 );
 
-                                                //Remove gate as a sibling.
-                                                let siblings = thread_pool_lists.parental_tree.get_mut(
-                                                    &parent_id
-                                                ).expect(
-                                                    "A sibling completed when its parent tree \
-                                                    was removed. This should never happen because the parent tree should \
-                                                    never be completed before the children tree is."
-                                                );
+                                                //Add this to the front so it will immediately re-run.
+                                                thread_pool_lists.gates.push_front(running_gate);
 
-                                                siblings.remove(
+                                                //If this gate needs to redo, it is still in parental_tree.
+                                            }
+                                            ProcessingGateStatus::Cancel => {
+                                                //TODO: delete
+                                                println!("CANCEL REACHED for gate id {}", gate_id.id());
+
+                                                thread_pool_lists.processing_set.remove(
                                                     &gate_id
                                                 );
 
-                                                //Keep only the gates that are not already being processed.
-                                                let mut num_new_children = next_gates.len();
+                                                //If this gate was canceled, it was already removed from
+                                                // parental_tree.
+                                            }
+                                        }
+                                    }
 
-                                                for next_gate in next_gates.iter() {
-                                                    if siblings.contains(&next_gate.gate_id) {
-                                                        num_new_children -= 1;
-                                                    }
-                                                }
-
-                                                num_new_children
-                                            } else { //Large gate was inserted into processing.
-
-                                                let processing_element = thread_pool_lists.processing_set.get_mut(
-                                                    &gate_id
-                                                ).expect(
-                                                    "A gate was not found in the processing set immediately after it completed."
-                                                );
-
-                                                match processing_element.processing_type {
-                                                    ProcessingSizeOfGate::Large { ref mut held_by_thread, .. } => {
-                                                        *held_by_thread = false;
-                                                    }
-                                                    ProcessingSizeOfGate::Small => {}
-                                                }
-
-                                                //Insert gate as a parent.
-                                                thread_pool_lists.parental_tree.insert(
-                                                    gate_id.clone(), HashSet::new(),
-                                                );
-
-                                                next_gates.len()
-                                            };
-
-                                        println!("num_new_children {} number_gates_that_ran {}", next_gates.len(), number_gates_that_ran);
-                                        Self::update_parent_gate(
-                                            thread_pool_lists,
-                                            num_new_children,
-                                            number_gates_that_ran,
-                                            &parent_id,
-                                            multiple_valid_signals,
-                                        );
-
-                                        Self::add_to_queue_internal(
-                                            &mut thread_pool_lists,
-                                            next_gates,
-                                            &mut signal_clone,
+                                    println!("waiting_to_be_processed_set.is_empty() {} num_threads_running {}", thread_pool_lists.waiting_to_be_processed_set.is_empty(), num_threads_running_clone.load(Ordering::Relaxed));
+                                    println!("waiting_to_be_processed_set {:#?}", thread_pool_lists.waiting_to_be_processed_set);
+                                    println!("gates.len() {:#?}", thread_pool_lists.gates.len());
+                                    //TODO: So what happened here is that thread 0 got here and found that there were two threads running. Then
+                                    // it went back to the top of the loop and got stuck at the mutex while this one did the same thing. Can
+                                    // I move where 'num_threads_running' is changed?
+                                    //This is the only thread running and there are no more elements to be
+                                    // processed.
+                                    if thread_pool_lists.waiting_to_be_processed_set.is_empty()
+                                        && num_threads_running_clone.load(Ordering::Relaxed) <= 1
+                                    {
+                                        println!("complete_queue() called");
+                                        Self::complete_queue(
+                                            &mut processing_completed_clone,
+                                            &mut wait_for_completion_clone,
                                         );
                                     }
-                                    ProcessingGateStatus::Redo => {
-                                        //TODO: delete
-                                        println!("REDO REACHED for gate id {}", gate_id.id());
 
-                                        thread_pool_lists.waiting_to_be_processed_set.insert(
-                                            gate_id,
-                                            WaitingSizeOfGate::convert_from_processing(
-                                                &processing_element.processing_type,
-                                                true,
-                                            ),
-                                        );
+                                    //This must be decremented while the lock is still held. This is so
+                                    // that the threads will properly reach '1' when only one is running.
+                                    num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
+                                } else {
+                                    println!("Thread {i} sleeping");
 
-                                        thread_pool_lists.processing_set.remove(
-                                            &gate_id
-                                        );
+                                    //NOTE: If thread_pool_lists is locked here, then it can end up in a situation
+                                    // where the thread pool does not properly end. If I want to lock it, do it
+                                    // after the fetch_add.
 
-                                        //Add this to the front so it will immediately re-run.
-                                        thread_pool_lists.gates.push_front(running_gate);
+                                    num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
 
-                                        //If this gate needs to redo, it is still in parental_tree.
-                                    }
-                                    ProcessingGateStatus::Cancel => {
-                                        //TODO: delete
-                                        println!("CANCEL REACHED for gate id {}", gate_id.id());
+                                    //todo: delete
+                                    let processing_set_len = thread_pool_lists_clone.lock().unwrap().processing_set.len();
+                                    let waiting_to_pro_set_len = thread_pool_lists_clone.lock().unwrap().waiting_to_be_processed_set.len();
 
-                                        thread_pool_lists.processing_set.remove(
-                                            &gate_id
-                                        );
+                                    println!("processing_set_len {processing_set_len} waiting_to_pro_set_len {waiting_to_pro_set_len} parental_tree {:#?}", thread_pool_lists_clone.lock().unwrap().parental_tree);
 
-                                        //If this gate was canceled, it was already removed from
-                                        // parental_tree.
-                                    }
+                                    signal_clone.wait();
                                 }
                             }
+                        });
 
-                            println!("waiting_to_be_processed_set.is_empty() {} num_threads_running {}", thread_pool_lists.waiting_to_be_processed_set.is_empty(), num_threads_running_clone.load(Ordering::Relaxed));
-                            println!("waiting_to_be_processed_set {:#?}", thread_pool_lists.waiting_to_be_processed_set);
-                            println!("gates.len() {:#?}", thread_pool_lists.gates.len());
-                            //TODO: So what happened here is that thread 0 got here and found that there were two threads running. Then
-                            // it went back to the top of the loop and got stuck at the mutex while this one did the same thing. Can
-                            // I move where 'num_threads_running' is changed?
-                            //This is the only thread running and there are no more elements to be
-                            // processed.
-                            if thread_pool_lists.waiting_to_be_processed_set.is_empty()
-                                && num_threads_running_clone.load(Ordering::Relaxed) <= 1
-                            {
-                                println!("complete_queue() called");
-                                Self::complete_queue(
-                                    &mut processing_completed_clone,
-                                    &mut wait_for_completion_clone,
-                                );
-                            }
-
-                            //This must be decremented while the lock is still held. This is so
-                            // that the threads will properly reach '1' when only one is running.
-                            num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
-                        } else {
-                            println!("Thread {i} sleeping");
-
-                            //NOTE: If thread_pool_lists is locked here, then it can end up in a situation
-                            // where the thread pool does not properly end. If I want to lock it, do it
-                            // after the fetch_add.
-
-                            num_threads_running_clone.fetch_add(-1, Ordering::Acquire);
-
-                            //todo: delete
-                            let processing_set_len = thread_pool_lists_clone.lock().unwrap().processing_set.len();
-                            let waiting_to_pro_set_len = thread_pool_lists_clone.lock().unwrap().waiting_to_be_processed_set.len();
-
-                            println!("processing_set_len {processing_set_len} waiting_to_pro_set_len {waiting_to_pro_set_len} parental_tree {:#?}", thread_pool_lists_clone.lock().unwrap().parental_tree);
-
-                            signal_clone.wait();
+                    match panic_result {
+                        Ok(_) => {
+                            println!("Thread {:?} completed successfully", thread::current().id());
+                        }
+                        Err(err) => {
+                            println!("Thread {:?} panic! with error {:?}", thread::current().id(), err);
                         }
                     }
                 })
@@ -1206,11 +1211,11 @@ pub fn run_circuit<F>(
                         }
 
                         let next_gate = next_gate_info.gate.clone();
-                        let mut mutable_next_gate = next_gate.lock().unwrap();
+                        // let mut mutable_next_gate = next_gate.lock().unwrap();
 
                         let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
-                            mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
-                        let gate_id = mutable_next_gate.get_unique_id();
+                            next_gate.lock().unwrap().update_input_signal(next_gate_info.throughput.clone());
+                        let gate_id = next_gate.lock().unwrap().get_unique_id();
 
                         let contains_id = next_gates_set.contains(&gate_id);
 
@@ -1222,16 +1227,16 @@ pub fn run_circuit<F>(
                         );
 
                         if print_output {
-                            println!("checking gate {} tag {} signal {:?}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag(), next_gate_info.throughput.signal.clone());
+                            println!("checking gate {} tag {} signal {:?}", next_gate.lock().unwrap().get_gate_type(), next_gate.lock().unwrap().get_tag(), next_gate_info.throughput.signal.clone());
                             // println!("input_signal_updated: {} contains_key(): {:#?} changed_count_this_tick: {:?}", input_signal_updated, next_gates.contains_key(&gate_id), changed_count_this_tick);
                             // println!("input_signal_updated: {input_signal_updated} propagate_signal_through_circuit: {propagate_signal_through_circuit} changed_count_this_tick {changed_count_this_tick} contains_id {contains_id}");
                         }
 
                         if should_update_gate {
                             if print_output {
-                                println!("Pushing gate {} tag {}", mutable_next_gate.get_gate_type(), mutable_next_gate.get_tag());
+                                println!("Pushing gate {} tag {}", next_gate.lock().unwrap().get_gate_type(), next_gate.lock().unwrap().get_tag());
                             }
-                            drop(mutable_next_gate);
+                            // drop(mutable_next_gate);
                             // println!("next_gates.insert()");
                             next_gates_set.insert(gate_id);
                             next_gates.push(next_gate);
