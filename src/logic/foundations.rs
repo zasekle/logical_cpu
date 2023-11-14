@@ -153,9 +153,15 @@ pub struct ConnectedOutput {
 
 impl fmt::Debug for ConnectedOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        //todo delete println
+        f.debug_struct("Please call 'extract_string_from_connected_output' for ConnectedOutput \
+            in order to print info. Debug cannot contain locks or deadlock will occur.")
+            .finish()
+    }
+}
+
+pub fn extract_string_from_connected_output(connected_output: &ConnectedOutput) -> String {
         println!("ConnectedOutput about to lock ThreadId({:?})", thread::current().id());
-        let mut_gate = self.gate.lock().unwrap();
+        let mut_gate = connected_output.gate.lock().unwrap();
         println!("ConnectedOutput gate_type ThreadId({:?})", thread::current().id());
         let gate_type = mut_gate.get_gate_type();
         println!("ConnectedOutput tag ThreadId({:?})", thread::current().id());
@@ -173,11 +179,9 @@ impl fmt::Debug for ConnectedOutput {
                 format!("{} gate with tag {}; id {}", gate_type, tag, id.id)
             };
 
-        f.debug_struct("OutputNode")
-            .field("input", &self.throughput)
-            .field("gate", &output_str)
-            .finish()
-    }
+        format!(
+            "OutputNode\ninput {:?}\ngate {}", connected_output.throughput, output_str
+        )
 }
 
 pub struct OscillationDetection {

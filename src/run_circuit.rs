@@ -63,16 +63,12 @@ impl fmt::Debug for ProcessingSizeOfGate {
                 ProcessingSizeOfGate::Large {
                     outstanding_children,
                     held_by_thread,
-                    gate,
                     multiple_valid_input_gates,
+                    ..
                 } => {
-                    let mut_gate = gate.lock().unwrap();
-                    let gate_type = mut_gate.get_gate_type();
-                    let tag = mut_gate.get_tag();
-                    let id = mut_gate.get_unique_id();
-
-                    drop(mut_gate);
-                    format!("'ProcessingSizeOfGate::Large' {} gate with tag {}; id {}\noutstanding_children: {}\nheld_by_thread: {}\nmultiple_valid_input_gates.len(): {}", gate_type, tag, id.id(), outstanding_children, held_by_thread, multiple_valid_input_gates.len())
+                    //Note that gates cannot be locked inside Debug implementations or deadlock can
+                    // occur. This means that gate information is not displayed.
+                    format!("'ProcessingSizeOfGate::Large'\ngate: cannot be displayed\noutstanding_children: {}\nheld_by_thread: {}\nmultiple_valid_input_gates.len(): {}", outstanding_children, held_by_thread, multiple_valid_input_gates.len())
                 }
                 ProcessingSizeOfGate::Small => {
                     format!("'ProcessingSizeOfGate::Small'")
@@ -350,6 +346,7 @@ impl RunCircuitThreadPool {
                                                 for gate_output_state in output_states {
                                                     match gate_output_state {
                                                         GateOutputState::NotConnected(signal) => {
+
                                                             if gate_tag == END_OUTPUT_GATE_TAG
                                                                 && signal == HIGH {
                                                                 println!("End of program reached on clock-tick {}. Stopping execution. ThreadId({:?})", get_clock_tick_number(), thread::current().id());
@@ -390,6 +387,8 @@ impl RunCircuitThreadPool {
                                                             //  parent lock internally?
                                                             let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
                                                                 next_gate.lock().unwrap().update_input_signal(next_gate_info.throughput.clone());
+
+                                                            //Faulted at gate 2 (a child of gate 4)
 
                                                             println!("{i} Connected gate_id ThreadId({:?})", thread::current().id());
                                                             let gate_id = next_gate.lock().unwrap().get_unique_id();
@@ -698,9 +697,9 @@ impl RunCircuitThreadPool {
         ) = match &mut parent_processing_gate.processing_type {
             ProcessingSizeOfGate::Large {
                 outstanding_children,
-                held_by_thread,
                 gate,
                 multiple_valid_input_gates,
+                ..
             } => {
                 //Subtract the current gate from the number of outstanding children.
                 *outstanding_children += num_new_children;
