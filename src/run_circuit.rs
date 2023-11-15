@@ -611,6 +611,11 @@ impl RunCircuitThreadPool {
                                     //TODO: So what happened here is that thread 0 got here and found that there were two threads running. Then
                                     // it went back to the top of the loop and got stuck at the mutex while this one did the same thing. Can
                                     // I move where 'num_threads_running' is changed?
+
+                                    //TODO: Essentially what is happening now is that in between the loop running above, there is
+                                    // a chance that the thread_pool_lists will be unlocked allowing this one to reach this
+                                    // condition and show that two threads are running, then both threads end and go to sleep
+                                    // which stops it from being able to end.
                                     //This is the only thread running and there are no more elements to be
                                     // processed.
                                     if thread_pool_lists.waiting_to_be_processed_set.is_empty()
