@@ -22,20 +22,30 @@ static NUM_CHILDREN_GATES_FOR_LARGE_GATE: usize = 7;
 
 pub struct CondvarWrapper {
     cond: Condvar,
-    mutex: UsedMutex<()>,
+    mutex: UsedMutex<usize>,
 }
 
 impl CondvarWrapper {
     fn new() -> Self {
         CondvarWrapper {
             cond: Condvar::new(),
-            mutex: new_used_mutex(-1, ()),
+            mutex: new_used_mutex(-1, 0),
         }
     }
 
     fn wait(&self) {
         let mut guard = self.mutex.lock().unwrap();
-        let _unused_guard = self.cond.wait(guard.take_guard()).unwrap();
+        *guard += 1;
+        let mut final_guard = self.cond.wait(guard.take_guard()).unwrap();
+        *final_guard -= 1;
+    }
+
+    fn notify_one(&self) {
+        self.cond.notify_one();
+    }
+
+    fn get_wait_count(&self) -> usize {
+        *self.mutex.lock().unwrap()
     }
 }
 
@@ -147,7 +157,7 @@ pub struct RunCircuitThreadPool {
     shutdown: Arc<AtomicBool>,
     propagate_signal: Arc<AtomicBool>,
     condvar_wrapper: Arc<CondvarWrapper>,
-    num_threads_running: Arc<AtomicI32>,
+    num_threads_running: Arc<AtomicI32>, //todo: can delete this, condvar counts waiting threads now
     processing_completed: Arc<UsedMutex<bool>>,
     wait_for_completion: Arc<Condvar>,
 }
@@ -253,6 +263,7 @@ impl RunCircuitThreadPool {
                                             }
                                         } else {
                                             println!("not in waiting_to_be_processed_set");
+                                            // num_threads_running_clone.fetch_add(-1, Ordering::Release);
                                             //If the gate was canceled, then it will not exist inside the
                                             // waiting_to_be_processed_set.
                                             continue;
@@ -370,6 +381,8 @@ impl RunCircuitThreadPool {
                                                             println!("{i} Connected locked ThreadId({:?})", thread::current().id());
                                                             // println!("{i} Connected locked type {} ThreadId({:?})", mutable_next_gate.get_gate_type(), thread::current().id());
 
+                                                            //TODO: There is a problem that gate 4 (the large gate) is left inside the parental
+                                                            // tree at the end.
                                                             //TODO: Locking occurs inside update_input_signal, need to look at it.
                                                             //TODO: So not sure if this is THE problem, but I do see a problem,
                                                             // 1) I extract the input gates through get_input_gates.
@@ -605,7 +618,11 @@ impl RunCircuitThreadPool {
                                         }
                                     }
 
-                                    println!("waiting_to_be_processed_set.is_empty() {} num_threads_running {}", thread_pool_lists.waiting_to_be_processed_set.is_empty(), num_threads_running_clone.load(Ordering::Relaxed));
+                                    println!(
+                                        "waiting_to_be_processed_set.is_empty() {} num_threads_running {}",
+                                         thread_pool_lists.waiting_to_be_processed_set.is_empty(),
+                                         num_threads_running_clone.load(Ordering::Relaxed)
+                                    );
                                     println!("waiting_to_be_processed_set {:#?}", thread_pool_lists.waiting_to_be_processed_set);
                                     println!("gates.len() {:#?}", thread_pool_lists.gates.len());
                                     //TODO: So what happened here is that thread 0 got here and found that there were two threads running. Then
@@ -618,9 +635,15 @@ impl RunCircuitThreadPool {
                                     // which stops it from being able to end.
                                     //This is the only thread running and there are no more elements to be
                                     // processed.
+                                    //TODO: not sure about this new way of doing it, technically I think there is the possibility that
+                                    // the other thread wakes up afterwards.
+                                    let wait_count = signal_clone.get_wait_count();
                                     if thread_pool_lists.waiting_to_be_processed_set.is_empty()
-                                        && num_threads_running_clone.load(Ordering::Relaxed) <= 1
+                                        && wait_count == size - 1
                                     {
+                                    // if thread_pool_lists.waiting_to_be_processed_set.is_empty()
+                                    //     && num_threads_running_clone.load(Ordering::Relaxed) <= 1
+                                    // {
                                         println!("complete_queue() called");
                                         Self::complete_queue(
                                             &mut processing_completed_clone,
@@ -663,7 +686,8 @@ impl RunCircuitThreadPool {
             );
         }
 
-        while thread_pool.num_threads_running.load(Ordering::Relaxed) > 0 {
+        //Wait for all threads to be in a waiting state.
+        while thread_pool.condvar_wrapper.get_wait_count() < size {
             thread::sleep(Duration::from_nanos(1));
         }
 
@@ -904,7 +928,7 @@ impl RunCircuitThreadPool {
                 );
 
                 // println!("notify_one Called line: {}", line!());
-                condvar_wrapper.cond.notify_one();
+                condvar_wrapper.notify_one();
 
                 continue;
             }
@@ -1033,7 +1057,7 @@ impl RunCircuitThreadPool {
             }
 
             // println!("notify_one Called line: {}", line!());
-            condvar_wrapper.cond.notify_one();
+            condvar_wrapper.notify_one();
 
             //No need to add the gate, it is currently processing. This means that it will 'Redo'
             // itself.
@@ -2075,7 +2099,8 @@ mod tests {
 
     #[test]
     fn single_large_gate_multi_thread() {
-        for _ in 0..100 {
+        for p in 0..100 {
+            println!("ITERATION {p}");
             //TODO: uncomment
             // let (number_bits, variable_bit_mem_cell) = create_large_gate();
             //
