@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar};
 use std::{fmt, thread};
 use std::fmt::Formatter;
 use std::thread::JoinHandle;
@@ -637,13 +637,40 @@ impl RunCircuitThreadPool {
                                     // processed.
                                     //TODO: not sure about this new way of doing it, technically I think there is the possibility that
                                     // the other thread wakes up afterwards.
+                                    //TODO: Maybe the trick to doing this is to NOT pop the waiting_to_be_processed_set up here. Instead just get the element
+                                    // and them pop it during the second locking. Then waiting_to_be_processed_set can be checked to be empty. However, there
+                                    // is still the problem (I think). No, I can't do this because waiting_to_be_processed_set is used to
+                                    // show which gates are currently running.
+                                    //TODO: I have some levers that I know of at the moment.
+                                    // 1) zero_set from parental_tree
+                                    //  The problem I am worried about with this is that it isn't properly added to the parental_tree
+                                    //  until after the first lock has ended.
+                                    // 2) waiting_to_be_processed_set
+                                    //  The element is removed from this set during the first lock, so it can be empty when continuing.
+                                    // 3) num_threads_running
+                                    //  Inside the sleep part of the conditional branch below, there is a gap where there are two threads
+                                    //  running and no lock. This means that it can misinterpret this.
+                                    // 4) gates
+                                    //  This doesn't reflect threads that are processing.
+                                    // 5) wait_count()
+                                    //  Not sure if this has some kind of a gap in it where things can work their
+                                    //  way in. Also there could be a thread inside the loop above that isn't
+                                    //  directly sleeping and this could still pass.
+
+                                    println!("running get_wait_count ThreadID({:?})", thread::current().id());
                                     let wait_count = signal_clone.get_wait_count();
-                                    if thread_pool_lists.waiting_to_be_processed_set.is_empty()
-                                        && wait_count == size - 1
-                                    {
+                                    println!("collected wait_count {} ThreadID({:?})", wait_count, thread::current().id());
+                                    // if thread_pool_lists.waiting_to_be_processed_set.is_empty()
+                                    //     && wait_count == size - 1
+                                    let zero_set = thread_pool_lists.parental_tree.get(&UniqueID::zero_id())
+                                        .expect("Zero ID set should always exist");
+                                    if zero_set.is_empty()
+                                        && thread_pool_lists.waiting_to_be_processed_set.is_empty()
+                                        && thread_pool_lists.gates.is_empty()
+                                        // && num_threads_running_clone.load(Ordering::Relaxed) <= 1
                                     // if thread_pool_lists.waiting_to_be_processed_set.is_empty()
                                     //     && num_threads_running_clone.load(Ordering::Relaxed) <= 1
-                                    // {
+                                    {
                                         println!("complete_queue() called");
                                         Self::complete_queue(
                                             &mut processing_completed_clone,
@@ -941,7 +968,7 @@ impl RunCircuitThreadPool {
             //   1) Large gate is added to the waiting_to_be_processed_set with initially_added==true and outstanding_children==0
             //   2) Mutex is locked by thread X and Large gate is popped from the waiting_to_be_processed_set and added to the processing_set.
             //   3) Mutex is unlocked by thread X and input gates are extracted from large gate.
-            //   4) Mutex is locked by thread X and large gate is given a set in parental tree while input gates are added to the waiting_to_be_processed_set.
+            //   4) Mutex is locked by thread X and large gate is given a set in parental_tree while input gates are added to the waiting_to_be_processed_set.
             //   5) Threads process child gates, each new child is added and each old child is removed.
             //   6) When outstanding_children hits 0, the gate is removed from the processing_set and added to the waiting_to_be_processed_set.
             //   7) Mutex is locked by thread Y and Large gate is popped from the waiting_to_be_processed_set and added to the processing_set.
@@ -1757,7 +1784,6 @@ pub fn compare_generate_and_collected_output(
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Deref;
     use std::time::Duration;
     use crate::logic::basic_gates::{And, Not, Or};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
@@ -2099,7 +2125,7 @@ mod tests {
 
     #[test]
     fn single_large_gate_multi_thread() {
-        for p in 0..100 {
+        for p in 0..1000 {
             println!("ITERATION {p}");
             //TODO: uncomment
             // let (number_bits, variable_bit_mem_cell) = create_large_gate();
@@ -2375,8 +2401,8 @@ mod tests {
         second_thread.join().expect("Second thread error");
     }
 
-
     //TODO: tests
+    // nested large gate
     // simple loop
     // first tick propagates
     // multiple ticks
@@ -2384,4 +2410,10 @@ mod tests {
     // END_OUTPUT_GATE_TAG works
 
     //TODO: remember to clean out all the println statements.
+
+    //TODO: currently 3 problems
+    // 1) There is a problem where the thread pool does not end. complete_queue() is called and
+    //  it still doesn't end?
+    // 2) There is a problem where occasionally it will return the wrong value.
+    // 3) There is a problem where the large gate is not removed from the parental tree.
 }
