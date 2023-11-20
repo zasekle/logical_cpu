@@ -66,12 +66,12 @@ impl<T: ?Sized> LoggingMutex<T> {
 }
 
 //TODO: set this back to type Mutex
-//pub type UsedMutex<T> = Mutex<T>;
-pub type UsedMutex<T> = LoggingMutex<T>;
+pub type UsedMutex<T> = Mutex<T>;
+// pub type UsedMutex<T> = LoggingMutex<T>;
 
 pub fn new_used_mutex<T>(id: i32, data: T) -> UsedMutex<T> {
-    // Mutex::new(data)
-    LoggingMutex::new(id, data)
+    Mutex::new(data)
+    // LoggingMutex::new(id, data)
 }
 
 pub type SharedMutex<T> = Arc<UsedMutex<T>>;

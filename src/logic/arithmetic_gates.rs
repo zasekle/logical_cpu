@@ -1,3 +1,4 @@
+use std::sync::MutexGuard;
 use std::time::Instant;
 use crate::ALU_TIME;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not, Or, Splitter, XOr};
@@ -8,7 +9,7 @@ use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::{VariableBitRegister, VariableDecoder};
-use crate::shared_mutex::{LoggingMutexGuard, new_shared_mutex, SharedMutex};
+use crate::shared_mutex::{LoggingMutexGuard, new_shared_mutex, SharedMutex, UsedMutex};
 
 pub struct HalfAdder {
     complex_gate: ComplexGateMembers,
@@ -650,7 +651,7 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
         output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         fn tie_register_bits_high(
-            mut register: LoggingMutexGuard<VariableBitRegister>
+            mut register: MutexGuard<VariableBitRegister>
         ) {
             let set_index = register.get_index_from_tag("S");
             let enable_index = register.get_index_from_tag("E");
