@@ -101,7 +101,7 @@ pub trait LogicGate: Send {
         &mut self,
         current_gate_output_key: usize,
         next_gate_input_key: usize,
-        next_gate: SharedMutex<dyn LogicGate>
+        next_gate: SharedMutex<dyn LogicGate>,
     ) -> Signal;
 
     fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal);
@@ -153,35 +153,61 @@ pub struct ConnectedOutput {
 
 impl fmt::Debug for ConnectedOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Please call 'extract_string_from_connected_output' for ConnectedOutput \
+        f.debug_struct("Please call 'extract_string_from_gate_output_states' or 'extract_string_from_connected_output' for ConnectedOutput \
             in order to print info. Debug cannot contain locks or deadlock will occur.")
             .finish()
     }
 }
 
-pub fn extract_string_from_connected_output(connected_output: &ConnectedOutput) -> String {
-        println!("ConnectedOutput about to lock ThreadId({:?})", thread::current().id());
-        let mut_gate = connected_output.gate.lock().unwrap();
-        println!("ConnectedOutput gate_type ThreadId({:?})", thread::current().id());
-        let gate_type = mut_gate.get_gate_type();
-        println!("ConnectedOutput tag ThreadId({:?})", thread::current().id());
-        let tag = mut_gate.get_tag();
-        println!("ConnectedOutput id ThreadId({:?})", thread::current().id());
-        let id = mut_gate.get_unique_id();
+pub fn extract_string_from_gate_output_states(connected_output: &Vec<GateOutputState>) -> String {
+    let mut result_string = String::from("[\n");
+    for output in connected_output.iter() {
+        match output {
+            GateOutputState::NotConnected(signal) => {
+                result_string.push_str(
+                    format!("    NotConnected: {:?}\n", signal).as_str()
+                );
+            }
+            GateOutputState::Connected(connected_output) => {
+                result_string.push_str(
+                    format!("    Connected: [\n{}\n    ]\n", extract_string_from_connected_output(connected_output, 2)).as_str()
+                );
+            }
+        }
+    }
 
-        drop(mut_gate);
-        println!("ConnectedOutput unlocked ThreadId({:?})", thread::current().id());
+    result_string.push_str("]");
 
-        let output_str =
-            if tag.is_empty() {
-                format!("{} gate with id {}", gate_type, id.id)
-            } else {
-                format!("{} gate with tag {}; id {}", gate_type, tag, id.id)
-            };
+    result_string
+}
 
-        format!(
-            "OutputNode\ninput {:?}\ngate {}", connected_output.throughput, output_str
-        )
+pub fn extract_string_from_connected_output(
+    connected_output: &ConnectedOutput,
+    num_indentations: usize,
+) -> String {
+    let mut_gate = connected_output.gate.lock().unwrap();
+    let gate_type = mut_gate.get_gate_type();
+    let tag = mut_gate.get_tag();
+    let id = mut_gate.get_unique_id();
+
+    drop(mut_gate);
+
+    let output_str =
+        if tag.is_empty() {
+            format!("{} gate with id {}", gate_type, id.id)
+        } else {
+            format!("{} gate with tag {}; id {}", gate_type, tag, id.id)
+        };
+
+    let mut indent_str = String::new();
+
+    for _ in 0..num_indentations {
+        indent_str.push_str("    ");
+    }
+
+    format!(
+        "{}input: {:?}\n{}gate: {}", indent_str, connected_output.throughput, indent_str, output_str
+    )
 }
 
 pub struct OscillationDetection {
@@ -353,7 +379,7 @@ impl BasicGateMembers {
         output_num: usize,
         gate_type: GateType,
         number_child_gates: usize,
-        output_signal: Option<Signal>
+        output_signal: Option<Signal>,
     ) -> Self {
 
         //Must have at least one input.
@@ -396,6 +422,9 @@ impl BasicGateMembers {
             &input.sending_id,
         );
 
+        //todo delete
+        println!("update_input_signal() input_signals: [\n    {:#?}\n]", self.input_signals);
+
         let input_signal_updated = if self.input_signals[input.input_index][&input.sending_id] == input.signal {
             false
         } else {
@@ -434,7 +463,6 @@ impl BasicGateMembers {
         gate_input_index: usize,
         signal: Signal,
     ) {
-
         if self.should_print_output {
             println!(
                 "Connection TO\n   type {} tag {} id {} index {}",
@@ -1010,7 +1038,6 @@ impl GateLogic {
         current_gate_tag: &str,
         should_print_output: bool,
     ) {
-
         if should_print_output {
             if current_gate_tag.is_empty() {
                 println!(
@@ -1227,7 +1254,7 @@ pub fn push_reg_outputs_to_output_gates(
 
 pub fn set_all_gate_output_to_signal(
     output_states: &mut Vec<GateOutputState>,
-    new_signal: Signal
+    new_signal: Signal,
 ) {
     for output in output_states.iter_mut() {
         match output {
@@ -1247,8 +1274,6 @@ pub fn connect_gates(
     input_gate: SharedMutex<dyn LogicGate>,
     input_index: usize,
 ) {
-
-
     let output_signal = output_gate.lock().unwrap().internal_connect_output(
         output_index,
         input_index,
@@ -1262,7 +1287,6 @@ pub fn connect_gates(
     input_gate.lock().unwrap().internal_update_index_to_id(
         output_id,
         input_index,
-        output_signal
+        output_signal,
     );
-
 }

@@ -6,7 +6,7 @@ use std::fmt::Formatter;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::globals::{CLOCK_TICK_NUMBER, END_OUTPUT_GATE_TAG, get_clock_tick_number, RUN_CIRCUIT_IS_HIGH_LEVEL};
-use crate::logic::foundations::{connect_gates, GateInput, GateLogicError, GateOutputState, InputSignalReturn, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{connect_gates, extract_string_from_connected_output, extract_string_from_gate_output_states, GateInput, GateLogicError, GateOutputState, InputSignalReturn, LogicGate, Signal, UniqueID};
 use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::{AutomaticInput, Clock};
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
@@ -391,7 +391,8 @@ impl RunCircuitThreadPool {
                                             // 1) The Mutex is locking on the same thread when it is already locked.
                                             // 2) The Mutex is locking in the wrong order relative to another lock.
                                             // 3) Maybe inside of where it is locking, another lock occurs.
-                                            println!("{i} output_states {:#?}", output_states);
+                                            let output_states_string = extract_string_from_gate_output_states(&output_states);
+                                            println!("{i} output_states {}", output_states_string);
 
                                             for gate_output_state in output_states {
                                                 match gate_output_state {
@@ -415,10 +416,8 @@ impl RunCircuitThreadPool {
                                                         // move where Thread 0 holds the first input gate at this point and then Thread 1
                                                         // holds the second input gate above at output_states. I don't see two different
                                                         // gates being locked at all in this situation. Or at least not out of order.
-                                                        println!("{i} Connected about to lock ThreadId({:?})", thread::current().id());
-                                                        // let mut mutable_next_gate = next_gate.lock().unwrap();
-                                                        println!("{i} Connected locked ThreadId({:?})", thread::current().id());
-                                                        // println!("{i} Connected locked type {} ThreadId({:?})", mutable_next_gate.get_gate_type(), thread::current().id());
+                                                        let mut mutable_next_gate = next_gate.lock().unwrap();
+                                                        println!("{i} Connected locked type {} ThreadId({:?})", mutable_next_gate.get_gate_type(), thread::current().id());
 
                                                         //TODO: There is a problem that gate 4 (the large gate) is left inside the parental
                                                         // tree at the end.
@@ -438,17 +437,15 @@ impl RunCircuitThreadPool {
                                                         // So, is the only problem the order of locks? Can I somehow fix this so that I always access the
                                                         //  parent lock internally?
                                                         let InputSignalReturn { changed_count_this_tick, input_signal_updated } =
-                                                            next_gate.lock().unwrap().update_input_signal(next_gate_info.throughput.clone());
+                                                            mutable_next_gate.update_input_signal(next_gate_info.throughput.clone());
 
                                                         //Faulted at gate 2 (a child of gate 4)
 
-                                                        println!("{i} Connected gate_id ThreadId({:?})", thread::current().id());
-                                                        let gate_id = next_gate.lock().unwrap().get_unique_id();
+                                                        let gate_id = mutable_next_gate.get_unique_id();
 
-                                                        println!("{i} Connected contains_id ThreadId({:?})", thread::current().id());
                                                         let contains_id = next_gates_set.contains(&gate_id);
 
-                                                        println!("{i} Connected check_if_next_gate_should_be_stored ThreadId({:?})", thread::current().id());
+                                                        println!("input_signal_updated: {} changed_count_this_tick: {} contains_id: {} propagate_signal_clone: {}", input_signal_updated, changed_count_this_tick, contains_id, propagate_signal_clone.load(Ordering::Relaxed));
                                                         let should_update_gate = check_if_next_gate_should_be_stored(
                                                             input_signal_updated,
                                                             changed_count_this_tick,
@@ -458,7 +455,8 @@ impl RunCircuitThreadPool {
 
                                                         if should_update_gate {
                                                             println!("{i} Connected number_children_in_gate ThreadId({:?})", thread::current().id());
-                                                            let number_children_in_gate = next_gate.lock().unwrap().num_children_gates();
+                                                            let number_children_in_gate = mutable_next_gate.num_children_gates();
+                                                            drop(mutable_next_gate);
                                                             next_gates_set.insert(gate_id);
                                                             next_gates.push(
                                                                 QueueElement {
@@ -529,6 +527,12 @@ impl RunCircuitThreadPool {
                                         }
                                     }
                                 }
+
+                                //TODO: What seems to be happening is that Thread X will run a ways into the large gate,
+                                // say it processes the inner input gates and the inner NAND gates. Then Thread Y
+                                // will attempt to call the large gate and it will reset everything to zero to redo it.
+                                // After that the initial gates don't actually change state and so the gate fizzles
+                                // even though it didn't complete initially.
 
                                 println!("next_gates.len() {} ThreadId({:?})", next_gates.len(), thread::current().id());
 
@@ -2192,7 +2196,7 @@ mod tests {
         //TODO: current problem
         // 1) It will return the wrong value.
 
-        for p in 0..1 {
+        for p in 0..1000 {
             println!("ITERATION {p}");
             //TODO: uncomment
             // let (number_bits, variable_bit_mem_cell) = create_large_gate();
@@ -2476,6 +2480,11 @@ mod tests {
         first_thread.join().expect("First thread error");
 
         second_thread.join().expect("Second thread error");
+
+        //TODO: delete
+        unsafe {
+            CLOCK_TICK_NUMBER += 1;
+        }
     }
 
     //TODO: tests
