@@ -534,6 +534,34 @@ impl RunCircuitThreadPool {
                                 // After that the initial gates don't actually change state and so the gate fizzles
                                 // even though it didn't complete initially.
 
+                                //TODO: How can I fix the above problem?
+                                //  -I can let the gate complete before it reaches the 'REDO' part (this would make the canceling thing almost worthless).
+                                //  -I could save the gate states optimistically where I assume it will complete properly (probably fails too much for this to be ideal). This may be
+                                //   easier to program. In order to do this, I will need to keep track of the original state of each gate that is changed. This means what
+                                //   the gates input states and output states are as well as the internal states.
+                                //  -I could save the gate states pessimistically where I assume it will fail. In order to do this I need to save all the states, then update them at the end.
+                                //   But this would also mean that I would need to check something other than the gate itself for what the state is. Essentially I would need
+                                //   to implement the entire system again for some temporary gates. I COULD essentially just make a copy of it, then fill up the copy first
+                                //   and if the gate completes move the information over. I think this would be the most practical way to do it.
+                                //  The below two are the most reasonable IMO.
+                                //  -I could do something similar to checkpoints, it iterates through the gate and remembers where it was canceled at (which small gates were in queue)
+                                //   then as it reaches those gates, it removes them. However, if it fizzles and still has gates that were not removed it will add them back in and continue
+                                //   running.
+                                //   -This one seems like it would be the most performant to me because it doesn't require adding another vector to save the sates. It also doesn't require
+                                //    doing much special outside remembering the gates when it was set to redo.
+                                //  -Maybe I can split it up and have the gates save their own state. For example, each gate has two different vectors, then I can call, temp_update_input()
+                                //   and when it is completed call finalize_input() or something.
+                                //   -This one seems like it would be easy to implement. I would just need to make a second vector for inputs and outputs and then change a few functions in
+                                //    this section.
+                                //TODO: How will the above solutions work for nested large gates? It seems like if a nested large gate is canceled with checkpoints the first way has no way
+                                // of reverting it. The checkpoints strategy only works (I think) for when a gate is sent to 'redo'. So I may have to implement it the way where each gate
+                                // saves a copy of its current state.
+                                // -If redo or cancel are called, it will make the real state the copy state.
+                                // -If it completes, it will make the copy state the real state.
+                                // There is a problem I think. Doesn't think mean that I have to iterate through every gate in order to do this? So I have to go through every gate in the
+                                //  circuit (or is it only the small gates?) and lock them all and call the function to make one state into another?
+
+
                                 println!("next_gates.len() {} ThreadId({:?})", next_gates.len(), thread::current().id());
 
                                 let mut thread_pool_lists_guard = thread_pool_lists_clone.lock().unwrap();
