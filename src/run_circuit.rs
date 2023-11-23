@@ -560,6 +560,29 @@ impl RunCircuitThreadPool {
                                 // -If it completes, it will make the copy state the real state.
                                 // There is a problem I think. Doesn't think mean that I have to iterate through every gate in order to do this? So I have to go through every gate in the
                                 //  circuit (or is it only the small gates?) and lock them all and call the function to make one state into another?
+                                // Things I need to do in order to complete this.
+                                //  1) Make new fields to hold the input and output.
+                                //   -For BasicGateMembers this is fairly straight forward, just make a copy of input_signals and
+                                //    output_signals.
+                                //   -For ComplexGateMembers this is more complex. I can call the function for the basic gate, but
+                                //    I need to update the stored gates themselves in some way right?
+                                //  1) Will need to make sure the current and temp gates are synchronized at the start.
+                                //  2) Make a function that is temp_update_input_signal(), this will do a temp update.
+                                //  3) Make a function that is reset_temp_updates(). This will set all the temp updates to the current updates.
+                                //  4) Make a function that is save_temp_updates(). This will set all the current updates to the temp updates.
+                                //  5) Come in this area and make it only do temp_update_input_signal() for large gates. And make it utilize
+                                //   reset_temp_updates and save_temp_updates.
+
+                                // TODO: how do handle ComplexGateMembers
+                                //  These things also need to update the gates at the end right. This means there needs to be some way
+                                //  Of saving their intermediate states. I need to take into account nested large gates as well
+
+                                //TODO: I will need to review my options a little bit. But honestly I may have backed myself in
+                                // a corner in terms of how I can solve this problem by not planning it well enough to start.
+                                // There are also diminishing returns to continuing this project, I have already gone through
+                                // most of the things that are valuable in terms of multi threading. And I am no longer learning
+                                // anything about low level logic in CPUs.
+
 
 
                                 println!("next_gates.len() {} ThreadId({:?})", next_gates.len(), thread::current().id());
