@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::time::Instant;
 use crate::CONTROL_SECTION_TIME;
 use crate::logic::basic_gates::{And, Not, Or, Splitter};
@@ -7,118 +5,120 @@ use crate::logic::complex_logic::VariableOutputStepper;
 
 #[allow(unused_imports)]
 use crate::logic::foundations::{BasicGateMembers, ComplexGateMembers, GateInput, GateLogicError, GateOutputState, GateType, InputSignalReturn, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::connect_gates;
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 
 #[allow(unused_imports)]
 use crate::logic::foundations::Signal::{LOW_, HIGH};
 use crate::logic::processor_components::VariableDecoder;
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub struct ControlSection {
     complex_gate: ComplexGateMembers,
-    clk_and: Rc<RefCell<And>>,
-    load_not: Rc<RefCell<Not>>,
-    reset_not: Rc<RefCell<Not>>,
-    stepper: Rc<RefCell<VariableOutputStepper>>,
-    stepper_splitters: Vec<Rc<RefCell<Splitter>>>,
-    stepper_1_and: Rc<RefCell<And>>,
-    bus_1_or: Rc<RefCell<Or>>,
-    ram_e_and: Rc<RefCell<And>>,
-    ram_e_or: Rc<RefCell<Or>>,
-    acc_e_and: Rc<RefCell<And>>,
-    acc_e_or: Rc<RefCell<Or>>,
-    iar_e_and: Rc<RefCell<And>>,
-    iar_e_or: Rc<RefCell<Or>>,
-    io_clk_e_and: Rc<RefCell<And>>,
-    io_clks_s_and: Rc<RefCell<And>>,
-    r0_e_or: Rc<RefCell<Or>>,
-    r0_e_reg_b_and: Rc<RefCell<And>>,
-    r0_e_reg_a_and: Rc<RefCell<And>>,
-    r1_e_or: Rc<RefCell<Or>>,
-    r1_e_reg_b_and: Rc<RefCell<And>>,
-    r1_e_reg_a_and: Rc<RefCell<And>>,
-    r2_e_or: Rc<RefCell<Or>>,
-    r2_e_reg_b_and: Rc<RefCell<And>>,
-    r2_e_reg_a_and: Rc<RefCell<And>>,
-    r3_e_or: Rc<RefCell<Or>>,
-    r3_e_reg_b_and: Rc<RefCell<And>>,
-    r3_e_reg_a_and: Rc<RefCell<And>>,
-    r_e_reg_b_decoder: Rc<RefCell<VariableDecoder>>,
-    r_e_reg_a_decoder: Rc<RefCell<VariableDecoder>>,
-    mar_s_or: Rc<RefCell<Or>>,
-    mar_s_and: Rc<RefCell<And>>,
-    mar_s_outer_or: Rc<RefCell<Or>>,
-    ram_s_or: Rc<RefCell<Or>>,
-    ram_s_load_and: Rc<RefCell<And>>,
-    ram_s_and: Rc<RefCell<And>>,
-    acc_s_or: Rc<RefCell<Or>>,
-    acc_s_and: Rc<RefCell<And>>,
-    acc_s_outer_or: Rc<RefCell<Or>>,
-    iar_s_or: Rc<RefCell<Or>>,
-    iar_s_and: Rc<RefCell<And>>,
-    iar_s_outer_or: Rc<RefCell<Or>>,
-    r0_s_or: Rc<RefCell<Or>>,
-    r0_s_and: Rc<RefCell<And>>,
-    r1_s_or: Rc<RefCell<Or>>,
-    r1_s_and: Rc<RefCell<And>>,
-    r2_s_or: Rc<RefCell<Or>>,
-    r2_s_and: Rc<RefCell<And>>,
-    r3_s_or: Rc<RefCell<Or>>,
-    r3_s_and: Rc<RefCell<And>>,
-    r_s_decoder: Rc<RefCell<VariableDecoder>>,
-    ir_s_or: Rc<RefCell<Or>>,
-    ir_s_and: Rc<RefCell<And>>,
-    tmp_s_or: Rc<RefCell<Or>>,
-    tmp_s_and: Rc<RefCell<And>>,
-    reg_b_e_or: Rc<RefCell<Or>>,
-    reg_a_or: Rc<RefCell<Or>>,
-    alu_0_and: Rc<RefCell<And>>,
-    alu_1_and: Rc<RefCell<And>>,
-    alu_2_and: Rc<RefCell<And>>,
-    flags_s_or: Rc<RefCell<Or>>,
-    flags_s_and: Rc<RefCell<And>>,
-    flags_s_outer_or: Rc<RefCell<Or>>,
-    reg_b_s_or: Rc<RefCell<Or>>,
-    load_store_instr_not: Rc<RefCell<Not>>,
-    load_store_instr_decoder: Rc<RefCell<VariableDecoder>>,
-    load_store_instr_0_top_and: Rc<RefCell<And>>,
-    load_store_instr_1_and: Rc<RefCell<And>>,
-    load_store_instr_2_and: Rc<RefCell<And>>,
-    load_store_instr_3_and: Rc<RefCell<And>>,
-    load_store_instr_4_and: Rc<RefCell<And>>,
-    load_store_instr_5_and: Rc<RefCell<And>>,
-    load_store_instr_6_and: Rc<RefCell<And>>,
-    load_store_instr_7_and: Rc<RefCell<And>>,
-    stepper_out_4_top_0_and: Rc<RefCell<And>>,
-    stepper_out_4_1_and: Rc<RefCell<And>>,
-    stepper_out_4_2_and: Rc<RefCell<And>>,
-    stepper_out_4_3_and: Rc<RefCell<And>>,
-    stepper_out_4_4_and: Rc<RefCell<And>>,
-    stepper_out_4_5_and: Rc<RefCell<And>>,
-    stepper_out_4_6_and: Rc<RefCell<And>>,
-    stepper_out_4_7_and: Rc<RefCell<And>>,
-    stepper_out_4_8_and: Rc<RefCell<And>>,
-    stepper_out_5_top_0_and: Rc<RefCell<And>>,
-    stepper_out_5_1_and: Rc<RefCell<And>>,
-    stepper_out_5_2_and: Rc<RefCell<And>>,
-    stepper_out_5_3_and: Rc<RefCell<And>>,
-    stepper_out_5_4_and: Rc<RefCell<And>>,
-    stepper_out_5_5_and: Rc<RefCell<And>>,
-    stepper_out_5_6_and: Rc<RefCell<And>>,
-    stepper_out_5_6_not: Rc<RefCell<Not>>,
-    stepper_out_6_top_0_and: Rc<RefCell<And>>,
-    stepper_out_6_1_and: Rc<RefCell<And>>,
-    stepper_out_6_2_and: Rc<RefCell<And>>,
-    eight_input_and: Rc<RefCell<And>>,
-    eight_input_and_not_loc_2: Rc<RefCell<Not>>,
-    eight_input_and_not_loc_3: Rc<RefCell<Not>>,
-    c_in_and: Rc<RefCell<And>>,
-    a_l_and: Rc<RefCell<And>>,
-    eq_and: Rc<RefCell<And>>,
-    z_and: Rc<RefCell<And>>,
-    alu_input_or: Rc<RefCell<Or>>,
-    add_and: Rc<RefCell<And>>,
-    add_not: Rc<RefCell<Not>>,
+    clk_and: SharedMutex<And>,
+    load_not: SharedMutex<Not>,
+    reset_not: SharedMutex<Not>,
+    stepper: SharedMutex<VariableOutputStepper>,
+    stepper_splitters: Vec<SharedMutex<Splitter>>,
+    stepper_1_and: SharedMutex<And>,
+    bus_1_or: SharedMutex<Or>,
+    ram_e_and: SharedMutex<And>,
+    ram_e_or: SharedMutex<Or>,
+    acc_e_and: SharedMutex<And>,
+    acc_e_or: SharedMutex<Or>,
+    iar_e_and: SharedMutex<And>,
+    iar_e_or: SharedMutex<Or>,
+    io_clk_e_and: SharedMutex<And>,
+    io_clks_s_and: SharedMutex<And>,
+    r0_e_or: SharedMutex<Or>,
+    r0_e_reg_b_and: SharedMutex<And>,
+    r0_e_reg_a_and: SharedMutex<And>,
+    r1_e_or: SharedMutex<Or>,
+    r1_e_reg_b_and: SharedMutex<And>,
+    r1_e_reg_a_and: SharedMutex<And>,
+    r2_e_or: SharedMutex<Or>,
+    r2_e_reg_b_and: SharedMutex<And>,
+    r2_e_reg_a_and: SharedMutex<And>,
+    r3_e_or: SharedMutex<Or>,
+    r3_e_reg_b_and: SharedMutex<And>,
+    r3_e_reg_a_and: SharedMutex<And>,
+    r_e_reg_b_decoder: SharedMutex<VariableDecoder>,
+    r_e_reg_a_decoder: SharedMutex<VariableDecoder>,
+    mar_s_or: SharedMutex<Or>,
+    mar_s_and: SharedMutex<And>,
+    mar_s_outer_or: SharedMutex<Or>,
+    ram_s_or: SharedMutex<Or>,
+    ram_s_load_and: SharedMutex<And>,
+    ram_s_and: SharedMutex<And>,
+    acc_s_or: SharedMutex<Or>,
+    acc_s_and: SharedMutex<And>,
+    acc_s_outer_or: SharedMutex<Or>,
+    iar_s_or: SharedMutex<Or>,
+    iar_s_and: SharedMutex<And>,
+    iar_s_outer_or: SharedMutex<Or>,
+    r0_s_or: SharedMutex<Or>,
+    r0_s_and: SharedMutex<And>,
+    r1_s_or: SharedMutex<Or>,
+    r1_s_and: SharedMutex<And>,
+    r2_s_or: SharedMutex<Or>,
+    r2_s_and: SharedMutex<And>,
+    r3_s_or: SharedMutex<Or>,
+    r3_s_and: SharedMutex<And>,
+    r_s_decoder: SharedMutex<VariableDecoder>,
+    ir_s_or: SharedMutex<Or>,
+    ir_s_and: SharedMutex<And>,
+    tmp_s_or: SharedMutex<Or>,
+    tmp_s_and: SharedMutex<And>,
+    reg_b_e_or: SharedMutex<Or>,
+    reg_a_or: SharedMutex<Or>,
+    alu_0_and: SharedMutex<And>,
+    alu_1_and: SharedMutex<And>,
+    alu_2_and: SharedMutex<And>,
+    flags_s_or: SharedMutex<Or>,
+    flags_s_and: SharedMutex<And>,
+    flags_s_outer_or: SharedMutex<Or>,
+    reg_b_s_or: SharedMutex<Or>,
+    load_store_instr_not: SharedMutex<Not>,
+    load_store_instr_decoder: SharedMutex<VariableDecoder>,
+    load_store_instr_0_top_and: SharedMutex<And>,
+    load_store_instr_1_and: SharedMutex<And>,
+    load_store_instr_2_and: SharedMutex<And>,
+    load_store_instr_3_and: SharedMutex<And>,
+    load_store_instr_4_and: SharedMutex<And>,
+    load_store_instr_5_and: SharedMutex<And>,
+    load_store_instr_6_and: SharedMutex<And>,
+    load_store_instr_7_and: SharedMutex<And>,
+    stepper_out_4_top_0_and: SharedMutex<And>,
+    stepper_out_4_1_and: SharedMutex<And>,
+    stepper_out_4_2_and: SharedMutex<And>,
+    stepper_out_4_3_and: SharedMutex<And>,
+    stepper_out_4_4_and: SharedMutex<And>,
+    stepper_out_4_5_and: SharedMutex<And>,
+    stepper_out_4_6_and: SharedMutex<And>,
+    stepper_out_4_7_and: SharedMutex<And>,
+    stepper_out_4_8_and: SharedMutex<And>,
+    stepper_out_5_top_0_and: SharedMutex<And>,
+    stepper_out_5_1_and: SharedMutex<And>,
+    stepper_out_5_2_and: SharedMutex<And>,
+    stepper_out_5_3_and: SharedMutex<And>,
+    stepper_out_5_4_and: SharedMutex<And>,
+    stepper_out_5_5_and: SharedMutex<And>,
+    stepper_out_5_6_and: SharedMutex<And>,
+    stepper_out_5_6_not: SharedMutex<Not>,
+    stepper_out_6_top_0_and: SharedMutex<And>,
+    stepper_out_6_1_and: SharedMutex<And>,
+    stepper_out_6_2_and: SharedMutex<And>,
+    eight_input_and: SharedMutex<And>,
+    eight_input_and_not_loc_2: SharedMutex<Not>,
+    eight_input_and_not_loc_3: SharedMutex<Not>,
+    c_in_and: SharedMutex<And>,
+    a_l_and: SharedMutex<And>,
+    eq_and: SharedMutex<And>,
+    z_and: SharedMutex<And>,
+    alu_input_or: SharedMutex<Or>,
+    add_and: SharedMutex<And>,
+    add_not: SharedMutex<Not>,
 }
 
 #[allow(dead_code)]
@@ -167,12 +167,12 @@ impl ControlSection {
     pub const IO: &'static str = "IO";
     pub const DA: &'static str = "DA";
 
-    pub fn new(bus_width: usize) -> Rc<RefCell<Self>> {
+    pub fn new(bus_width: usize) -> SharedMutex<Self> {
         assert!(bus_width > 7);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         input_gates.push(SimpleInput::new(4, "IR_0"));
         input_gates.push(SimpleInput::new(4, "IR_1"));
@@ -208,7 +208,7 @@ impl ControlSection {
         input_gates.push(SimpleInput::new(1, ControlSection::EQ));
         input_gates.push(SimpleInput::new(1, ControlSection::Z));
 
-        let mut store_output = |gate: Rc<RefCell<SimpleOutput>>| {
+        let mut store_output = |gate: SharedMutex<SimpleOutput>| {
             output_gates.push(gate.clone());
             output_gates_logic.push(gate.clone());
         };
@@ -355,125 +355,125 @@ impl ControlSection {
             add_not: Not::new(1),
         };
 
-        control_section.clk_and.borrow_mut().set_tag("clk_and");
-        control_section.load_not.borrow_mut().set_tag("load_not");
-        control_section.reset_not.borrow_mut().set_tag("reset_not");
-        control_section.stepper.borrow_mut().set_tag("stepper");
-        control_section.stepper_splitters[0].borrow_mut().set_tag("stepper_splitters[0]");
-        control_section.stepper_splitters[1].borrow_mut().set_tag("stepper_splitters[1]");
-        control_section.stepper_splitters[2].borrow_mut().set_tag("stepper_splitters[2]");
-        control_section.stepper_splitters[3].borrow_mut().set_tag("stepper_splitters[3]");
-        control_section.stepper_splitters[4].borrow_mut().set_tag("stepper_splitters[4]");
-        control_section.stepper_splitters[5].borrow_mut().set_tag("stepper_splitters[5]");
-        control_section.stepper_1_and.borrow_mut().set_tag("stepper_1_and");
-        control_section.bus_1_or.borrow_mut().set_tag("bus_1_or");
-        control_section.ram_e_and.borrow_mut().set_tag("ram_e_and");
-        control_section.ram_e_or.borrow_mut().set_tag("ram_e_or");
-        control_section.acc_e_and.borrow_mut().set_tag("acc_e_and");
-        control_section.acc_e_or.borrow_mut().set_tag("acc_e_or");
-        control_section.iar_e_and.borrow_mut().set_tag("iar_e_and");
-        control_section.iar_e_or.borrow_mut().set_tag("iar_e_or");
-        control_section.io_clk_e_and.borrow_mut().set_tag("io_clk_e_and");
-        control_section.io_clks_s_and.borrow_mut().set_tag("io_clks_s_and");
-        control_section.r0_e_or.borrow_mut().set_tag("r0_e_or");
-        control_section.r0_e_reg_b_and.borrow_mut().set_tag("r0_e_reg_b_and");
-        control_section.r0_e_reg_a_and.borrow_mut().set_tag("r0_e_reg_a_and");
-        control_section.r1_e_or.borrow_mut().set_tag("r1_e_or");
-        control_section.r1_e_reg_b_and.borrow_mut().set_tag("r1_e_reg_b_and");
-        control_section.r1_e_reg_a_and.borrow_mut().set_tag("r1_e_reg_a_and");
-        control_section.r2_e_or.borrow_mut().set_tag("r2_e_or");
-        control_section.r2_e_reg_b_and.borrow_mut().set_tag("r2_e_reg_b_and");
-        control_section.r2_e_reg_a_and.borrow_mut().set_tag("r2_e_reg_a_and");
-        control_section.r3_e_or.borrow_mut().set_tag("r3_e_or");
-        control_section.r3_e_reg_b_and.borrow_mut().set_tag("r3_e_reg_b_and");
-        control_section.r3_e_reg_a_and.borrow_mut().set_tag("r3_e_reg_a_and");
-        control_section.r_e_reg_b_decoder.borrow_mut().set_tag("r_e_reg_b_decoder");
-        control_section.r_e_reg_a_decoder.borrow_mut().set_tag("r_e_reg_a_decoder");
-        control_section.mar_s_or.borrow_mut().set_tag("mar_s_or");
-        control_section.mar_s_and.borrow_mut().set_tag("mar_s_and");
-        control_section.mar_s_outer_or.borrow_mut().set_tag("mar_s_outer_or");
-        control_section.ram_s_or.borrow_mut().set_tag("ram_s_or");
-        control_section.ram_s_load_and.borrow_mut().set_tag("ram_s_load_and");
-        control_section.ram_s_and.borrow_mut().set_tag("ram_s_and");
-        control_section.acc_s_or.borrow_mut().set_tag("acc_s_or");
-        control_section.acc_s_and.borrow_mut().set_tag("acc_s_and");
-        control_section.acc_s_outer_or.borrow_mut().set_tag("acc_s_outer_or");
-        control_section.iar_s_or.borrow_mut().set_tag("iar_s_or");
-        control_section.iar_s_and.borrow_mut().set_tag("iar_s_and");
-        control_section.iar_s_outer_or.borrow_mut().set_tag("iar_s_outer_or");
-        control_section.r0_s_or.borrow_mut().set_tag("r0_s_or");
-        control_section.r0_s_and.borrow_mut().set_tag("r0_s_and");
-        control_section.r1_s_or.borrow_mut().set_tag("r1_s_or");
-        control_section.r1_s_and.borrow_mut().set_tag("r1_s_and");
-        control_section.r2_s_or.borrow_mut().set_tag("r2_s_or");
-        control_section.r2_s_and.borrow_mut().set_tag("r2_s_and");
-        control_section.r3_s_or.borrow_mut().set_tag("r3_s_or");
-        control_section.r3_s_and.borrow_mut().set_tag("r3_s_and");
-        control_section.r_s_decoder.borrow_mut().set_tag("r_s_decoder");
-        control_section.ir_s_or.borrow_mut().set_tag("ir_s_or");
-        control_section.ir_s_and.borrow_mut().set_tag("ir_s_and");
-        control_section.tmp_s_or.borrow_mut().set_tag("tmp_s_or");
-        control_section.tmp_s_and.borrow_mut().set_tag("tmp_s_and");
-        control_section.reg_b_e_or.borrow_mut().set_tag("reg_b_e_or");
-        control_section.reg_a_or.borrow_mut().set_tag("reg_a_or");
-        control_section.alu_0_and.borrow_mut().set_tag("alu_0_and");
-        control_section.alu_1_and.borrow_mut().set_tag("alu_1_and");
-        control_section.alu_2_and.borrow_mut().set_tag("alu_2_and");
-        control_section.flags_s_or.borrow_mut().set_tag("flags_s_or");
-        control_section.flags_s_and.borrow_mut().set_tag("flags_s_and");
-        control_section.flags_s_outer_or.borrow_mut().set_tag("flags_s_outer_or");
-        control_section.reg_b_s_or.borrow_mut().set_tag("reg_b_s_or");
-        control_section.load_store_instr_not.borrow_mut().set_tag("load_store_instr_not");
-        control_section.load_store_instr_decoder.borrow_mut().set_tag("load_store_instr_decoder");
-        control_section.load_store_instr_0_top_and.borrow_mut().set_tag("load_store_instr_0_top_and");
-        control_section.load_store_instr_1_and.borrow_mut().set_tag("load_store_instr_1_and");
-        control_section.load_store_instr_2_and.borrow_mut().set_tag("load_store_instr_2_and");
-        control_section.load_store_instr_3_and.borrow_mut().set_tag("load_store_instr_3_and");
-        control_section.load_store_instr_4_and.borrow_mut().set_tag("load_store_instr_4_and");
-        control_section.load_store_instr_5_and.borrow_mut().set_tag("load_store_instr_5_and");
-        control_section.load_store_instr_6_and.borrow_mut().set_tag("load_store_instr_6_and");
-        control_section.load_store_instr_7_and.borrow_mut().set_tag("load_store_instr_7_and");
-        control_section.stepper_out_4_top_0_and.borrow_mut().set_tag("stepper_out_4_top_0_and");
-        control_section.stepper_out_4_1_and.borrow_mut().set_tag("stepper_out_4_1_and");
-        control_section.stepper_out_4_2_and.borrow_mut().set_tag("stepper_out_4_2_and");
-        control_section.stepper_out_4_3_and.borrow_mut().set_tag("stepper_out_4_3_and");
-        control_section.stepper_out_4_4_and.borrow_mut().set_tag("stepper_out_4_4_and");
-        control_section.stepper_out_4_5_and.borrow_mut().set_tag("stepper_out_4_5_and");
-        control_section.stepper_out_4_6_and.borrow_mut().set_tag("stepper_out_4_6_and");
-        control_section.stepper_out_4_7_and.borrow_mut().set_tag("stepper_out_4_7_and");
-        control_section.stepper_out_4_8_and.borrow_mut().set_tag("stepper_out_4_8_and");
-        control_section.stepper_out_5_top_0_and.borrow_mut().set_tag("stepper_out_5_top_0_and");
-        control_section.stepper_out_5_1_and.borrow_mut().set_tag("stepper_out_5_1_and");
-        control_section.stepper_out_5_2_and.borrow_mut().set_tag("stepper_out_5_2_and");
-        control_section.stepper_out_5_3_and.borrow_mut().set_tag("stepper_out_5_3_and");
-        control_section.stepper_out_5_4_and.borrow_mut().set_tag("stepper_out_5_4_and");
-        control_section.stepper_out_5_5_and.borrow_mut().set_tag("stepper_out_5_5_and");
-        control_section.stepper_out_5_6_and.borrow_mut().set_tag("stepper_out_5_6_and");
-        control_section.stepper_out_5_6_not.borrow_mut().set_tag("stepper_out_5_6_not");
-        control_section.stepper_out_6_top_0_and.borrow_mut().set_tag("stepper_out_6_top_0_and");
-        control_section.stepper_out_6_1_and.borrow_mut().set_tag("stepper_out_6_1_and");
-        control_section.stepper_out_6_2_and.borrow_mut().set_tag("stepper_out_6_2_and");
-        control_section.eight_input_and.borrow_mut().set_tag("eight_input_and");
-        control_section.eight_input_and_not_loc_2.borrow_mut().set_tag("eight_input_and_not_loc_2");
-        control_section.eight_input_and_not_loc_3.borrow_mut().set_tag("eight_input_and_not_loc_3");
-        control_section.c_in_and.borrow_mut().set_tag("c_in_and");
-        control_section.a_l_and.borrow_mut().set_tag("a_l_and");
-        control_section.eq_and.borrow_mut().set_tag("eq_and");
-        control_section.z_and.borrow_mut().set_tag("z_and");
-        control_section.alu_input_or.borrow_mut().set_tag("alu_input_or");
-        control_section.add_and.borrow_mut().set_tag("add_and");
-        control_section.add_not.borrow_mut().set_tag("add_not");
+        control_section.clk_and.lock().unwrap().set_tag("clk_and");
+        control_section.load_not.lock().unwrap().set_tag("load_not");
+        control_section.reset_not.lock().unwrap().set_tag("reset_not");
+        control_section.stepper.lock().unwrap().set_tag("stepper");
+        control_section.stepper_splitters[0].lock().unwrap().set_tag("stepper_splitters[0]");
+        control_section.stepper_splitters[1].lock().unwrap().set_tag("stepper_splitters[1]");
+        control_section.stepper_splitters[2].lock().unwrap().set_tag("stepper_splitters[2]");
+        control_section.stepper_splitters[3].lock().unwrap().set_tag("stepper_splitters[3]");
+        control_section.stepper_splitters[4].lock().unwrap().set_tag("stepper_splitters[4]");
+        control_section.stepper_splitters[5].lock().unwrap().set_tag("stepper_splitters[5]");
+        control_section.stepper_1_and.lock().unwrap().set_tag("stepper_1_and");
+        control_section.bus_1_or.lock().unwrap().set_tag("bus_1_or");
+        control_section.ram_e_and.lock().unwrap().set_tag("ram_e_and");
+        control_section.ram_e_or.lock().unwrap().set_tag("ram_e_or");
+        control_section.acc_e_and.lock().unwrap().set_tag("acc_e_and");
+        control_section.acc_e_or.lock().unwrap().set_tag("acc_e_or");
+        control_section.iar_e_and.lock().unwrap().set_tag("iar_e_and");
+        control_section.iar_e_or.lock().unwrap().set_tag("iar_e_or");
+        control_section.io_clk_e_and.lock().unwrap().set_tag("io_clk_e_and");
+        control_section.io_clks_s_and.lock().unwrap().set_tag("io_clks_s_and");
+        control_section.r0_e_or.lock().unwrap().set_tag("r0_e_or");
+        control_section.r0_e_reg_b_and.lock().unwrap().set_tag("r0_e_reg_b_and");
+        control_section.r0_e_reg_a_and.lock().unwrap().set_tag("r0_e_reg_a_and");
+        control_section.r1_e_or.lock().unwrap().set_tag("r1_e_or");
+        control_section.r1_e_reg_b_and.lock().unwrap().set_tag("r1_e_reg_b_and");
+        control_section.r1_e_reg_a_and.lock().unwrap().set_tag("r1_e_reg_a_and");
+        control_section.r2_e_or.lock().unwrap().set_tag("r2_e_or");
+        control_section.r2_e_reg_b_and.lock().unwrap().set_tag("r2_e_reg_b_and");
+        control_section.r2_e_reg_a_and.lock().unwrap().set_tag("r2_e_reg_a_and");
+        control_section.r3_e_or.lock().unwrap().set_tag("r3_e_or");
+        control_section.r3_e_reg_b_and.lock().unwrap().set_tag("r3_e_reg_b_and");
+        control_section.r3_e_reg_a_and.lock().unwrap().set_tag("r3_e_reg_a_and");
+        control_section.r_e_reg_b_decoder.lock().unwrap().set_tag("r_e_reg_b_decoder");
+        control_section.r_e_reg_a_decoder.lock().unwrap().set_tag("r_e_reg_a_decoder");
+        control_section.mar_s_or.lock().unwrap().set_tag("mar_s_or");
+        control_section.mar_s_and.lock().unwrap().set_tag("mar_s_and");
+        control_section.mar_s_outer_or.lock().unwrap().set_tag("mar_s_outer_or");
+        control_section.ram_s_or.lock().unwrap().set_tag("ram_s_or");
+        control_section.ram_s_load_and.lock().unwrap().set_tag("ram_s_load_and");
+        control_section.ram_s_and.lock().unwrap().set_tag("ram_s_and");
+        control_section.acc_s_or.lock().unwrap().set_tag("acc_s_or");
+        control_section.acc_s_and.lock().unwrap().set_tag("acc_s_and");
+        control_section.acc_s_outer_or.lock().unwrap().set_tag("acc_s_outer_or");
+        control_section.iar_s_or.lock().unwrap().set_tag("iar_s_or");
+        control_section.iar_s_and.lock().unwrap().set_tag("iar_s_and");
+        control_section.iar_s_outer_or.lock().unwrap().set_tag("iar_s_outer_or");
+        control_section.r0_s_or.lock().unwrap().set_tag("r0_s_or");
+        control_section.r0_s_and.lock().unwrap().set_tag("r0_s_and");
+        control_section.r1_s_or.lock().unwrap().set_tag("r1_s_or");
+        control_section.r1_s_and.lock().unwrap().set_tag("r1_s_and");
+        control_section.r2_s_or.lock().unwrap().set_tag("r2_s_or");
+        control_section.r2_s_and.lock().unwrap().set_tag("r2_s_and");
+        control_section.r3_s_or.lock().unwrap().set_tag("r3_s_or");
+        control_section.r3_s_and.lock().unwrap().set_tag("r3_s_and");
+        control_section.r_s_decoder.lock().unwrap().set_tag("r_s_decoder");
+        control_section.ir_s_or.lock().unwrap().set_tag("ir_s_or");
+        control_section.ir_s_and.lock().unwrap().set_tag("ir_s_and");
+        control_section.tmp_s_or.lock().unwrap().set_tag("tmp_s_or");
+        control_section.tmp_s_and.lock().unwrap().set_tag("tmp_s_and");
+        control_section.reg_b_e_or.lock().unwrap().set_tag("reg_b_e_or");
+        control_section.reg_a_or.lock().unwrap().set_tag("reg_a_or");
+        control_section.alu_0_and.lock().unwrap().set_tag("alu_0_and");
+        control_section.alu_1_and.lock().unwrap().set_tag("alu_1_and");
+        control_section.alu_2_and.lock().unwrap().set_tag("alu_2_and");
+        control_section.flags_s_or.lock().unwrap().set_tag("flags_s_or");
+        control_section.flags_s_and.lock().unwrap().set_tag("flags_s_and");
+        control_section.flags_s_outer_or.lock().unwrap().set_tag("flags_s_outer_or");
+        control_section.reg_b_s_or.lock().unwrap().set_tag("reg_b_s_or");
+        control_section.load_store_instr_not.lock().unwrap().set_tag("load_store_instr_not");
+        control_section.load_store_instr_decoder.lock().unwrap().set_tag("load_store_instr_decoder");
+        control_section.load_store_instr_0_top_and.lock().unwrap().set_tag("load_store_instr_0_top_and");
+        control_section.load_store_instr_1_and.lock().unwrap().set_tag("load_store_instr_1_and");
+        control_section.load_store_instr_2_and.lock().unwrap().set_tag("load_store_instr_2_and");
+        control_section.load_store_instr_3_and.lock().unwrap().set_tag("load_store_instr_3_and");
+        control_section.load_store_instr_4_and.lock().unwrap().set_tag("load_store_instr_4_and");
+        control_section.load_store_instr_5_and.lock().unwrap().set_tag("load_store_instr_5_and");
+        control_section.load_store_instr_6_and.lock().unwrap().set_tag("load_store_instr_6_and");
+        control_section.load_store_instr_7_and.lock().unwrap().set_tag("load_store_instr_7_and");
+        control_section.stepper_out_4_top_0_and.lock().unwrap().set_tag("stepper_out_4_top_0_and");
+        control_section.stepper_out_4_1_and.lock().unwrap().set_tag("stepper_out_4_1_and");
+        control_section.stepper_out_4_2_and.lock().unwrap().set_tag("stepper_out_4_2_and");
+        control_section.stepper_out_4_3_and.lock().unwrap().set_tag("stepper_out_4_3_and");
+        control_section.stepper_out_4_4_and.lock().unwrap().set_tag("stepper_out_4_4_and");
+        control_section.stepper_out_4_5_and.lock().unwrap().set_tag("stepper_out_4_5_and");
+        control_section.stepper_out_4_6_and.lock().unwrap().set_tag("stepper_out_4_6_and");
+        control_section.stepper_out_4_7_and.lock().unwrap().set_tag("stepper_out_4_7_and");
+        control_section.stepper_out_4_8_and.lock().unwrap().set_tag("stepper_out_4_8_and");
+        control_section.stepper_out_5_top_0_and.lock().unwrap().set_tag("stepper_out_5_top_0_and");
+        control_section.stepper_out_5_1_and.lock().unwrap().set_tag("stepper_out_5_1_and");
+        control_section.stepper_out_5_2_and.lock().unwrap().set_tag("stepper_out_5_2_and");
+        control_section.stepper_out_5_3_and.lock().unwrap().set_tag("stepper_out_5_3_and");
+        control_section.stepper_out_5_4_and.lock().unwrap().set_tag("stepper_out_5_4_and");
+        control_section.stepper_out_5_5_and.lock().unwrap().set_tag("stepper_out_5_5_and");
+        control_section.stepper_out_5_6_and.lock().unwrap().set_tag("stepper_out_5_6_and");
+        control_section.stepper_out_5_6_not.lock().unwrap().set_tag("stepper_out_5_6_not");
+        control_section.stepper_out_6_top_0_and.lock().unwrap().set_tag("stepper_out_6_top_0_and");
+        control_section.stepper_out_6_1_and.lock().unwrap().set_tag("stepper_out_6_1_and");
+        control_section.stepper_out_6_2_and.lock().unwrap().set_tag("stepper_out_6_2_and");
+        control_section.eight_input_and.lock().unwrap().set_tag("eight_input_and");
+        control_section.eight_input_and_not_loc_2.lock().unwrap().set_tag("eight_input_and_not_loc_2");
+        control_section.eight_input_and_not_loc_3.lock().unwrap().set_tag("eight_input_and_not_loc_3");
+        control_section.c_in_and.lock().unwrap().set_tag("c_in_and");
+        control_section.a_l_and.lock().unwrap().set_tag("a_l_and");
+        control_section.eq_and.lock().unwrap().set_tag("eq_and");
+        control_section.z_and.lock().unwrap().set_tag("z_and");
+        control_section.alu_input_or.lock().unwrap().set_tag("alu_input_or");
+        control_section.add_and.lock().unwrap().set_tag("add_and");
+        control_section.add_not.lock().unwrap().set_tag("add_not");
 
-        control_section.stepper.borrow_mut().toggle_print_each_input_output_gate(false);
+        control_section.stepper.lock().unwrap().toggle_print_each_input_output_gate(false);
 
         control_section.build_and_prime_circuit(output_gates_logic);
 
-        Rc::new(RefCell::new(control_section))
+        new_shared_mutex(control_section.get_unique_id().id(), control_section)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
 
         //Inputs
@@ -613,9 +613,8 @@ impl ControlSection {
         self.check_output();
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 
@@ -643,121 +642,122 @@ impl ControlSection {
             }
         }
 
-        check_output(&self.clk_and.borrow_mut().members);
-        check_output(&self.load_not.borrow_mut().members);
-        check_output(&self.stepper.borrow_mut().complex_gate.simple_gate);
-        check_output(&self.stepper_splitters[0].borrow_mut().members);
-        check_output(&self.stepper_splitters[1].borrow_mut().members);
-        check_output(&self.stepper_splitters[2].borrow_mut().members);
-        check_output(&self.stepper_splitters[3].borrow_mut().members);
-        check_output(&self.stepper_splitters[4].borrow_mut().members);
-        check_output(&self.stepper_splitters[5].borrow_mut().members);
-        check_output(&self.stepper_1_and.borrow_mut().members);
-        check_output(&self.bus_1_or.borrow_mut().members);
-        check_output(&self.ram_e_and.borrow_mut().members);
-        check_output(&self.ram_e_or.borrow_mut().members);
-        check_output(&self.acc_e_and.borrow_mut().members);
-        check_output(&self.acc_e_or.borrow_mut().members);
-        check_output(&self.iar_e_and.borrow_mut().members);
-        check_output(&self.iar_e_or.borrow_mut().members);
-        check_output(&self.io_clk_e_and.borrow_mut().members);
-        check_output(&self.io_clks_s_and.borrow_mut().members);
-        check_output(&self.r0_e_or.borrow_mut().members);
-        check_output(&self.r0_e_reg_b_and.borrow_mut().members);
-        check_output(&self.r0_e_reg_a_and.borrow_mut().members);
-        check_output(&self.r1_e_or.borrow_mut().members);
-        check_output(&self.r1_e_reg_b_and.borrow_mut().members);
-        check_output(&self.r1_e_reg_a_and.borrow_mut().members);
-        check_output(&self.r2_e_or.borrow_mut().members);
-        check_output(&self.r2_e_reg_b_and.borrow_mut().members);
-        check_output(&self.r2_e_reg_a_and.borrow_mut().members);
-        check_output(&self.r3_e_or.borrow_mut().members);
-        check_output(&self.r3_e_reg_b_and.borrow_mut().members);
-        check_output(&self.r3_e_reg_a_and.borrow_mut().members);
-        check_output(&self.r_e_reg_b_decoder.borrow_mut().complex_gate.simple_gate);
-        check_output(&self.r_e_reg_a_decoder.borrow_mut().complex_gate.simple_gate);
-        check_output(&self.mar_s_or.borrow_mut().members);
-        check_output(&self.mar_s_and.borrow_mut().members);
-        check_output(&self.mar_s_outer_or.borrow_mut().members);
-        check_output(&self.ram_s_or.borrow_mut().members);
-        check_output(&self.ram_s_load_and.borrow_mut().members);
-        check_output(&self.ram_s_and.borrow_mut().members);
-        check_output(&self.acc_s_or.borrow_mut().members);
-        check_output(&self.acc_s_and.borrow_mut().members);
-        check_output(&self.acc_s_outer_or.borrow_mut().members);
-        check_output(&self.iar_s_or.borrow_mut().members);
-        check_output(&self.iar_s_and.borrow_mut().members);
-        check_output(&self.iar_s_outer_or.borrow_mut().members);
-        check_output(&self.r0_s_or.borrow_mut().members);
-        check_output(&self.r0_s_and.borrow_mut().members);
-        check_output(&self.r1_s_or.borrow_mut().members);
-        check_output(&self.r1_s_and.borrow_mut().members);
-        check_output(&self.r2_s_or.borrow_mut().members);
-        check_output(&self.r2_s_and.borrow_mut().members);
-        check_output(&self.r3_s_or.borrow_mut().members);
-        check_output(&self.r3_s_and.borrow_mut().members);
-        check_output(&self.r_s_decoder.borrow_mut().complex_gate.simple_gate);
-        check_output(&self.ir_s_or.borrow_mut().members);
-        check_output(&self.ir_s_and.borrow_mut().members);
-        check_output(&self.tmp_s_or.borrow_mut().members);
-        check_output(&self.tmp_s_and.borrow_mut().members);
-        check_output(&self.reg_b_e_or.borrow_mut().members);
-        check_output(&self.reg_a_or.borrow_mut().members);
-        check_output(&self.alu_0_and.borrow_mut().members);
-        check_output(&self.alu_1_and.borrow_mut().members);
-        check_output(&self.alu_2_and.borrow_mut().members);
-        check_output(&self.flags_s_or.borrow_mut().members);
-        check_output(&self.flags_s_and.borrow_mut().members);
-        check_output(&self.flags_s_outer_or.borrow_mut().members);
-        check_output(&self.reg_b_s_or.borrow_mut().members);
-        check_output(&self.load_store_instr_not.borrow_mut().members);
-        check_output(&self.load_store_instr_decoder.borrow_mut().complex_gate.simple_gate);
-        check_output(&self.load_store_instr_0_top_and.borrow_mut().members);
-        check_output(&self.load_store_instr_1_and.borrow_mut().members);
-        check_output(&self.load_store_instr_2_and.borrow_mut().members);
-        check_output(&self.load_store_instr_3_and.borrow_mut().members);
-        check_output(&self.load_store_instr_4_and.borrow_mut().members);
-        check_output(&self.load_store_instr_5_and.borrow_mut().members);
-        check_output(&self.load_store_instr_6_and.borrow_mut().members);
-        check_output(&self.load_store_instr_7_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_top_0_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_1_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_2_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_3_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_4_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_5_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_6_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_7_and.borrow_mut().members);
-        check_output(&self.stepper_out_4_8_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_top_0_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_1_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_2_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_3_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_4_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_5_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_6_and.borrow_mut().members);
-        check_output(&self.stepper_out_5_6_not.borrow_mut().members);
-        check_output(&self.stepper_out_6_top_0_and.borrow_mut().members);
-        check_output(&self.stepper_out_6_1_and.borrow_mut().members);
-        check_output(&self.stepper_out_6_2_and.borrow_mut().members);
-        check_output(&self.eight_input_and.borrow_mut().members);
-        check_output(&self.eight_input_and_not_loc_2.borrow_mut().members);
-        check_output(&self.eight_input_and_not_loc_3.borrow_mut().members);
-        check_output(&self.c_in_and.borrow_mut().members);
-        check_output(&self.a_l_and.borrow_mut().members);
-        check_output(&self.eq_and.borrow_mut().members);
-        check_output(&self.z_and.borrow_mut().members);
-        check_output(&self.alu_input_or.borrow_mut().members);
-        check_output(&self.add_and.borrow_mut().members);
-        check_output(&self.add_not.borrow_mut().members);
+        check_output(&self.clk_and.lock().unwrap().members);
+        check_output(&self.load_not.lock().unwrap().members);
+        check_output(&self.stepper.lock().unwrap().complex_gate.simple_gate);
+        check_output(&self.stepper_splitters[0].lock().unwrap().members);
+        check_output(&self.stepper_splitters[1].lock().unwrap().members);
+        check_output(&self.stepper_splitters[2].lock().unwrap().members);
+        check_output(&self.stepper_splitters[3].lock().unwrap().members);
+        check_output(&self.stepper_splitters[4].lock().unwrap().members);
+        check_output(&self.stepper_splitters[5].lock().unwrap().members);
+        check_output(&self.stepper_1_and.lock().unwrap().members);
+        check_output(&self.bus_1_or.lock().unwrap().members);
+        check_output(&self.ram_e_and.lock().unwrap().members);
+        check_output(&self.ram_e_or.lock().unwrap().members);
+        check_output(&self.acc_e_and.lock().unwrap().members);
+        check_output(&self.acc_e_or.lock().unwrap().members);
+        check_output(&self.iar_e_and.lock().unwrap().members);
+        check_output(&self.iar_e_or.lock().unwrap().members);
+        check_output(&self.io_clk_e_and.lock().unwrap().members);
+        check_output(&self.io_clks_s_and.lock().unwrap().members);
+        check_output(&self.r0_e_or.lock().unwrap().members);
+        check_output(&self.r0_e_reg_b_and.lock().unwrap().members);
+        check_output(&self.r0_e_reg_a_and.lock().unwrap().members);
+        check_output(&self.r1_e_or.lock().unwrap().members);
+        check_output(&self.r1_e_reg_b_and.lock().unwrap().members);
+        check_output(&self.r1_e_reg_a_and.lock().unwrap().members);
+        check_output(&self.r2_e_or.lock().unwrap().members);
+        check_output(&self.r2_e_reg_b_and.lock().unwrap().members);
+        check_output(&self.r2_e_reg_a_and.lock().unwrap().members);
+        check_output(&self.r3_e_or.lock().unwrap().members);
+        check_output(&self.r3_e_reg_b_and.lock().unwrap().members);
+        check_output(&self.r3_e_reg_a_and.lock().unwrap().members);
+        check_output(&self.r_e_reg_b_decoder.lock().unwrap().complex_gate.simple_gate);
+        check_output(&self.r_e_reg_a_decoder.lock().unwrap().complex_gate.simple_gate);
+        check_output(&self.mar_s_or.lock().unwrap().members);
+        check_output(&self.mar_s_and.lock().unwrap().members);
+        check_output(&self.mar_s_outer_or.lock().unwrap().members);
+        check_output(&self.ram_s_or.lock().unwrap().members);
+        check_output(&self.ram_s_load_and.lock().unwrap().members);
+        check_output(&self.ram_s_and.lock().unwrap().members);
+        check_output(&self.acc_s_or.lock().unwrap().members);
+        check_output(&self.acc_s_and.lock().unwrap().members);
+        check_output(&self.acc_s_outer_or.lock().unwrap().members);
+        check_output(&self.iar_s_or.lock().unwrap().members);
+        check_output(&self.iar_s_and.lock().unwrap().members);
+        check_output(&self.iar_s_outer_or.lock().unwrap().members);
+        check_output(&self.r0_s_or.lock().unwrap().members);
+        check_output(&self.r0_s_and.lock().unwrap().members);
+        check_output(&self.r1_s_or.lock().unwrap().members);
+        check_output(&self.r1_s_and.lock().unwrap().members);
+        check_output(&self.r2_s_or.lock().unwrap().members);
+        check_output(&self.r2_s_and.lock().unwrap().members);
+        check_output(&self.r3_s_or.lock().unwrap().members);
+        check_output(&self.r3_s_and.lock().unwrap().members);
+        check_output(&self.r_s_decoder.lock().unwrap().complex_gate.simple_gate);
+        check_output(&self.ir_s_or.lock().unwrap().members);
+        check_output(&self.ir_s_and.lock().unwrap().members);
+        check_output(&self.tmp_s_or.lock().unwrap().members);
+        check_output(&self.tmp_s_and.lock().unwrap().members);
+        check_output(&self.reg_b_e_or.lock().unwrap().members);
+        check_output(&self.reg_a_or.lock().unwrap().members);
+        check_output(&self.alu_0_and.lock().unwrap().members);
+        check_output(&self.alu_1_and.lock().unwrap().members);
+        check_output(&self.alu_2_and.lock().unwrap().members);
+        check_output(&self.flags_s_or.lock().unwrap().members);
+        check_output(&self.flags_s_and.lock().unwrap().members);
+        check_output(&self.flags_s_outer_or.lock().unwrap().members);
+        check_output(&self.reg_b_s_or.lock().unwrap().members);
+        check_output(&self.load_store_instr_not.lock().unwrap().members);
+        check_output(&self.load_store_instr_decoder.lock().unwrap().complex_gate.simple_gate);
+        check_output(&self.load_store_instr_0_top_and.lock().unwrap().members);
+        check_output(&self.load_store_instr_1_and.lock().unwrap().members);
+        check_output(&self.load_store_instr_2_and.lock().unwrap().members);
+        check_output(&self.load_store_instr_3_and.lock().unwrap().members);
+        check_output(&self.load_store_instr_4_and.lock().unwrap().members);
+        check_output(&self.load_store_instr_5_and.lock().unwrap().members);
+        check_output(&self.load_store_instr_6_and.lock().unwrap().members);
+        check_output(&self.load_store_instr_7_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_top_0_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_1_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_2_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_3_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_4_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_5_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_6_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_7_and.lock().unwrap().members);
+        check_output(&self.stepper_out_4_8_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_top_0_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_1_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_2_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_3_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_4_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_5_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_6_and.lock().unwrap().members);
+        check_output(&self.stepper_out_5_6_not.lock().unwrap().members);
+        check_output(&self.stepper_out_6_top_0_and.lock().unwrap().members);
+        check_output(&self.stepper_out_6_1_and.lock().unwrap().members);
+        check_output(&self.stepper_out_6_2_and.lock().unwrap().members);
+        check_output(&self.eight_input_and.lock().unwrap().members);
+        check_output(&self.eight_input_and_not_loc_2.lock().unwrap().members);
+        check_output(&self.eight_input_and_not_loc_3.lock().unwrap().members);
+        check_output(&self.c_in_and.lock().unwrap().members);
+        check_output(&self.a_l_and.lock().unwrap().members);
+        check_output(&self.eq_and.lock().unwrap().members);
+        check_output(&self.z_and.lock().unwrap().members);
+        check_output(&self.alu_input_or.lock().unwrap().members);
+        check_output(&self.add_and.lock().unwrap().members);
+        check_output(&self.add_not.lock().unwrap().members);
     }
 
     fn connect_stepper_to_splitter(&mut self) {
         for i in 0..self.stepper_splitters.len() {
-            self.stepper.borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.stepper.clone(),
                 i,
-                0,
                 self.stepper_splitters[i].clone(),
+                0,
             );
         }
     }
@@ -767,10 +767,11 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::CLOCK)
             ].clone();
 
-        clk_input.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            clk_input.clone(),
             0,
             self.clk_and.clone(),
+            0,
         );
     }
 
@@ -779,76 +780,88 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::CLOCK_ENABLE)
             ].clone();
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            clke_input.clone(),
             0,
             self.iar_e_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             1,
-            0,
             self.ram_e_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             2,
-            0,
             self.acc_e_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             3,
-            0,
             self.io_clk_e_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             4,
-            0,
             self.r0_e_reg_b_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             5,
-            0,
             self.r1_e_reg_b_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             6,
-            0,
             self.r2_e_reg_b_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             7,
-            0,
             self.r3_e_reg_b_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             8,
-            0,
             self.r0_e_reg_a_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             9,
-            0,
             self.r1_e_reg_a_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             10,
-            0,
             self.r2_e_reg_a_and.clone(),
+            0,
         );
 
-        clke_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clke_input.clone(),
             11,
-            0,
             self.r3_e_reg_a_and.clone(),
+            0,
         );
     }
 
@@ -857,82 +870,95 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::CLOCK_SET)
             ].clone();
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            clks_input.clone(),
             0,
             self.ir_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             1,
-            0,
             self.mar_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             2,
-            0,
             self.iar_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             3,
-            0,
             self.acc_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             4,
-            1,
             self.ram_s_load_and.clone(),
+            1,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             5,
-            0,
             self.ram_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             6,
-            0,
             self.tmp_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             7,
-            0,
             self.flags_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             8,
-            0,
             self.io_clks_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             9,
-            0,
             self.r0_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             10,
-            0,
             self.r1_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             11,
-            0,
             self.r2_s_and.clone(),
+            0,
         );
 
-        clks_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            clks_input.clone(),
             12,
-            0,
             self.r3_s_and.clone(),
+            0,
         );
     }
 
@@ -941,10 +967,11 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::HIGH_LVL_MARS)
             ].clone();
 
-        high_level_mars.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            high_level_mars.clone(),
             0,
             self.mar_s_or.clone(),
+            0,
         );
     }
 
@@ -953,70 +980,81 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::HIGH_LVL_RESET)
             ].clone();
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            high_level_reset.clone(),
             0,
             self.ir_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            high_level_reset.clone(),
             1,
             self.mar_s_or.clone(),
+            1,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             2,
-            0,
             self.iar_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             3,
-            0,
             self.acc_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             4,
-            0,
             self.tmp_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             5,
-            0,
             self.flags_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             6,
-            0,
             self.r0_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             7,
-            0,
             self.r1_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             8,
-            0,
             self.r2_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             9,
-            0,
             self.r3_s_or.clone(),
+            0,
         );
 
-        high_level_reset.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_reset.clone(),
             10,
-            0,
             self.reset_not.clone(),
+            0,
         );
     }
 
@@ -1025,16 +1063,18 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::HIGH_LVL_LOAD)
             ].clone();
 
-        high_level_load.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            high_level_load.clone(),
             0,
             self.load_not.clone(),
+            0,
         );
 
-        high_level_load.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            high_level_load.clone(),
             1,
-            0,
             self.ram_s_load_and.clone(),
+            0,
         );
     }
 
@@ -1043,10 +1083,11 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::C_IN)
             ].clone();
 
-        c_in_input.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            c_in_input.clone(),
             0,
             self.c_in_and.clone(),
+            0,
         );
     }
 
@@ -1055,10 +1096,11 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::A_L)
             ].clone();
 
-        a_l_input.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            a_l_input.clone(),
             0,
             self.a_l_and.clone(),
+            0,
         );
     }
 
@@ -1067,10 +1109,11 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::EQ)
             ].clone();
 
-        eq_input.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            eq_input.clone(),
             0,
             self.eq_and.clone(),
+            0,
         );
     }
 
@@ -1079,1797 +1122,2038 @@ impl ControlSection {
             self.get_index_from_tag(ControlSection::Z)
             ].clone();
 
-        z_input.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            z_input.clone(),
             0,
             self.z_and.clone(),
+            0,
         );
     }
 
     fn connect_ir_0_input(&mut self) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_0")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            1,
             self.z_and.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
             1,
-            7,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            1,
             self.eight_input_and.clone(),
+            7,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             2,
-            0,
             self.r_e_reg_b_decoder.clone(),
+            0,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             3,
-            0,
             self.r_s_decoder.clone(),
+            0,
         );
     }
 
     fn connect_ir_1_input(&mut self) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_1")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            1,
             self.eq_and.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             1,
-            6,
             self.eight_input_and.clone(),
+            6,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             2,
-            1,
             self.r_e_reg_b_decoder.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             3,
-            1,
             self.r_s_decoder.clone(),
+            1,
         );
     }
 
     fn connect_ir_2_input(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_2")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            1,
             self.a_l_and.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
             1,
-            5,
-            self.eight_input_and.clone(),
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
+            1,
+            self.eight_input_and.clone(),
+            5,
+        );
+
+        connect_gates(
+            input_gate.clone(),
             2,
-            0,
             self.r_e_reg_a_decoder.clone(),
+            0,
         );
 
         let io_index = self.get_index_from_tag(ControlSection::IO);
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             3,
-            0,
             output_gates[io_index].clone(),
+            0,
         );
     }
 
     fn connect_ir_3_input(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_3")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            1,
             self.c_in_and.clone(),
+            1,
         );
 
         let da_index = self.get_index_from_tag(ControlSection::DA);
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             1,
-            0,
             output_gates[da_index].clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            2,
-            4,
-            self.eight_input_and.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            3,
-            1,
-            self.r_e_reg_a_decoder.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            4,
-            2,
-            self.stepper_out_4_8_and.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            5,
             0,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            2,
+            self.eight_input_and.clone(),
+            4,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            3,
+            self.r_e_reg_a_decoder.clone(),
+            1,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            4,
+            self.stepper_out_4_8_and.clone(),
+            2,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            5,
             self.stepper_out_5_6_not.clone(),
+            0,
         );
     }
 
     fn connect_ir_4_input(&mut self) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_4")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            2,
             self.alu_0_and.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            1,
-            0,
-            self.eight_input_and_not_loc_3.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            0,
-            self.load_store_instr_decoder.clone(),
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            3,
+        connect_gates(
+            input_gate.clone(),
+            1,
+            self.eight_input_and_not_loc_3.clone(),
             0,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            2,
+            self.load_store_instr_decoder.clone(),
+            0,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            3,
             self.add_and.clone(),
+            0,
         );
     }
 
     fn connect_ir_5_input(&mut self) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_5")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            2,
             self.alu_1_and.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            1,
-            0,
-            self.eight_input_and_not_loc_2.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
             2,
-            1,
-            self.load_store_instr_decoder.clone(),
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            3,
+        connect_gates(
+            input_gate.clone(),
             1,
+            self.eight_input_and_not_loc_2.clone(),
+            0,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            2,
+            self.load_store_instr_decoder.clone(),
+            1,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            3,
             self.add_and.clone(),
+            1,
         );
     }
 
     fn connect_ir_6_input(&mut self) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_6")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            2,
             self.alu_2_and.clone(),
+            2,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            input_gate.clone(),
             1,
             self.eight_input_and.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            2,
+        connect_gates(
+            input_gate.clone(),
             2,
             self.load_store_instr_decoder.clone(),
+            2,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             3,
-            2,
             self.add_and.clone(),
+            2,
         );
     }
 
     fn connect_ir_7_input(&mut self) {
         let input_gate = self.complex_gate.input_gates[self.get_index_from_tag("IR_7")].clone();
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             0,
-            1,
             self.alu_0_and.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            input_gate.clone(),
             1,
             self.alu_1_and.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             2,
-            1,
             self.alu_2_and.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             3,
-            0,
             self.eight_input_and.clone(),
-        );
-
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            4,
             0,
+        );
+
+        connect_gates(
+            input_gate.clone(),
+            4,
             self.load_store_instr_not.clone(),
+            0,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             5,
-            1,
             self.stepper_out_4_top_0_and.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             6,
-            1,
             self.stepper_out_5_top_0_and.clone(),
+            1,
         );
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            input_gate.clone(),
             7,
-            1,
             self.stepper_out_6_top_0_and.clone(),
+            1,
         );
     }
 
     fn clk_and_connect(&mut self) {
-        let clk_index = self.stepper.borrow_mut().get_index_from_tag("CLK");
-        self.clk_and.borrow_mut().connect_output_to_next_gate(
+        let clk_index = self.stepper.lock().unwrap().get_index_from_tag("CLK");
+        connect_gates(
+            self.clk_and.clone(),
             0,
-            clk_index,
             self.stepper.clone(),
+            clk_index,
         );
     }
 
     fn load_not_connect(&mut self) {
-        self.load_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_not.clone(),
             0,
-            1,
             self.clk_and.clone(),
+            1,
         );
 
-        self.load_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_not.clone(),
             1,
-            0,
             self.stepper_1_and.clone(),
+            0,
         );
     }
 
     fn reset_not_connect(&mut self) {
-        self.reset_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reset_not.clone(),
             0,
-            2,
             self.clk_and.clone(),
+            2,
         );
 
-        self.reset_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reset_not.clone(),
             1,
-            2,
             self.stepper_1_and.clone(),
+            2,
         );
     }
 
     fn stepper_splitters_1_connect(&mut self) {
-        self.stepper_splitters[0].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[0].clone(),
             0,
-            1,
             self.stepper_1_and.clone(),
+            1,
         );
     }
 
     fn stepper_splitters_2_connect(&mut self) {
-        self.stepper_splitters[1].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[1].clone(),
             0,
-            1,
             self.ir_s_and.clone(),
+            1,
         );
 
-        self.stepper_splitters[1].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[1].clone(),
             1,
-            0,
             self.ram_e_or.clone(),
+            0,
         );
     }
 
     fn stepper_splitters_3_connect(&mut self) {
-        self.stepper_splitters[2].borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_splitters[2].clone(),
             0,
             self.iar_s_outer_or.clone(),
+            0,
         );
 
-        self.stepper_splitters[2].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[2].clone(),
             1,
-            0,
             self.acc_e_or.clone(),
+            0,
         );
     }
 
     fn stepper_splitters_4_connect(&mut self) {
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             0,
             self.stepper_out_4_top_0_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             1,
-            0,
             self.stepper_out_4_1_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             2,
-            0,
             self.stepper_out_4_2_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             3,
-            0,
             self.stepper_out_4_3_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             4,
-            0,
             self.stepper_out_4_4_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             5,
-            0,
             self.stepper_out_4_5_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             6,
-            0,
             self.stepper_out_4_6_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             7,
-            0,
             self.stepper_out_4_7_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[3].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[3].clone(),
             8,
-            0,
             self.stepper_out_4_8_and.clone(),
+            0,
         );
     }
 
     fn stepper_splitters_5_connect(&mut self) {
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             0,
             self.stepper_out_5_top_0_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             1,
-            0,
             self.stepper_out_5_1_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             2,
-            0,
             self.stepper_out_5_2_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             3,
-            0,
             self.stepper_out_5_3_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             4,
-            0,
             self.stepper_out_5_4_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             5,
-            0,
             self.stepper_out_5_5_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             6,
-            0,
             self.stepper_out_5_6_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             7,
-            0,
             self.alu_0_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             8,
-            0,
             self.alu_1_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[4].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[4].clone(),
             9,
-            0,
             self.alu_2_and.clone(),
+            0,
         );
     }
 
     fn stepper_splitters_6_connect(&mut self) {
-        self.stepper_splitters[5].borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_splitters[5].clone(),
             0,
             self.stepper_out_6_top_0_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[5].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[5].clone(),
             1,
-            0,
             self.stepper_out_6_1_and.clone(),
+            0,
         );
 
-        self.stepper_splitters[5].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_splitters[5].clone(),
             2,
-            0,
             self.stepper_out_6_2_and.clone(),
+            0,
         );
     }
 
     fn stepper_1_and_connect(&mut self) {
-        self.stepper_1_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_1_and.clone(),
             0,
             self.bus_1_or.clone(),
+            0,
         );
 
-        self.stepper_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_1_and.clone(),
             1,
-            0,
             self.mar_s_outer_or.clone(),
+            0,
         );
 
-        self.stepper_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_1_and.clone(),
             2,
-            0,
             self.iar_e_or.clone(),
+            0,
         );
 
-        self.stepper_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_1_and.clone(),
             3,
-            0,
             self.acc_s_outer_or.clone(),
+            0,
         );
     }
 
     fn bus_1_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let bus_1_index = self.get_index_from_tag(ControlSection::BUS_1);
-        self.bus_1_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.bus_1_or.clone(),
             0,
             output_gates[bus_1_index].clone(),
+            0,
         );
     }
 
     fn ram_e_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let ram_e_index = self.get_index_from_tag(ControlSection::RAM_E);
-        self.ram_e_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.ram_e_and.clone(),
             0,
             output_gates[ram_e_index].clone(),
+            0,
         );
     }
 
     fn ram_e_or_connect(&mut self) {
-        self.ram_e_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.ram_e_or.clone(),
             0,
-            1,
             self.ram_e_and.clone(),
+            1,
         );
     }
 
     fn acc_e_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let acc_e_index = self.get_index_from_tag(ControlSection::ACC_E);
-        self.acc_e_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.acc_e_and.clone(),
             0,
             output_gates[acc_e_index].clone(),
+            0,
         );
     }
 
     fn acc_e_or_connect(&mut self) {
-        self.acc_e_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.acc_e_or.clone(),
             0,
-            1,
             self.acc_e_and.clone(),
+            1,
         );
     }
 
     fn iar_e_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let iar_e_index = self.get_index_from_tag(ControlSection::IAR_E);
-        self.iar_e_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.iar_e_and.clone(),
             0,
             output_gates[iar_e_index].clone(),
+            0,
         );
     }
 
     fn iar_e_or_connect(&mut self) {
-        self.iar_e_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.iar_e_or.clone(),
             0,
-            1,
             self.iar_e_and.clone(),
+            1,
         );
     }
 
     fn io_clk_e_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let io_clk_e_index = self.get_index_from_tag(ControlSection::IO_CLK_E);
-        self.io_clk_e_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.io_clk_e_and.clone(),
             0,
             output_gates[io_clk_e_index].clone(),
+            0,
         );
     }
 
     fn io_clks_s_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let io_clk_s_index = self.get_index_from_tag(ControlSection::IO_CLK_S);
-        self.io_clks_s_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.io_clks_s_and.clone(),
             0,
             output_gates[io_clk_s_index].clone(),
+            0,
         );
     }
 
     fn r0_e_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r0_e_index = self.get_index_from_tag(ControlSection::R0_E);
-        self.r0_e_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r0_e_or.clone(),
             0,
             output_gates[r0_e_index].clone(),
+            0,
         );
     }
 
     fn r0_e_reg_b_and_connect(&mut self) {
-        self.r0_e_reg_b_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r0_e_reg_b_and.clone(),
             0,
             self.r0_e_or.clone(),
+            0,
         );
     }
 
     fn r0_e_reg_a_and_connect(&mut self) {
-        self.r0_e_reg_a_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r0_e_reg_a_and.clone(),
             0,
-            1,
             self.r0_e_or.clone(),
+            1,
         );
     }
 
     fn r1_e_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r1_e_index = self.get_index_from_tag(ControlSection::R1_E);
-        self.r1_e_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r1_e_or.clone(),
             0,
             output_gates[r1_e_index].clone(),
+            0,
         );
     }
 
     fn r1_e_reg_b_and_connect(&mut self) {
-        self.r1_e_reg_b_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r1_e_reg_b_and.clone(),
             0,
             self.r1_e_or.clone(),
+            0,
         );
     }
 
     fn r1_e_reg_a_and_connect(&mut self) {
-        self.r1_e_reg_a_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r1_e_reg_a_and.clone(),
             0,
-            1,
             self.r1_e_or.clone(),
+            1,
         );
     }
 
     fn r2_e_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r2_e_index = self.get_index_from_tag(ControlSection::R2_E);
-        self.r2_e_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r2_e_or.clone(),
             0,
             output_gates[r2_e_index].clone(),
+            0,
         );
     }
 
     fn r2_e_reg_b_and_connect(&mut self) {
-        self.r2_e_reg_b_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r2_e_reg_b_and.clone(),
             0,
             self.r2_e_or.clone(),
+            0,
         );
     }
 
     fn r2_e_reg_a_and_connect(&mut self) {
-        self.r2_e_reg_a_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r2_e_reg_a_and.clone(),
             0,
-            1,
             self.r2_e_or.clone(),
+            1,
         );
     }
 
     fn r3_e_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r3_e_index = self.get_index_from_tag(ControlSection::R3_E);
-        self.r3_e_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r3_e_or.clone(),
             0,
             output_gates[r3_e_index].clone(),
+            0,
         );
     }
 
     fn r3_e_reg_b_and_connect(&mut self) {
-        self.r3_e_reg_b_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r3_e_reg_b_and.clone(),
             0,
             self.r3_e_or.clone(),
+            0,
         );
     }
 
     fn r3_e_reg_a_and_connect(&mut self) {
-        self.r3_e_reg_a_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r3_e_reg_a_and.clone(),
             0,
-            1,
             self.r3_e_or.clone(),
+            1,
         );
     }
 
     fn r_e_reg_b_decoder_connect(&mut self) {
-        self.r_e_reg_b_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_e_reg_b_decoder.clone(),
             0,
-            2,
             self.r0_e_reg_b_and.clone(),
+            2,
         );
 
-        self.r_e_reg_b_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_e_reg_b_decoder.clone(),
             1,
-            2,
             self.r1_e_reg_b_and.clone(),
+            2,
         );
 
-        self.r_e_reg_b_decoder.borrow_mut().connect_output_to_next_gate(
-            2,
+        connect_gates(
+            self.r_e_reg_b_decoder.clone(),
             2,
             self.r2_e_reg_b_and.clone(),
+            2,
         );
 
-        self.r_e_reg_b_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_e_reg_b_decoder.clone(),
             3,
-            2,
             self.r3_e_reg_b_and.clone(),
+            2,
         );
     }
 
     fn r_e_reg_a_decoder_connect(&mut self) {
-        self.r_e_reg_a_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_e_reg_a_decoder.clone(),
             0,
-            2,
             self.r0_e_reg_a_and.clone(),
+            2,
         );
 
-        self.r_e_reg_a_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_e_reg_a_decoder.clone(),
             1,
-            2,
             self.r1_e_reg_a_and.clone(),
+            2,
         );
 
-        self.r_e_reg_a_decoder.borrow_mut().connect_output_to_next_gate(
-            2,
+        connect_gates(
+            self.r_e_reg_a_decoder.clone(),
             2,
             self.r2_e_reg_a_and.clone(),
+            2,
         );
 
-        self.r_e_reg_a_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_e_reg_a_decoder.clone(),
             3,
-            2,
             self.r3_e_reg_a_and.clone(),
+            2,
         );
     }
 
     fn mar_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let mar_s_index = self.get_index_from_tag(ControlSection::MAR_S);
-        self.mar_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.mar_s_or.clone(),
             0,
             output_gates[mar_s_index].clone(),
+            0,
         );
     }
 
     fn mar_s_and_connect(&mut self) {
-        self.mar_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.mar_s_and.clone(),
             0,
-            2,
             self.mar_s_or.clone(),
+            2,
         );
     }
 
     fn mar_s_outer_or_connect(&mut self) {
-        self.mar_s_outer_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.mar_s_outer_or.clone(),
             0,
-            1,
             self.mar_s_and.clone(),
+            1,
         );
     }
 
     fn ram_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let ram_s_index = self.get_index_from_tag(ControlSection::RAM_S);
-        self.ram_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.ram_s_or.clone(),
             0,
             output_gates[ram_s_index].clone(),
+            0,
         );
     }
 
     fn ram_s_load_and_connect(&mut self) {
-        self.ram_s_load_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.ram_s_load_and.clone(),
             0,
             self.ram_s_or.clone(),
+            0,
         );
     }
 
     fn ram_s_and_connect(&mut self) {
-        self.ram_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.ram_s_and.clone(),
             0,
-            1,
             self.ram_s_or.clone(),
+            1,
         );
     }
 
     fn acc_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let acc_s_index = self.get_index_from_tag(ControlSection::ACC_S);
-        self.acc_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.acc_s_or.clone(),
             0,
             output_gates[acc_s_index].clone(),
+            0,
         );
     }
 
     fn acc_s_and_connect(&mut self) {
-        self.acc_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.acc_s_and.clone(),
             0,
-            1,
             self.acc_s_or.clone(),
+            1,
         );
     }
 
     fn acc_s_outer_or_connect(&mut self) {
-        self.acc_s_outer_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.acc_s_outer_or.clone(),
             0,
-            1,
             self.acc_s_and.clone(),
+            1,
         );
     }
 
     fn iar_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let ias_s_index = self.get_index_from_tag(ControlSection::IAR_S);
-        self.iar_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.iar_s_or.clone(),
             0,
             output_gates[ias_s_index].clone(),
+            0,
         );
     }
 
     fn iar_s_and_connect(&mut self) {
-        self.iar_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.iar_s_and.clone(),
             0,
-            1,
             self.iar_s_or.clone(),
+            1,
         );
     }
 
     fn iar_s_outer_or_connect(&mut self) {
-        self.iar_s_outer_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.iar_s_outer_or.clone(),
             0,
-            1,
             self.iar_s_and.clone(),
+            1,
         );
     }
 
     fn r0_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r0_s_index = self.get_index_from_tag(ControlSection::R0_S);
-        self.r0_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r0_s_or.clone(),
             0,
             output_gates[r0_s_index].clone(),
+            0,
         );
     }
 
     fn r0_s_and_connect(&mut self) {
-        self.r0_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r0_s_and.clone(),
             0,
-            1,
             self.r0_s_or.clone(),
+            1,
         );
     }
 
     fn r1_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r1_s_index = self.get_index_from_tag(ControlSection::R1_S);
-        self.r1_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r1_s_or.clone(),
             0,
             output_gates[r1_s_index].clone(),
+            0,
         );
     }
 
     fn r1_s_and_connect(&mut self) {
-        self.r1_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r1_s_and.clone(),
             0,
-            1,
             self.r1_s_or.clone(),
+            1,
         );
     }
 
     fn r2_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r2_s_index = self.get_index_from_tag(ControlSection::R2_S);
-        self.r2_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r2_s_or.clone(),
             0,
             output_gates[r2_s_index].clone(),
+            0,
         );
     }
 
     fn r2_s_and_connect(&mut self) {
-        self.r2_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r2_s_and.clone(),
             0,
-            1,
             self.r2_s_or.clone(),
+            1,
         );
     }
 
     fn r3_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let r2_s_index = self.get_index_from_tag(ControlSection::R3_S);
-        self.r3_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.r3_s_or.clone(),
             0,
             output_gates[r2_s_index].clone(),
+            0,
         );
     }
 
     fn r3_s_and_connect(&mut self) {
-        self.r3_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r3_s_and.clone(),
             0,
-            1,
             self.r3_s_or.clone(),
+            1,
         );
     }
 
     fn r_s_decoder_connect(&mut self) {
-        self.r_s_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_s_decoder.clone(),
             0,
-            2,
             self.r0_s_and.clone(),
+            2,
         );
 
-        self.r_s_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_s_decoder.clone(),
             1,
-            2,
             self.r1_s_and.clone(),
+            2,
         );
 
-        self.r_s_decoder.borrow_mut().connect_output_to_next_gate(
-            2,
+        connect_gates(
+            self.r_s_decoder.clone(),
             2,
             self.r2_s_and.clone(),
+            2,
         );
 
-        self.r_s_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.r_s_decoder.clone(),
             3,
-            2,
             self.r3_s_and.clone(),
+            2,
         );
     }
 
     fn ir_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let ir_s_index = self.get_index_from_tag(ControlSection::IR_S);
-        self.ir_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.ir_s_or.clone(),
             0,
             output_gates[ir_s_index].clone(),
+            0,
         );
     }
 
     fn ir_s_and_connect(&mut self) {
-        self.ir_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.ir_s_and.clone(),
             0,
-            1,
             self.ir_s_or.clone(),
+            1,
         );
     }
 
     fn tmp_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let tmp_s_index = self.get_index_from_tag(ControlSection::TMP_S);
-        self.tmp_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.tmp_s_or.clone(),
             0,
             output_gates[tmp_s_index].clone(),
+            0,
         );
     }
 
     fn tmp_s_and_connect(&mut self) {
-        self.tmp_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.tmp_s_and.clone(),
             0,
-            1,
             self.tmp_s_or.clone(),
+            1,
         );
     }
 
     fn reg_b_e_or_connect(&mut self) {
-        self.reg_b_e_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_b_e_or.clone(),
             0,
-            1,
             self.r0_e_reg_b_and.clone(),
+            1,
         );
 
-        self.reg_b_e_or.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.reg_b_e_or.clone(),
             1,
             self.r1_e_reg_b_and.clone(),
+            1,
         );
 
-        self.reg_b_e_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_b_e_or.clone(),
             2,
-            1,
             self.r2_e_reg_b_and.clone(),
+            1,
         );
 
-        self.reg_b_e_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_b_e_or.clone(),
             3,
-            1,
             self.r3_e_reg_b_and.clone(),
+            1,
         );
     }
 
     fn reg_a_or_connect(&mut self) {
-        self.reg_a_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_a_or.clone(),
             0,
-            1,
             self.r0_e_reg_a_and.clone(),
+            1,
         );
 
-        self.reg_a_or.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.reg_a_or.clone(),
             1,
             self.r1_e_reg_a_and.clone(),
+            1,
         );
 
-        self.reg_a_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_a_or.clone(),
             2,
-            1,
             self.r2_e_reg_a_and.clone(),
+            1,
         );
 
-        self.reg_a_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_a_or.clone(),
             3,
-            1,
             self.r3_e_reg_a_and.clone(),
+            1,
         );
     }
 
     fn alu_0_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let alu_0_index = self.get_index_from_tag(ControlSection::ALU_0);
-        self.alu_0_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.alu_0_and.clone(),
             0,
             output_gates[alu_0_index].clone(),
+            0,
         );
     }
 
     fn alu_1_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let alu_1_index = self.get_index_from_tag(ControlSection::ALU_1);
-        self.alu_1_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.alu_1_and.clone(),
             0,
             output_gates[alu_1_index].clone(),
+            0,
         );
     }
 
     fn alu_2_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let alu_2_index = self.get_index_from_tag(ControlSection::ALU_2);
-        self.alu_2_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.alu_2_and.clone(),
             0,
             output_gates[alu_2_index].clone(),
+            0,
         );
     }
 
     fn flags_s_or_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let flag_s_index = self.get_index_from_tag(ControlSection::FLAG_S);
-        self.flags_s_or.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.flags_s_or.clone(),
             0,
             output_gates[flag_s_index].clone(),
+            0,
         );
     }
 
     fn flags_s_and_connect(&mut self) {
-        self.flags_s_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.flags_s_and.clone(),
             0,
-            1,
             self.flags_s_or.clone(),
+            1,
         );
     }
 
     fn flags_s_outer_or_connect(&mut self) {
-        self.flags_s_outer_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.flags_s_outer_or.clone(),
             0,
-            1,
             self.flags_s_and.clone(),
+            1,
         );
     }
 
     fn reg_b_s_or_connect(&mut self) {
-        self.reg_b_s_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_b_s_or.clone(),
             0,
-            1,
             self.r0_s_and.clone(),
+            1,
         );
 
-        self.reg_b_s_or.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.reg_b_s_or.clone(),
             1,
             self.r1_s_and.clone(),
+            1,
         );
 
-        self.reg_b_s_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_b_s_or.clone(),
             2,
-            1,
             self.r2_s_and.clone(),
+            1,
         );
 
-        self.reg_b_s_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.reg_b_s_or.clone(),
             3,
-            1,
             self.r3_s_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_not_connect(&mut self) {
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.load_store_instr_not.clone(),
             0,
             self.load_store_instr_0_top_and.clone(),
+            0,
         );
 
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_not.clone(),
             1,
-            0,
             self.load_store_instr_1_and.clone(),
+            0,
         );
 
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_not.clone(),
             2,
-            0,
             self.load_store_instr_2_and.clone(),
+            0,
         );
 
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_not.clone(),
             3,
-            0,
             self.load_store_instr_3_and.clone(),
+            0,
         );
 
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_not.clone(),
             4,
-            0,
             self.load_store_instr_4_and.clone(),
+            0,
         );
 
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_not.clone(),
             5,
-            0,
             self.load_store_instr_5_and.clone(),
+            0,
         );
 
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_not.clone(),
             6,
-            0,
             self.load_store_instr_6_and.clone(),
+            0,
         );
 
-        self.load_store_instr_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_not.clone(),
             7,
-            0,
             self.load_store_instr_7_and.clone(),
+            0,
         );
     }
 
     fn load_store_instr_decoder_connect(&mut self) {
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             0,
-            1,
             self.load_store_instr_0_top_and.clone(),
+            1,
         );
 
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             1,
             self.load_store_instr_1_and.clone(),
+            1,
         );
 
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             2,
-            1,
             self.load_store_instr_2_and.clone(),
+            1,
         );
 
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             3,
-            1,
             self.load_store_instr_3_and.clone(),
+            1,
         );
 
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             4,
-            1,
             self.load_store_instr_4_and.clone(),
+            1,
         );
 
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             5,
-            1,
             self.load_store_instr_5_and.clone(),
+            1,
         );
 
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             6,
-            1,
             self.load_store_instr_6_and.clone(),
+            1,
         );
 
-        self.load_store_instr_decoder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_decoder.clone(),
             7,
-            1,
             self.load_store_instr_7_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_0_top_and_connect(&mut self) {
-        self.load_store_instr_0_top_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_0_top_and.clone(),
             0,
-            1,
             self.stepper_out_4_1_and.clone(),
+            1,
         );
 
-        self.load_store_instr_0_top_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.load_store_instr_0_top_and.clone(),
             1,
             self.stepper_out_5_1_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_1_and_connect(&mut self) {
-        self.load_store_instr_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_1_and.clone(),
             0,
-            1,
             self.stepper_out_4_2_and.clone(),
+            1,
         );
 
-        self.load_store_instr_1_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.load_store_instr_1_and.clone(),
             1,
             self.stepper_out_5_2_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_2_and_connect(&mut self) {
-        self.load_store_instr_2_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_2_and.clone(),
             0,
-            1,
             self.stepper_out_4_3_and.clone(),
+            1,
         );
 
-        self.load_store_instr_2_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.load_store_instr_2_and.clone(),
             1,
             self.stepper_out_5_3_and.clone(),
+            1,
         );
 
-        self.load_store_instr_2_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_2_and.clone(),
             2,
-            1,
             self.stepper_out_6_1_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_3_and_connect(&mut self) {
-        self.load_store_instr_3_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_3_and.clone(),
             0,
-            1,
             self.stepper_out_4_4_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_4_and_connect(&mut self) {
-        self.load_store_instr_4_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_4_and.clone(),
             0,
-            1,
             self.stepper_out_4_5_and.clone(),
+            1,
         );
 
-        self.load_store_instr_4_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.load_store_instr_4_and.clone(),
             1,
             self.stepper_out_5_4_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_5_and_connect(&mut self) {
-        self.load_store_instr_5_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_5_and.clone(),
             0,
-            1,
             self.stepper_out_4_6_and.clone(),
+            1,
         );
 
-        self.load_store_instr_5_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.load_store_instr_5_and.clone(),
             1,
             self.stepper_out_5_5_and.clone(),
+            1,
         );
 
-        self.load_store_instr_5_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_5_and.clone(),
             2,
-            1,
             self.stepper_out_6_2_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_6_and_connect(&mut self) {
-        self.load_store_instr_6_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_6_and.clone(),
             0,
-            1,
             self.stepper_out_4_7_and.clone(),
+            1,
         );
     }
 
     fn load_store_instr_7_and_connect(&mut self) {
-        self.load_store_instr_7_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.load_store_instr_7_and.clone(),
             0,
-            1,
             self.stepper_out_4_8_and.clone(),
+            1,
         );
 
-        self.load_store_instr_7_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.load_store_instr_7_and.clone(),
             1,
             self.stepper_out_5_6_and.clone(),
+            1,
         );
     }
 
     fn stepper_out_4_top_0_and_connect(&mut self) {
-        self.stepper_out_4_top_0_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_out_4_top_0_and.clone(),
             0,
             self.reg_b_e_or.clone(),
+            0,
         );
 
-        self.stepper_out_4_top_0_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.stepper_out_4_top_0_and.clone(),
             1,
             self.tmp_s_and.clone(),
+            1,
         );
     }
 
     fn stepper_out_4_1_and_connect(&mut self) {
-        self.stepper_out_4_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_1_and.clone(),
             0,
-            1,
             self.reg_a_or.clone(),
+            1,
         );
 
-        self.stepper_out_4_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_1_and.clone(),
             1,
-            3,
             self.mar_s_outer_or.clone(),
+            3,
         );
     }
 
     fn stepper_out_4_2_and_connect(&mut self) {
-        self.stepper_out_4_2_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_out_4_2_and.clone(),
             0,
             self.reg_a_or.clone(),
+            0,
         );
 
-        self.stepper_out_4_2_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_2_and.clone(),
             1,
-            4,
             self.mar_s_outer_or.clone(),
+            4,
         );
     }
 
     fn stepper_out_4_3_and_connect(&mut self) {
-        self.stepper_out_4_3_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_3_and.clone(),
             0,
-            1,
             self.mar_s_outer_or.clone(),
+            1,
         );
 
-        self.stepper_out_4_3_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_3_and.clone(),
             1,
-            3,
             self.bus_1_or.clone(),
-        );
-
-        self.stepper_out_4_3_and.borrow_mut().connect_output_to_next_gate(
-            2,
-            1,
-            self.acc_s_outer_or.clone(),
-        );
-
-        self.stepper_out_4_3_and.borrow_mut().connect_output_to_next_gate(
             3,
+        );
+
+        connect_gates(
+            self.stepper_out_4_3_and.clone(),
+            2,
+            self.acc_s_outer_or.clone(),
             1,
+        );
+
+        connect_gates(
+            self.stepper_out_4_3_and.clone(),
+            3,
             self.iar_e_or.clone(),
+            1,
         );
     }
 
     fn stepper_out_4_4_and_connect(&mut self) {
-        self.stepper_out_4_4_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_4_and.clone(),
             0,
-            2,
             self.reg_b_e_or.clone(),
+            2,
         );
 
-        self.stepper_out_4_4_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.stepper_out_4_4_and.clone(),
             1,
             self.iar_s_outer_or.clone(),
+            1,
         );
     }
 
     fn stepper_out_4_5_and_connect(&mut self) {
-        self.stepper_out_4_5_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_5_and.clone(),
             0,
-            2,
             self.iar_e_or.clone(),
+            2,
         );
 
-        self.stepper_out_4_5_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_5_and.clone(),
             1,
-            5,
             self.mar_s_outer_or.clone(),
+            5,
         );
     }
 
     fn stepper_out_4_6_and_connect(&mut self) {
-        self.stepper_out_4_6_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_6_and.clone(),
             0,
-            2,
             self.acc_s_outer_or.clone(),
-        );
-
-        self.stepper_out_4_6_and.borrow_mut().connect_output_to_next_gate(
-            1,
-            3,
-            self.iar_e_or.clone(),
-        );
-
-        self.stepper_out_4_6_and.borrow_mut().connect_output_to_next_gate(
             2,
+        );
+
+        connect_gates(
+            self.stepper_out_4_6_and.clone(),
+            1,
+            self.iar_e_or.clone(),
+            3,
+        );
+
+        connect_gates(
+            self.stepper_out_4_6_and.clone(),
             2,
             self.mar_s_outer_or.clone(),
+            2,
         );
 
-        self.stepper_out_4_6_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_6_and.clone(),
             3,
-            2,
             self.bus_1_or.clone(),
+            2,
         );
     }
 
     fn stepper_out_4_7_and_connect(&mut self) {
-        self.stepper_out_4_7_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_out_4_7_and.clone(),
             0,
             self.flags_s_outer_or.clone(),
+            0,
         );
 
-        self.stepper_out_4_7_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.stepper_out_4_7_and.clone(),
             1,
             self.bus_1_or.clone(),
+            1,
         );
     }
 
     fn stepper_out_4_8_and_connect(&mut self) {
-        self.stepper_out_4_8_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_4_8_and.clone(),
             0,
-            3,
             self.reg_b_e_or.clone(),
+            3,
         );
 
-        self.stepper_out_4_8_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.stepper_out_4_8_and.clone(),
             1,
             self.io_clks_s_and.clone(),
+            1,
         );
     }
 
     fn stepper_out_5_top_0_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
-        self.stepper_out_5_top_0_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_top_0_and.clone(),
             0,
-            2,
             self.reg_a_or.clone(),
+            2,
         );
 
-        self.stepper_out_5_top_0_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.stepper_out_5_top_0_and.clone(),
             1,
             self.flags_s_outer_or.clone(),
+            1,
         );
 
-        self.stepper_out_5_top_0_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_top_0_and.clone(),
             2,
-            3,
             self.acc_s_outer_or.clone(),
+            3,
         );
 
         let c_out_index = self.get_index_from_tag(ControlSection::C_OUT);
-        self.stepper_out_5_top_0_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_top_0_and.clone(),
             3,
-            0,
             output_gates[c_out_index].clone(),
+            0,
         );
     }
 
     fn stepper_out_5_1_and_connect(&mut self) {
-        self.stepper_out_5_1_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.stepper_out_5_1_and.clone(),
             0,
             self.reg_b_s_or.clone(),
+            0,
         );
 
-        self.stepper_out_5_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_1_and.clone(),
             1,
-            4,
             self.ram_e_or.clone(),
+            4,
         );
     }
 
     fn stepper_out_5_2_and_connect(&mut self) {
-        self.stepper_out_5_2_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_2_and.clone(),
             0,
-            1,
             self.reg_b_e_or.clone(),
+            1,
         );
 
-        self.stepper_out_5_2_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.stepper_out_5_2_and.clone(),
             1,
             self.ram_s_and.clone(),
+            1,
         );
     }
 
     fn stepper_out_5_3_and_connect(&mut self) {
-        self.stepper_out_5_3_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_3_and.clone(),
             0,
-            2,
             self.reg_b_s_or.clone(),
+            2,
         );
 
-        self.stepper_out_5_3_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_3_and.clone(),
             1,
-            3,
             self.ram_e_or.clone(),
+            3,
         );
     }
 
     fn stepper_out_5_4_and_connect(&mut self) {
-        self.stepper_out_5_4_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_4_and.clone(),
             0,
-            3,
             self.iar_s_outer_or.clone(),
+            3,
         );
 
-        self.stepper_out_5_4_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_4_and.clone(),
             1,
-            2,
             self.ram_e_or.clone(),
+            2,
         );
     }
 
     fn stepper_out_5_5_and_connect(&mut self) {
-        self.stepper_out_5_5_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_5_and.clone(),
             0,
-            1,
             self.acc_e_or.clone(),
+            1,
         );
 
-        self.stepper_out_5_5_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_5_and.clone(),
             1,
-            2,
             self.iar_s_outer_or.clone(),
+            2,
         );
     }
 
     fn stepper_out_5_6_and_connect(&mut self) {
-        self.stepper_out_5_6_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_6_and.clone(),
             0,
-            3,
             self.reg_b_s_or.clone(),
+            3,
         );
 
-        self.stepper_out_5_6_and.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            self.stepper_out_5_6_and.clone(),
             1,
             self.io_clk_e_and.clone(),
+            1,
         );
     }
 
     fn stepper_out_5_6_not_connect(&mut self) {
-        self.stepper_out_5_6_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_5_6_not.clone(),
             0,
-            2,
             self.stepper_out_5_6_and.clone(),
+            2,
         );
     }
 
     fn stepper_out_6_top_0_and_connect(&mut self) {
-        self.stepper_out_6_top_0_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_6_top_0_and.clone(),
             0,
-            1,
             self.reg_b_s_or.clone(),
+            1,
         );
 
-        self.stepper_out_6_top_0_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_6_top_0_and.clone(),
             1,
-            3,
             self.acc_e_or.clone(),
+            3,
         );
     }
 
     fn stepper_out_6_1_and_connect(&mut self) {
-        self.stepper_out_6_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_6_1_and.clone(),
             0,
-            2,
             self.acc_e_or.clone(),
+            2,
         );
 
-        self.stepper_out_6_1_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_6_1_and.clone(),
             1,
-            4,
             self.iar_s_outer_or.clone(),
+            4,
         );
     }
 
     fn stepper_out_6_2_and_connect(&mut self) {
-        self.stepper_out_6_2_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_6_2_and.clone(),
             0,
-            1,
             self.ram_e_or.clone(),
+            1,
         );
 
-        self.stepper_out_6_2_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.stepper_out_6_2_and.clone(),
             1,
-            5,
             self.iar_s_outer_or.clone(),
+            5,
         );
     }
 
     fn eight_input_and_connect(
         &mut self,
-        output_gates: &Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: &Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let end_index = self.get_index_from_tag(ControlSection::END);
-        self.eight_input_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.eight_input_and.clone(),
             0,
             output_gates[end_index].clone(),
+            0,
         );
     }
 
     fn eight_input_and_not_loc_2_connect(&mut self) {
-        self.eight_input_and_not_loc_2.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.eight_input_and_not_loc_2.clone(),
             0,
-            2,
             self.eight_input_and.clone(),
+            2,
         );
     }
 
     fn eight_input_and_not_loc_3_connect(&mut self) {
-        self.eight_input_and_not_loc_3.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.eight_input_and_not_loc_3.clone(),
             0,
-            3,
             self.eight_input_and.clone(),
+            3,
         );
     }
 
     fn c_in_and_connect(&mut self) {
-        self.c_in_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.c_in_and.clone(),
             0,
             self.alu_input_or.clone(),
+            0,
         );
     }
 
     fn a_l_and_connect(&mut self) {
-        self.a_l_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.a_l_and.clone(),
             0,
-            1,
             self.alu_input_or.clone(),
+            1,
         );
     }
 
     fn eq_and_connect(&mut self) {
-        self.eq_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.eq_and.clone(),
             0,
-            2,
             self.alu_input_or.clone(),
+            2,
         );
     }
 
     fn z_and_connect(&mut self) {
-        self.z_and.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.z_and.clone(),
             0,
-            3,
             self.alu_input_or.clone(),
+            3,
         );
     }
 
     fn alu_input_or_connect(&mut self) {
-        self.alu_input_or.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.alu_input_or.clone(),
             0,
-            2,
             self.stepper_out_6_2_and.clone(),
+            2,
         );
     }
 
     fn add_and_connect(&mut self) {
-        self.add_and.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.add_and.clone(),
             0,
             self.add_not.clone(),
+            0,
         );
     }
 
     fn add_not_connect(&mut self) {
-        self.add_not.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.add_not.clone(),
             0,
-            2,
             self.stepper_out_6_top_0_and.clone(),
+            2,
         );
     }
 }
 
 impl LogicGate for ControlSection {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -2878,12 +3162,11 @@ impl LogicGate for ControlSection {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         let start = Instant::now();
 
-        let result = self.complex_gate.fetch_output_signals(
+        let result = self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
         );
 
         unsafe {
@@ -2891,6 +3174,12 @@ impl LogicGate for ControlSection {
         }
 
         result
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -2917,16 +3206,20 @@ impl LogicGate for ControlSection {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -2965,9 +3258,9 @@ mod tests {
 
         let mut current_idx = 0;
         while current_idx < length {
-            let mut output = vec![LOW_; control_section.borrow_mut().complex_gate.output_gates.len()];
+            let mut output = vec![LOW_; control_section.lock().unwrap().complex_gate.output_gates.len()];
             for (tag, v) in output_signals_map.iter() {
-                let idx = control_section.borrow_mut().get_index_from_tag(tag);
+                let idx = control_section.lock().unwrap().get_index_from_tag(tag);
                 output[idx] = v[current_idx].clone();
             }
             current_idx += 1;
@@ -2984,16 +3277,17 @@ mod tests {
 
             let clock_input = AutomaticInput::new(clock_input, 1, "Clock");
 
-            let clk_index = control_section.borrow_mut().get_index_from_tag(ControlSection::CLOCK);
-            clock_input.borrow_mut().connect_output_to_next_gate(
+            let clk_index = control_section.lock().unwrap().get_index_from_tag(ControlSection::CLOCK);
+            connect_gates(
+                clock_input.clone(),
                 0,
-                clk_index,
                 control_section.clone(),
+                clk_index,
             );
 
-            let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+            let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
             input_gates.push(clock_input);
-            let output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+            let output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
             let mut cycle_nums = 0;
             let mut continue_cycles = true;
@@ -3004,17 +3298,16 @@ mod tests {
                     &output_gates,
                     false,
                     &mut |_clock_tick_inputs, _output_gates| {},
-                    None,
                 );
             }
 
             println!("cycle_nums {cycle_nums}");
 
-            control_section.borrow_mut().update_input_signal(
+            control_section.lock().unwrap().update_input_signal(
                 GateInput::new(
                     clk_index,
                     Signal::NONE,
-                    input_gates[0].borrow_mut().get_unique_id(),
+                    input_gates[0].lock().unwrap().get_unique_id(),
                 )
             );
         }
@@ -3031,7 +3324,7 @@ mod tests {
 
         println!("Advanced for {} clock ticks", clock_ticks_to_advance);
         println!("Ran for {} clock ticks", output_signals.len());
-        let tags_sorted_by_index = extract_output_tags_sorted_by_index(&control_section.borrow_mut().complex_gate);
+        let tags_sorted_by_index = extract_output_tags_sorted_by_index(&control_section.lock().unwrap().complex_gate);
 
         let mut failed = false;
         for i in 0..output_signals.len() {
@@ -3091,9 +3384,9 @@ mod tests {
     fn control_section_initialization() {
         let control_section = ControlSection::new(8);
 
-        let tags_sorted_by_index = extract_output_tags_sorted_by_index(&control_section.borrow_mut().complex_gate);
+        let tags_sorted_by_index = extract_output_tags_sorted_by_index(&control_section.lock().unwrap().complex_gate);
 
-        let collected_output = control_section.borrow_mut().fetch_output_signals().unwrap();
+        let collected_output = control_section.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         let mut generated_output = vec![LOW_; tags_sorted_by_index.len()];
         generated_output[0] = HIGH; //Set BUS_1 high

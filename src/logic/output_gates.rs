@@ -1,8 +1,7 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, Signal, OscillationDetection, InputSignalReturn, calculate_input_signal_from_single_inputs};
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub trait OutputGate {
     fn get_output_tag(&self) -> String;
@@ -24,20 +23,37 @@ pub struct SimpleOutput {
 
 #[allow(dead_code)]
 impl SimpleOutput {
-    pub fn new(tag: &str) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                SimpleOutput {
-                    output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW_)]),
-                    unique_id: UniqueID::generate(),
-                    oscillation_detection: OscillationDetection::new(),
-                    should_print_output: false,
-                    print_each_input_output_gate: true,
-                    gate_type: GateType::SimpleOutputType,
-                    tag: String::from(tag),
-                }
-            )
+    pub fn new(tag: &str) -> SharedMutex<Self> {
+        let simple_output = SimpleOutput {
+            output_state: HashMap::from([(UniqueID::zero_id(), Signal::LOW_)]),
+            unique_id: UniqueID::generate(),
+            oscillation_detection: OscillationDetection::new(),
+            should_print_output: false,
+            print_each_input_output_gate: true,
+            gate_type: GateType::SimpleOutputType,
+            tag: String::from(tag),
+        };
+        new_shared_mutex(
+            simple_output.get_unique_id().id(),
+            simple_output,
         )
+    }
+
+    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        let output_clone = calculate_input_signal_from_single_inputs(&self.output_state)?;
+        // println!("SimpleOutput id {} output_clone: {:#?}", self.unique_id.id() ,output_clone);
+
+        if self.should_print_output && self.print_each_input_output_gate {
+            GateLogic::print_gate_output(
+                &self.gate_type,
+                &self.unique_id,
+                &self.get_tag(),
+                &None::<Signal>,
+                &output_clone,
+            );
+        }
+
+        Ok(vec![GateOutputState::NotConnected(output_clone)])
     }
 }
 
@@ -48,13 +64,22 @@ impl OutputGate for SimpleOutput {
 }
 
 impl LogicGate for SimpleOutput {
-    fn connect_output_to_next_gate(
+    fn internal_connect_output(
         &mut self,
         _current_gate_output_key: usize,
         _next_gate_input_key: usize,
-        _next_gate: Rc<RefCell<dyn LogicGate>>,
-    ) {
+        _next_gate: SharedMutex<dyn LogicGate>
+    ) -> Signal {
         panic!("An output gate should be the end of the circuit, it should never connect to another input.");
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, _gate_input_index: usize, signal: Signal) {
+        //Whenever an input is updated, remove the zero index. Even adding the zero index it will
+        // simply be inserted immediately afterwards.
+        self.output_state.remove(&UniqueID::zero_id());
+
+        //This is a temporary signal. When the input is updated afterwards, it will add it.
+        self.output_state.insert(sending_id, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
@@ -78,21 +103,12 @@ impl LogicGate for SimpleOutput {
         }
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        let output_clone = calculate_input_signal_from_single_inputs(&self.output_state)?;
-        // println!("SimpleOutput id {} output_clone: {:#?}", self.unique_id.id() ,output_clone);
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
 
-        if self.should_print_output && self.print_each_input_output_gate {
-            GateLogic::print_gate_output(
-                &self.gate_type,
-                &self.unique_id,
-                &self.get_tag(),
-                &None::<Signal>,
-                &output_clone,
-            );
-        }
-
-        Ok(vec![GateOutputState::NotConnected(output_clone)])
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -115,15 +131,6 @@ impl LogicGate for SimpleOutput {
         self.tag = tag.to_string()
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, _gate_input_index: usize, signal: Signal) {
-        //Whenever an input is updated, remove the zero index. Even adding the zero index it will
-        // simply be inserted immediately afterwards.
-        self.output_state.remove(&UniqueID::zero_id());
-
-        //This is a temporary signal. When the input is updated afterwards, it will add it.
-        self.output_state.insert(sending_id, signal);
-    }
-
     fn remove_connected_input(&mut self, _input_index: usize, connected_id: UniqueID) {
         self.output_state
             .remove(&connected_id)
@@ -139,5 +146,13 @@ impl LogicGate for SimpleOutput {
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.print_each_input_output_gate = print_each_input_output_gate;
+    }
+
+    fn num_children_gates(&self) -> usize {
+        0
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Output gates do not have input gates");
     }
 }

@@ -1,23 +1,23 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use crate::globals::{CLOCK_TICK_NUMBER, get_clock_tick_number};
-use crate::logic::foundations::{ComplexGateMembers, GateInput, GateOutputState, GateTagInfo, GateTagType, LogicGate, Signal, UniqueID};
+use crate::logic::foundations::{ComplexGateMembers, connect_gates, GateInput, GateOutputState, GateTagInfo, GateTagType, LogicGate, Signal, UniqueID};
 use crate::logic::input_gates::AutomaticInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::run_circuit::{run_circuit, start_clock};
+use crate::shared_mutex::SharedMutex;
 
 #[allow(dead_code)]
 pub fn check_for_single_element_signal(
-    output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>,
+    output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>,
     output: Signal,
 ) {
     assert_eq!(output_gates.len(), 1);
-    let mut output_gate = output_gates.first().unwrap().borrow_mut();
-    let output_signals = output_gate.fetch_output_signals().unwrap();
+    let mut output_gate = output_gates.first().unwrap().lock().unwrap();
+    let output_signals = output_gate.fetch_output_signals_calculate().unwrap();
 
     assert_eq!(output_signals.len(), 1);
 
@@ -65,7 +65,7 @@ pub fn run_multi_input_output_logic_gate(
     input_signals: Vec<Vec<Signal>>,
     output_signal: Vec<Vec<Signal>>,
     tagged_input_signal: HashMap<&str, Vec<Vec<Signal>>>,
-    gate: Rc<RefCell<dyn LogicGate>>,
+    gate: SharedMutex<dyn LogicGate>,
 ) {
     let collected_output = run_multi_input_output_logic_gate_return(
         input_signals,
@@ -81,28 +81,29 @@ pub fn run_multi_input_output_logic_gate_return(
     input_signals: Vec<Vec<Signal>>,
     output_signal: &Vec<Vec<Signal>>,
     tagged_input_signal: HashMap<&str, Vec<Vec<Signal>>>,
-    gate: Rc<RefCell<dyn LogicGate>>,
+    gate: SharedMutex<dyn LogicGate>,
 ) -> Vec<Vec<Signal>> {
     let num_outputs = output_signal[0].len();
 
-    let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-    let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+    let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+    let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
     for (i, signals) in input_signals.into_iter().enumerate() {
         for (j, signal) in signals.into_iter().enumerate() {
-            let cell_index = gate.borrow_mut().get_index_from_tag(format!("i_{}", j).as_str());
+            let cell_index = gate.lock().unwrap().get_index_from_tag(format!("i_{}", j).as_str());
             if i == 0 {
                 let input_gate = AutomaticInput::new(vec![signal], 1, "Start");
 
-                input_gate.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    input_gate.clone(),
                     0,
+                    Arc::clone(&gate),
                     cell_index,
-                    Rc::clone(&gate),
                 );
 
                 input_gates.push(input_gate);
             } else {
-                let mut input_gate = input_gates[j].borrow_mut();
+                let mut input_gate = input_gates[j].lock().unwrap();
                 input_gate.update_input_signal(
                     GateInput::new(
                         cell_index,
@@ -126,19 +127,20 @@ pub fn run_multi_input_output_logic_gate_return(
                         format!("{}_{}", tag, j)
                     };
 
-                let tag_index = gate.borrow_mut().get_index_from_tag(tag.as_str());
+                let tag_index = gate.lock().unwrap().get_index_from_tag(tag.as_str());
                 if i == 0 {
                     let input_gate = AutomaticInput::new(vec![signal], 1, "Start");
 
-                    input_gate.borrow_mut().connect_output_to_next_gate(
+                    connect_gates(
+                        input_gate.clone(),
                         0,
+                        Arc::clone(&gate),
                         tag_index,
-                        Rc::clone(&gate),
                     );
 
                     input_gates.push(input_gate);
                 } else {
-                    let mut input_gate = input_gates[starting_index + j].borrow_mut();
+                    let mut input_gate = input_gates[starting_index + j].lock().unwrap();
                     input_gate.update_input_signal(
                         GateInput::new(
                             tag_index,
@@ -178,10 +180,11 @@ pub fn run_multi_input_output_logic_gate_return(
     for i in 0..num_outputs {
         let output_gate = SimpleOutput::new("End");
 
-        gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            gate.clone(),
             i,
-            0,
             output_gate.clone(),
+            0,
         );
 
         output_gates.push(output_gate);
@@ -190,6 +193,7 @@ pub fn run_multi_input_output_logic_gate_return(
     let mut collected_output: Vec<Vec<Signal>> = Vec::new();
     let mut propagate_signal_through_circuit = true;
     let mut continue_clock = true;
+
 
     while continue_clock {
         unsafe {
@@ -202,7 +206,7 @@ pub fn run_multi_input_output_logic_gate_return(
             &input_gates,
             &output_gates,
             propagate_signal_through_circuit,
-            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 assert_eq!(output_gates.len(), num_outputs);
 
                 let mut single_collected_output = Vec::new();
@@ -210,7 +214,6 @@ pub fn run_multi_input_output_logic_gate_return(
 
                 collected_output.push(single_collected_output);
             },
-            None,
         );
 
         propagate_signal_through_circuit = false;
@@ -218,11 +221,11 @@ pub fn run_multi_input_output_logic_gate_return(
     collected_output
 }
 
-pub fn collect_outputs_from_output_gates(output_gates: &&Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>, single_collected_output: &mut Vec<Signal>) {
+pub fn collect_outputs_from_output_gates(output_gates: &&Vec<SharedMutex<dyn LogicGateAndOutputGate>>, single_collected_output: &mut Vec<Signal>) {
     for output in output_gates.iter() {
-        let mut output = output.borrow_mut();
+        let mut output = output.lock().unwrap();
 
-        let output = output.fetch_output_signals().unwrap();
+        let output = output.fetch_output_signals_calculate().unwrap();
 
         assert_eq!(output.len(), 1);
 
@@ -239,7 +242,7 @@ pub fn collect_outputs_from_output_gates(output_gates: &&Vec<Rc<RefCell<dyn Logi
 
 #[allow(dead_code)]
 pub fn test_simple_gate(
-    gate: Rc<RefCell<dyn LogicGate>>,
+    gate: SharedMutex<dyn LogicGate>,
     first_input: Signal,
     second_input: Option<Signal>,
     output: Signal,
@@ -247,40 +250,43 @@ pub fn test_simple_gate(
     let first_pin_input = AutomaticInput::new(vec![first_input], 1, "");
     let output_gate = SimpleOutput::new("");
 
-    let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-    let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+    let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+    let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
     input_gates.push(first_pin_input.clone());
     output_gates.push(output_gate.clone());
 
-    first_pin_input.borrow_mut().connect_output_to_next_gate(
-        0,
+    connect_gates(
+        first_pin_input.clone(),
         0,
         gate.clone(),
+        0,
     );
 
     if let Some(second_input) = second_input {
         let second_pin_input = AutomaticInput::new(vec![second_input], 1, "");
 
-        second_pin_input.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            second_pin_input.clone(),
             0,
-            1,
             gate.clone(),
+            1,
         );
 
         input_gates.push(second_pin_input.clone());
     }
 
-    gate.borrow_mut().connect_output_to_next_gate(
-        0,
+    connect_gates(
+        gate.clone(),
         0,
         output_gate.clone(),
+        0,
     );
 
     start_clock(
         &input_gates,
         &output_gates,
-        &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+        &mut |_: &Vec<(String, Vec<GateOutputState>)>, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
             check_for_single_element_signal(&output_gates, output.clone());
         },
     );

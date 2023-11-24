@@ -1,28 +1,28 @@
-use std::cell::{RefCell, RefMut};
-use std::rc::Rc;
+use std::sync::MutexGuard;
 use std::time::Instant;
 use crate::ALU_TIME;
 use crate::logic::basic_gates::{And, ControlledBuffer, Not, Or, Splitter, XOr};
 use crate::logic::complex_logic::SignalGatekeeper;
 
-use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, InputSignalReturn, Signal, ComplexGateMembers, build_simple_inputs_and_outputs};
+use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, InputSignalReturn, Signal, ComplexGateMembers, build_simple_inputs_and_outputs, connect_gates};
 use crate::logic::foundations::Signal::{HIGH, LOW_};
 use crate::logic::input_gates::SimpleInput;
 use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
 use crate::logic::processor_components::{VariableBitRegister, VariableDecoder};
+use crate::shared_mutex::{LoggingMutexGuard, new_shared_mutex, SharedMutex, UsedMutex};
 
 pub struct HalfAdder {
     complex_gate: ComplexGateMembers,
-    sum_xor_gate: Rc<RefCell<XOr>>,
-    carry_and_gate: Rc<RefCell<And>>,
+    sum_xor_gate: SharedMutex<XOr>,
+    carry_and_gate: SharedMutex<And>,
 }
 
 #[allow(dead_code)]
 impl HalfAdder {
-    pub fn new() -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new() -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         input_gates.push(SimpleInput::new(2, "A"));
         input_gates.push(SimpleInput::new(2, "B"));
@@ -48,80 +48,94 @@ impl HalfAdder {
 
         half_adder.build_and_prime_circuit(output_gates_logic);
 
-        Rc::new(RefCell::new(half_adder))
+        new_shared_mutex(half_adder.get_unique_id().id(), half_adder)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let a_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("A")].clone();
         let b_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("B")].clone();
 
-        a_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            a_input_gate.clone(),
             0,
             self.sum_xor_gate.clone(),
+            0,
         );
 
-        a_input_gate.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            a_input_gate.clone(),
             1,
             self.carry_and_gate.clone(),
+            1,
         );
 
-        b_input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            b_input_gate.clone(),
             0,
-            1,
             self.sum_xor_gate.clone(),
+            1,
         );
 
-        b_input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            b_input_gate.clone(),
             1,
-            0,
             self.carry_and_gate.clone(),
+            0,
         );
 
         let sum_output_gate_index = self.get_index_from_tag("S");
-        self.sum_xor_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.sum_xor_gate.clone(),
             0,
             output_gates[sum_output_gate_index].clone(),
+            0,
         );
 
         let carry_output_gate_index = self.get_index_from_tag("C");
-        self.carry_and_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.carry_and_gate.clone(),
             0,
             output_gates[carry_output_gate_index].clone(),
+            0,
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for HalfAdder {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -149,10 +163,6 @@ impl LogicGate for HalfAdder {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -160,21 +170,29 @@ impl LogicGate for HalfAdder {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct FullAdder {
     complex_gate: ComplexGateMembers,
-    input_half_added: Rc<RefCell<HalfAdder>>,
-    carry_half_adder: Rc<RefCell<HalfAdder>>,
-    or_gate: Rc<RefCell<Or>>,
+    input_half_added: SharedMutex<HalfAdder>,
+    carry_half_adder: SharedMutex<HalfAdder>,
+    or_gate: SharedMutex<Or>,
 }
 
 #[allow(dead_code)]
 impl FullAdder {
-    pub fn new() -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new() -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         input_gates.push(SimpleInput::new(1, "A"));
         input_gates.push(SimpleInput::new(1, "B"));
@@ -202,101 +220,117 @@ impl FullAdder {
 
         full_adder.build_and_prime_circuit(output_gates_logic);
 
-        Rc::new(RefCell::new(full_adder))
+        new_shared_mutex(full_adder.get_unique_id().id(), full_adder)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let a_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("A")].clone();
         let b_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("B")].clone();
         let c_in_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("C_IN")].clone();
 
-        let a_input_index = self.input_half_added.borrow_mut().get_index_from_tag("A");
-        a_input_gate.borrow_mut().connect_output_to_next_gate(
+        let a_input_index = self.input_half_added.lock().unwrap().get_index_from_tag("A");
+        connect_gates(
+            a_input_gate.clone(),
             0,
+            self.input_half_added.clone(),
             a_input_index,
-            self.input_half_added.clone(),
         );
 
-        let b_input_index = self.input_half_added.borrow_mut().get_index_from_tag("B");
-        b_input_gate.borrow_mut().connect_output_to_next_gate(
+        let b_input_index = self.input_half_added.lock().unwrap().get_index_from_tag("B");
+        connect_gates(
+            b_input_gate.clone(),
             0,
-            b_input_index,
             self.input_half_added.clone(),
+            b_input_index,
         );
 
-        let a_input_index = self.carry_half_adder.borrow_mut().get_index_from_tag("A");
-        let s_output_index = self.input_half_added.borrow_mut().get_index_from_tag("S");
-        self.input_half_added.borrow_mut().connect_output_to_next_gate(
+        let a_input_index = self.carry_half_adder.lock().unwrap().get_index_from_tag("A");
+        let s_output_index = self.input_half_added.lock().unwrap().get_index_from_tag("S");
+        connect_gates(
+            self.input_half_added.clone(),
             s_output_index,
+            self.carry_half_adder.clone(),
             a_input_index,
-            self.carry_half_adder.clone(),
         );
 
-        let b_input_index = self.carry_half_adder.borrow_mut().get_index_from_tag("B");
-        c_in_input_gate.borrow_mut().connect_output_to_next_gate(
+        let b_input_index = self.carry_half_adder.lock().unwrap().get_index_from_tag("B");
+        connect_gates(
+            c_in_input_gate.clone(),
             0,
+            self.carry_half_adder.clone(),
             b_input_index,
-            self.carry_half_adder.clone(),
         );
 
-        let s_out_output_index = self.carry_half_adder.borrow_mut().get_index_from_tag("S");
+        let s_out_output_index = self.carry_half_adder.lock().unwrap().get_index_from_tag("S");
         let s_out_index = self.get_index_from_tag("S");
-        self.carry_half_adder.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.carry_half_adder.clone(),
             s_out_output_index,
-            0,
             output_gates[s_out_index].clone(),
-        );
-
-        let c_out_output_index = self.carry_half_adder.borrow_mut().get_index_from_tag("C");
-        self.carry_half_adder.borrow_mut().connect_output_to_next_gate(
-            c_out_output_index,
             0,
-            self.or_gate.clone(),
         );
 
-        let c_out_output_index = self.input_half_added.borrow_mut().get_index_from_tag("C");
-        self.input_half_added.borrow_mut().connect_output_to_next_gate(
+        let c_out_output_index = self.carry_half_adder.lock().unwrap().get_index_from_tag("C");
+        connect_gates(
+            self.carry_half_adder.clone(),
             c_out_output_index,
-            1,
             self.or_gate.clone(),
+            0,
+        );
+
+        let c_out_output_index = self.input_half_added.lock().unwrap().get_index_from_tag("C");
+        connect_gates(
+            self.input_half_added.clone(),
+            c_out_output_index,
+            self.or_gate.clone(),
+            1,
         );
 
         let c_out_index = self.get_index_from_tag("C_OUT");
-        self.or_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.or_gate.clone(),
             0,
             output_gates[c_out_index].clone(),
+            0,
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for FullAdder {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -324,10 +358,6 @@ impl LogicGate for FullAdder {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -335,23 +365,33 @@ impl LogicGate for FullAdder {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitAdder {
     complex_gate: ComplexGateMembers,
-    full_adders: Vec<Rc<RefCell<FullAdder>>>,
+    full_adders: Vec<SharedMutex<FullAdder>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitAdder {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let mut full_adders = Vec::new();
+
 
         for i in 0..num_bits {
             let a_input_tag = format!("a_{}", i);
@@ -379,6 +419,7 @@ impl VariableBitAdder {
         output_gates.push(carry_output_gate.clone());
         output_gates_logic.push(carry_output_gate);
 
+
         let mut variable_bit_adder = VariableBitAdder {
             complex_gate: ComplexGateMembers::new(
                 num_bits * 2 + 1,
@@ -390,19 +431,22 @@ impl VariableBitAdder {
             full_adders,
         };
 
+
         variable_bit_adder.build_and_prime_circuit(
             num_bits,
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_adder))
+
+        new_shared_mutex(variable_bit_adder.get_unique_id().id(), variable_bit_adder)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
+
         for i in 0..num_bits {
             let a_input_tag = format!("a_{}", i);
             let b_input_tag = format!("b_{}", i);
@@ -412,84 +456,103 @@ impl VariableBitAdder {
             let b_input_index = self.get_index_from_tag(b_input_tag.as_str());
             let output_index = self.get_index_from_tag(output_tag.as_str());
 
-            let mut mut_full_adder = self.full_adders[i].borrow_mut();
+            let mut_full_adder = self.full_adders[i].lock().unwrap();
 
             let a_adder_index = mut_full_adder.get_index_from_tag("A");
             let b_adder_index = mut_full_adder.get_index_from_tag("B");
             let s_adder_index = mut_full_adder.get_index_from_tag("S");
             let c_in_adder_index = mut_full_adder.get_index_from_tag("C_IN");
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            //Must be dropped or deadlock will occur when the gate is passed to connect_gates below.
+            drop(mut_full_adder);
+
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 0,
+                self.full_adders[i].clone(),
                 a_adder_index,
-                self.full_adders[i].clone(),
             );
 
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 0,
+                self.full_adders[i].clone(),
                 b_adder_index,
-                self.full_adders[i].clone(),
             );
 
-            mut_full_adder.connect_output_to_next_gate(
+            connect_gates(
+                self.full_adders[i].clone(),
                 s_adder_index,
-                0,
                 output_gates[output_index].clone(),
+                0,
             );
 
             if i == 0 { //First adder in the line.
                 let c_in_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("C_IN")].clone();
-                let c_in_adder_index = mut_full_adder.get_index_from_tag("C_IN");
+                let c_in_adder_index = self.full_adders[i].lock().unwrap().get_index_from_tag("C_IN");
 
-                c_in_input_gate.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    c_in_input_gate,
                     0,
-                    c_in_adder_index,
                     self.full_adders[i].clone(),
+                    c_in_adder_index,
                 );
             } else {
-                let c_out_adder_index = self.full_adders[i - 1].borrow_mut().get_index_from_tag("C_OUT");
-                self.full_adders[i - 1].borrow_mut().connect_output_to_next_gate(
+                let c_out_adder_index = self.full_adders[i - 1].lock().unwrap().get_index_from_tag("C_OUT");
+                connect_gates(
+                    self.full_adders[i - 1].clone(),
                     c_out_adder_index,
-                    c_in_adder_index,
                     self.full_adders[i].clone(),
+                    c_in_adder_index,
                 );
             }
         }
 
-        let c_out_adder_index = self.full_adders[num_bits - 1].borrow_mut().get_index_from_tag("C_OUT");
+
+        let c_out_adder_index = self.full_adders[num_bits - 1].lock().unwrap().get_index_from_tag("C_OUT");
         let c_out_output_index = self.get_index_from_tag("C_OUT");
-        self.full_adders[num_bits - 1].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.full_adders[num_bits - 1].clone(),
             c_out_adder_index,
-            0,
             output_gates[c_out_output_index].clone(),
+            0,
         );
 
+
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for VariableBitAdder {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -517,10 +580,6 @@ impl LogicGate for VariableBitAdder {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -528,22 +587,30 @@ impl LogicGate for VariableBitAdder {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitShiftLeft<const LEFT_SHIFT: bool> {
     complex_gate: ComplexGateMembers,
-    first_register: Rc<RefCell<VariableBitRegister>>,
-    second_register: Rc<RefCell<VariableBitRegister>>,
+    first_register: SharedMutex<VariableBitRegister>,
+    second_register: SharedMutex<VariableBitRegister>,
 }
 
 #[allow(dead_code)]
 impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         build_simple_inputs_and_outputs(
             num_bits,
@@ -575,16 +642,16 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_shift_left))
+        new_shared_mutex(variable_bit_shift_left.get_unique_id().id(), variable_bit_shift_left)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         fn tie_register_bits_high(
-            mut register: RefMut<VariableBitRegister>
+            mut register: MutexGuard<VariableBitRegister>
         ) {
             let set_index = register.get_index_from_tag("S");
             let enable_index = register.get_index_from_tag("E");
@@ -606,23 +673,25 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
             );
         }
 
-        tie_register_bits_high(self.first_register.borrow_mut());
-        tie_register_bits_high(self.second_register.borrow_mut());
+        tie_register_bits_high(self.first_register.lock().unwrap());
+        tie_register_bits_high(self.second_register.lock().unwrap());
 
         for i in 0..num_bits {
-            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[i].clone(),
                 0,
-                i,
                 self.first_register.clone(),
+                i,
             );
 
             if (LEFT_SHIFT && i == (num_bits - 1))
                 || (!LEFT_SHIFT && i == 0) {
                 let shift_out_index = self.get_index_from_tag("S_OUT");
-                self.first_register.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    self.first_register.clone(),
                     i,
-                    0,
                     output_gates[shift_out_index].clone(),
+                    0,
                 );
             } else {
                 let second_index =
@@ -632,17 +701,19 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
                         i - 1
                     };
 
-                self.first_register.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    self.first_register.clone(),
                     i,
-                    second_index,
                     self.second_register.clone(),
+                    second_index,
                 );
             }
 
-            self.second_register.borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.second_register.clone(),
                 i,
-                0,
                 output_gates[i].clone(),
+                0,
             );
         }
 
@@ -654,38 +725,47 @@ impl<const LEFT_SHIFT: bool> VariableBitShiftLeft<LEFT_SHIFT> {
                 num_bits - 1
             };
 
-        self.complex_gate.input_gates[shift_in_index].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.complex_gate.input_gates[shift_in_index].clone(),
             0,
-            second_index,
             self.second_register.clone(),
+            second_index,
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl<const LEFT_SHIFT: bool> LogicGate for VariableBitShiftLeft<LEFT_SHIFT> {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -713,10 +793,6 @@ impl<const LEFT_SHIFT: bool> LogicGate for VariableBitShiftLeft<LEFT_SHIFT> {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -724,21 +800,29 @@ impl<const LEFT_SHIFT: bool> LogicGate for VariableBitShiftLeft<LEFT_SHIFT> {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitNot {
     complex_gate: ComplexGateMembers,
-    not_gates: Vec<Rc<RefCell<Not>>>,
+    not_gates: Vec<SharedMutex<Not>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitNot {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let mut not_gates = Vec::new();
 
@@ -772,54 +856,64 @@ impl VariableBitNot {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_not))
+        new_shared_mutex(variable_bit_not.get_unique_id().id(), variable_bit_not)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         for i in 0..num_bits {
-            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                self.complex_gate.input_gates[i].clone(),
                 0,
                 self.not_gates[i].clone(),
+                0,
             );
 
-            self.not_gates[i].borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                self.not_gates[i].clone(),
                 0,
                 output_gates[i].clone(),
+                0,
             );
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for VariableBitNot {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -847,10 +941,6 @@ impl LogicGate for VariableBitNot {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -858,21 +948,29 @@ impl LogicGate for VariableBitNot {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitAnd {
     complex_gate: ComplexGateMembers,
-    and_gates: Vec<Rc<RefCell<And>>>,
+    and_gates: Vec<SharedMutex<And>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitAnd {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let mut and_gates = Vec::new();
 
@@ -911,13 +1009,13 @@ impl VariableBitAnd {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_and))
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         for i in 0..num_bits {
             let a_input_tag = format!("a_{}", i);
@@ -926,51 +1024,62 @@ impl VariableBitAnd {
             let a_input_index = self.get_index_from_tag(a_input_tag.as_str());
             let b_input_index = self.get_index_from_tag(b_input_tag.as_str());
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 0,
                 self.and_gates[i].clone(),
+                0,
             );
 
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 0,
+                self.and_gates[i].clone(),
                 1,
-                self.and_gates[i].clone(),
             );
 
-            self.and_gates[i].borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                self.and_gates[i].clone(),
                 0,
                 output_gates[i].clone(),
+                0,
             );
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for VariableBitAnd {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -998,10 +1107,6 @@ impl LogicGate for VariableBitAnd {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -1009,21 +1114,29 @@ impl LogicGate for VariableBitAnd {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitOr {
     complex_gate: ComplexGateMembers,
-    or_gates: Vec<Rc<RefCell<Or>>>,
+    or_gates: Vec<SharedMutex<Or>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitOr {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let mut or_gates = Vec::new();
 
@@ -1062,13 +1175,13 @@ impl VariableBitOr {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_and))
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         for i in 0..num_bits {
             let a_input_tag = format!("a_{}", i);
@@ -1077,51 +1190,62 @@ impl VariableBitOr {
             let a_input_index = self.get_index_from_tag(a_input_tag.as_str());
             let b_input_index = self.get_index_from_tag(b_input_tag.as_str());
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 0,
                 self.or_gates[i].clone(),
+                0,
             );
 
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 0,
+                self.or_gates[i].clone(),
                 1,
-                self.or_gates[i].clone(),
             );
 
-            self.or_gates[i].borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                self.or_gates[i].clone(),
                 0,
                 output_gates[i].clone(),
+                0,
             );
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for VariableBitOr {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -1149,10 +1273,6 @@ impl LogicGate for VariableBitOr {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -1160,23 +1280,31 @@ impl LogicGate for VariableBitOr {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct XOrLE {
     complex_gate: ComplexGateMembers,
-    xor_gate: Rc<RefCell<XOr>>,
-    not_gate: Rc<RefCell<Not>>,
-    equal_and_gate: Rc<RefCell<And>>,
-    middle_and_gate: Rc<RefCell<And>>,
-    or_gate: Rc<RefCell<Or>>,
+    xor_gate: SharedMutex<XOr>,
+    not_gate: SharedMutex<Not>,
+    equal_and_gate: SharedMutex<And>,
+    middle_and_gate: SharedMutex<And>,
+    or_gate: SharedMutex<Or>,
 }
 
 #[allow(dead_code)]
 impl XOrLE {
-    pub fn new() -> Rc<RefCell<Self>> {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+    pub fn new() -> SharedMutex<Self> {
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         input_gates.push(SimpleInput::new(2, "A"));
         input_gates.push(SimpleInput::new(1, "B"));
@@ -1213,12 +1341,12 @@ impl XOrLE {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_and))
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
         &mut self,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let a_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("A")].clone();
         let b_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("B")].clone();
@@ -1229,110 +1357,131 @@ impl XOrLE {
         let equal_output_gate = output_gates[self.get_index_from_tag("E")].clone();
         let a_larger_output_gate = output_gates[self.get_index_from_tag("A_L")].clone();
 
-        a_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            a_input_gate.clone(),
             0,
             self.xor_gate.clone(),
+            0,
         );
 
-        a_input_gate.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            a_input_gate.clone(),
             1,
             self.middle_and_gate.clone(),
-        );
-
-        b_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
             1,
-            self.xor_gate.clone(),
         );
 
-        self.xor_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            b_input_gate.clone(),
             0,
+            self.xor_gate.clone(),
+            1,
+        );
+
+        connect_gates(
+            self.xor_gate.clone(),
             0,
             self.not_gate.clone(),
+            0,
         );
 
-        self.xor_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.xor_gate.clone(),
             1,
-            2,
             self.middle_and_gate.clone(),
+            2,
         );
 
-        self.xor_gate.borrow_mut().connect_output_to_next_gate(
-            2,
+        connect_gates(
+            self.xor_gate.clone(),
             2,
             c_output_gate.clone(),
+            2,
         );
 
-        self.not_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.not_gate.clone(),
             0,
             self.equal_and_gate.clone(),
+            0,
         );
 
-        self.equal_and_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.equal_and_gate.clone(),
             0,
             equal_output_gate.clone(),
+            0,
         );
 
-        equal_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            equal_input_gate.clone(),
             0,
             self.middle_and_gate.clone(),
+            0,
         );
 
-        equal_input_gate.borrow_mut().connect_output_to_next_gate(
-            1,
+        connect_gates(
+            equal_input_gate.clone(),
             1,
             self.equal_and_gate.clone(),
-        );
-
-        self.middle_and_gate.borrow_mut().connect_output_to_next_gate(
-            0,
-            0,
-            self.or_gate.clone(),
-        );
-
-        larger_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
             1,
-            self.or_gate.clone(),
         );
 
-        self.or_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.middle_and_gate.clone(),
             0,
+            self.or_gate.clone(),
+            0,
+        );
+
+        connect_gates(
+            larger_input_gate.clone(),
+            0,
+            self.or_gate.clone(),
+            1,
+        );
+
+        connect_gates(
+            self.or_gate.clone(),
             0,
             a_larger_output_gate.clone(),
+            0,
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for XOrLE {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -1360,10 +1509,6 @@ impl LogicGate for XOrLE {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -1371,21 +1516,29 @@ impl LogicGate for XOrLE {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitXOrLE {
     complex_gate: ComplexGateMembers,
-    xor_le_gates: Vec<Rc<RefCell<XOrLE>>>,
+    xor_le_gates: Vec<SharedMutex<XOrLE>>,
 }
 
 #[allow(dead_code)]
 impl VariableBitXOrLE {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         let mut xor_le_gates = Vec::new();
 
@@ -1410,8 +1563,8 @@ impl VariableBitXOrLE {
 
         let larger_output_gate = SimpleOutput::new("L");
         let equal_output_gate = SimpleOutput::new("E");
-        // larger_output_gate.borrow_mut().toggle_output_printing(true);
-        // equal_output_gate.borrow_mut().toggle_output_printing(true);
+        // larger_output_gate.lock().unwrap().toggle_output_printing(true);
+        // equal_output_gate.lock().unwrap().toggle_output_printing(true);
         output_gates.push(larger_output_gate.clone());
         output_gates.push(equal_output_gate.clone());
         output_gates_logic.push(larger_output_gate);
@@ -1433,19 +1586,19 @@ impl VariableBitXOrLE {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_and))
+        new_shared_mutex(variable_bit_and.get_unique_id().id(), variable_bit_and)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         for i in 0..num_bits {
-            let xor_a_input_index = self.xor_le_gates[i].borrow_mut().get_index_from_tag("A");
-            let xor_b_input_index = self.xor_le_gates[i].borrow_mut().get_index_from_tag("B");
+            let xor_a_input_index = self.xor_le_gates[i].lock().unwrap().get_index_from_tag("A");
+            let xor_b_input_index = self.xor_le_gates[i].lock().unwrap().get_index_from_tag("B");
 
-            let c_output_index = self.xor_le_gates[i].borrow_mut().get_index_from_tag("C");
+            let c_output_index = self.xor_le_gates[i].lock().unwrap().get_index_from_tag("C");
 
             let a_input_tag = format!("a_{}", i);
             let b_input_tag = format!("b_{}", i);
@@ -1453,29 +1606,32 @@ impl VariableBitXOrLE {
             let a_input_index = self.get_index_from_tag(a_input_tag.as_str());
             let b_input_index = self.get_index_from_tag(b_input_tag.as_str());
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 0,
+                self.xor_le_gates[i].clone(),
                 xor_a_input_index,
-                self.xor_le_gates[i].clone(),
             );
 
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 0,
+                self.xor_le_gates[i].clone(),
                 xor_b_input_index,
-                self.xor_le_gates[i].clone(),
             );
 
-            self.xor_le_gates[i].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.xor_le_gates[i].clone(),
                 c_output_index,
-                0,
                 output_gates[i].clone(),
+                0,
             );
 
             if i == num_bits - 1 {
-                let xor_equal_input_index = self.xor_le_gates[i].borrow_mut().get_index_from_tag("ABOVE_E");
-                let xor_larger_input_index = self.xor_le_gates[i].borrow_mut().get_index_from_tag("ABOVE_L");
+                let xor_equal_input_index = self.xor_le_gates[i].lock().unwrap().get_index_from_tag("ABOVE_E");
+                let xor_larger_input_index = self.xor_le_gates[i].lock().unwrap().get_index_from_tag("ABOVE_L");
 
-                self.xor_le_gates[i].borrow_mut().update_input_signal(
+                self.xor_le_gates[i].lock().unwrap().update_input_signal(
                     GateInput::new(
                         xor_equal_input_index,
                         HIGH,
@@ -1483,7 +1639,7 @@ impl VariableBitXOrLE {
                     )
                 );
 
-                self.xor_le_gates[i].borrow_mut().update_input_signal(
+                self.xor_le_gates[i].lock().unwrap().update_input_signal(
                     GateInput::new(
                         xor_larger_input_index,
                         LOW_,
@@ -1491,68 +1647,80 @@ impl VariableBitXOrLE {
                     )
                 );
             } else {
-                let equal_output_index = self.xor_le_gates[i + 1].borrow_mut().get_index_from_tag("E");
-                let a_larger_output_index = self.xor_le_gates[i + 1].borrow_mut().get_index_from_tag("A_L");
-                let xor_equal_input_index = self.xor_le_gates[i].borrow_mut().get_index_from_tag("ABOVE_E");
-                let xor_larger_input_index = self.xor_le_gates[i].borrow_mut().get_index_from_tag("ABOVE_L");
+                let equal_output_index = self.xor_le_gates[i + 1].lock().unwrap().get_index_from_tag("E");
+                let a_larger_output_index = self.xor_le_gates[i + 1].lock().unwrap().get_index_from_tag("A_L");
+                let xor_equal_input_index = self.xor_le_gates[i].lock().unwrap().get_index_from_tag("ABOVE_E");
+                let xor_larger_input_index = self.xor_le_gates[i].lock().unwrap().get_index_from_tag("ABOVE_L");
 
-                self.xor_le_gates[i + 1].borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    self.xor_le_gates[i + 1].clone(),
                     equal_output_index,
-                    xor_equal_input_index,
                     self.xor_le_gates[i].clone(),
+                    xor_equal_input_index,
                 );
 
-                self.xor_le_gates[i + 1].borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    self.xor_le_gates[i + 1].clone(),
                     a_larger_output_index,
-                    xor_larger_input_index,
                     self.xor_le_gates[i].clone(),
+                    xor_larger_input_index,
                 );
             }
         }
 
-        let xor_equal_output_index = self.xor_le_gates[0].borrow_mut().get_index_from_tag("E");
-        let xor_a_larger_output_index = self.xor_le_gates[0].borrow_mut().get_index_from_tag("A_L");
+        let xor_equal_output_index = self.xor_le_gates[0].lock().unwrap().get_index_from_tag("E");
+        let xor_a_larger_output_index = self.xor_le_gates[0].lock().unwrap().get_index_from_tag("A_L");
         let equal_output_index = self.get_index_from_tag("E");
         let larger_output_index = self.get_index_from_tag("L");
 
-        self.xor_le_gates[0].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.xor_le_gates[0].clone(),
             xor_equal_output_index,
-            0,
             output_gates[equal_output_index].clone(),
+            0,
         );
 
-        self.xor_le_gates[0].borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.xor_le_gates[0].clone(),
             xor_a_larger_output_index,
-            0,
             output_gates[larger_output_index].clone(),
+            0,
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for VariableBitXOrLE {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -1580,10 +1748,6 @@ impl LogicGate for VariableBitXOrLE {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -1591,22 +1755,30 @@ impl LogicGate for VariableBitXOrLE {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitZ {
     complex_gate: ComplexGateMembers,
-    or_gate: Rc<RefCell<Or>>,
-    not_gate: Rc<RefCell<Not>>,
+    or_gate: SharedMutex<Or>,
+    not_gate: SharedMutex<Not>,
 }
 
 #[allow(dead_code)]
 impl VariableBitZ {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         for i in 0..num_bits {
             let input_tag = format!("i_{}", i);
@@ -1634,60 +1806,71 @@ impl VariableBitZ {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_z))
+        new_shared_mutex(variable_bit_z.get_unique_id().id(), variable_bit_z)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         for i in 0..num_bits {
-            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[i].clone(),
                 0,
-                i,
                 self.or_gate.clone(),
+                i,
             );
         }
 
-        self.or_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.or_gate.clone(),
             0,
             self.not_gate.clone(),
+            0,
         );
 
-        self.not_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.not_gate.clone(),
             0,
             output_gates[0].clone(),
+            0,
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for VariableBitZ {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -1715,10 +1898,6 @@ impl LogicGate for VariableBitZ {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
@@ -1726,21 +1905,29 @@ impl LogicGate for VariableBitZ {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
+    }
 }
 
 pub struct VariableBitEnable {
     complex_gate: ComplexGateMembers,
-    control_buffer: Rc<RefCell<ControlledBuffer>>,
+    control_buffer: SharedMutex<ControlledBuffer>,
 }
 
 #[allow(dead_code)]
 impl VariableBitEnable {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         build_simple_inputs_and_outputs(
             num_bits,
@@ -1767,63 +1954,74 @@ impl VariableBitEnable {
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(variable_bit_enable))
+        new_shared_mutex(variable_bit_enable. get_unique_id().id(), variable_bit_enable)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let e_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("E")].clone();
-        let controlled_buffer_enable_index = self.control_buffer.borrow_mut().get_index_from_tag("E");
+        let controlled_buffer_enable_index = self.control_buffer.lock().unwrap().get_index_from_tag("E");
 
-        e_input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            e_input_gate.clone(),
             0,
-            controlled_buffer_enable_index,
             self.control_buffer.clone(),
+            controlled_buffer_enable_index,
         );
 
         for i in 0..num_bits {
-            self.complex_gate.input_gates[i].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[i].clone(),
                 0,
-                i,
                 self.control_buffer.clone(),
+                i,
             );
 
-            self.control_buffer.borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.control_buffer.clone(),
                 i,
-                0,
                 output_gates[i].clone(),
+                0,
             );
         }
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            None,
         );
     }
 }
 
 impl LogicGate for VariableBitEnable {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        self.complex_gate.fetch_output_signals(
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            None,
+        )
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
         )
     }
 
@@ -1851,16 +2049,20 @@ impl LogicGate for VariableBitEnable {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -1911,33 +2113,34 @@ impl AluOperations {
 
 pub struct ArithmeticLogicUnit {
     complex_gate: ComplexGateMembers,
-    xor_le: Rc<RefCell<VariableBitXOrLE>>,
-    or: Rc<RefCell<VariableBitOr>>,
-    and: Rc<RefCell<VariableBitAnd>>,
-    not: Rc<RefCell<VariableBitNot>>,
-    shift_left: Rc<RefCell<VariableBitShiftLeft<true>>>,
-    shift_right: Rc<RefCell<VariableBitShiftLeft<false>>>,
-    adder: Rc<RefCell<VariableBitAdder>>,
-    decoder: Rc<RefCell<VariableDecoder>>,
-    decoder_splitters: Vec<Rc<RefCell<Splitter>>>,
-    enable_gates: Vec<Rc<RefCell<VariableBitEnable>>>,
-    enable_splitters: Vec<Rc<RefCell<Splitter>>>,
-    shl_controlled_buffer: Rc<RefCell<ControlledBuffer>>,
-    shr_controlled_buffer: Rc<RefCell<ControlledBuffer>>,
-    adder_controlled_buffer: Rc<RefCell<ControlledBuffer>>,
-    z: Rc<RefCell<VariableBitZ>>,
-    input_signal_gatekeepers: Vec<Rc<RefCell<SignalGatekeeper>>>,
-    carry_in_signal_gatekeepers: Vec<Rc<RefCell<SignalGatekeeper>>>,
+    xor_le: SharedMutex<VariableBitXOrLE>,
+    or: SharedMutex<VariableBitOr>,
+    and: SharedMutex<VariableBitAnd>,
+    not: SharedMutex<VariableBitNot>,
+    shift_left: SharedMutex<VariableBitShiftLeft<true>>,
+    shift_right: SharedMutex<VariableBitShiftLeft<false>>,
+    adder: SharedMutex<VariableBitAdder>,
+    decoder: SharedMutex<VariableDecoder>,
+    decoder_splitters: Vec<SharedMutex<Splitter>>,
+    enable_gates: Vec<SharedMutex<VariableBitEnable>>,
+    enable_splitters: Vec<SharedMutex<Splitter>>,
+    shl_controlled_buffer: SharedMutex<ControlledBuffer>,
+    shr_controlled_buffer: SharedMutex<ControlledBuffer>,
+    adder_controlled_buffer: SharedMutex<ControlledBuffer>,
+    z: SharedMutex<VariableBitZ>,
+    input_signal_gatekeepers: Vec<SharedMutex<SignalGatekeeper>>,
+    carry_in_signal_gatekeepers: Vec<SharedMutex<SignalGatekeeper>>,
 }
 
 #[allow(dead_code)]
 impl ArithmeticLogicUnit {
-    pub fn new(num_bits: usize) -> Rc<RefCell<Self>> {
+    pub fn new(num_bits: usize) -> SharedMutex<Self> {
         assert_ne!(num_bits, 0);
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-        let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+        let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
         for i in 0..num_bits {
             let a_input_tag = format!("a_{}", i);
@@ -1999,6 +2202,24 @@ impl ArithmeticLogicUnit {
         decoder_splitters.push(Splitter::new(1, 4)); // 4; SHR
         decoder_splitters.push(Splitter::new(1, 5)); // 5: Adder
 
+
+        let xor_le= VariableBitXOrLE::new(num_bits);
+
+        let or= VariableBitOr::new(num_bits);
+
+        let and= VariableBitAnd::new(num_bits);
+
+        let not= VariableBitNot::new(num_bits);
+
+        let shift_left= VariableBitShiftLeft::<true>::new(num_bits);
+
+        let shift_right= VariableBitShiftLeft::<false>::new(num_bits);
+
+        let adder= VariableBitAdder::new(num_bits);
+
+        let decoder= VariableDecoder::new(3);
+
+
         let mut arithmetic_logic_unit = ArithmeticLogicUnit {
             complex_gate: ComplexGateMembers::new(
                 2 * num_bits + 4,
@@ -2007,14 +2228,14 @@ impl ArithmeticLogicUnit {
                 input_gates,
                 output_gates,
             ),
-            xor_le: VariableBitXOrLE::new(num_bits),
-            or: VariableBitOr::new(num_bits),
-            and: VariableBitAnd::new(num_bits),
-            not: VariableBitNot::new(num_bits),
-            shift_left: VariableBitShiftLeft::<true>::new(num_bits),
-            shift_right: VariableBitShiftLeft::<false>::new(num_bits),
-            adder: VariableBitAdder::new(num_bits),
-            decoder: VariableDecoder::new(3),
+            xor_le,
+            or,
+            and,
+            not,
+            shift_left,
+            shift_right,
+            adder,
+            decoder,
             decoder_splitters,
             enable_gates,
             enable_splitters,
@@ -2026,23 +2247,25 @@ impl ArithmeticLogicUnit {
             carry_in_signal_gatekeepers,
         };
 
+
         arithmetic_logic_unit.build_and_prime_circuit(
             num_bits,
             output_gates_logic,
         );
 
-        Rc::new(RefCell::new(arithmetic_logic_unit))
+        new_shared_mutex(arithmetic_logic_unit.get_unique_id().id(), arithmetic_logic_unit)
     }
 
     fn build_and_prime_circuit(
         &mut self,
         num_bits: usize,
-        output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+        output_gates: Vec<SharedMutex<dyn LogicGate>>,
     ) {
         let a_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("A")].clone();
         let b_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("B")].clone();
         let c_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("C")].clone();
         let c_in_input_gate = self.complex_gate.input_gates[self.get_index_from_tag("C_IN")].clone();
+
 
         for i in 0..num_bits {
             let input_tag = format!("i_{}", i);
@@ -2056,349 +2279,412 @@ impl ArithmeticLogicUnit {
 
             //Xor_le doesn't get a signal gatekeeper so that the larger and equal outputs will always
             // be correct.
-            let xor_a_input_index = self.xor_le.borrow_mut().get_index_from_tag(a_input_tag.as_str());
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            let xor_a_input_index = self.xor_le.lock().unwrap().get_index_from_tag(a_input_tag.as_str());
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 0,
-                xor_a_input_index,
                 self.xor_le.clone(),
+                xor_a_input_index,
             );
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 1,
-                i,
                 self.input_signal_gatekeepers[0].clone(),
+                i,
             );
 
-            let or_a_input_index = self.or.borrow_mut().get_index_from_tag(a_input_tag.as_str());
-            self.input_signal_gatekeepers[0].borrow_mut().connect_output_to_next_gate(
+            let or_a_input_index = self.or.lock().unwrap().get_index_from_tag(a_input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[0].clone(),
                 i,
-                or_a_input_index,
                 self.or.clone(),
+                or_a_input_index,
             );
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 2,
-                i,
                 self.input_signal_gatekeepers[1].clone(),
+                i,
             );
 
-            let and_a_input_index = self.and.borrow_mut().get_index_from_tag(a_input_tag.as_str());
-            self.input_signal_gatekeepers[1].borrow_mut().connect_output_to_next_gate(
+            let and_a_input_index = self.and.lock().unwrap().get_index_from_tag(a_input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[1].clone(),
                 i,
-                and_a_input_index,
                 self.and.clone(),
+                and_a_input_index,
             );
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 3,
-                i,
                 self.input_signal_gatekeepers[2].clone(),
+                i,
             );
 
-            let not_a_input_index = self.not.borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.input_signal_gatekeepers[2].borrow_mut().connect_output_to_next_gate(
+            let not_a_input_index = self.not.lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[2].clone(),
                 i,
-                not_a_input_index,
                 self.not.clone(),
+                not_a_input_index,
             );
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 4,
-                i,
                 self.input_signal_gatekeepers[3].clone(),
+                i,
             );
 
-            let shl_a_input_index = self.shift_left.borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.input_signal_gatekeepers[3].borrow_mut().connect_output_to_next_gate(
+            let shl_a_input_index = self.shift_left.lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[3].clone(),
                 i,
-                shl_a_input_index,
                 self.shift_left.clone(),
+                shl_a_input_index,
             );
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 5,
-                i,
                 self.input_signal_gatekeepers[4].clone(),
+                i,
             );
 
-            let shr_a_input_index = self.shift_right.borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.input_signal_gatekeepers[4].borrow_mut().connect_output_to_next_gate(
+            let shr_a_input_index = self.shift_right.lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[4].clone(),
                 i,
-                shr_a_input_index,
                 self.shift_right.clone(),
+                shr_a_input_index,
             );
 
-            self.complex_gate.input_gates[a_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[a_input_index].clone(),
                 6,
-                i,
                 self.input_signal_gatekeepers[5].clone(),
+                i,
             );
 
-            let adder_a_input_index = self.adder.borrow_mut().get_index_from_tag(a_input_tag.as_str());
-            self.input_signal_gatekeepers[5].borrow_mut().connect_output_to_next_gate(
+            let adder_a_input_index = self.adder.lock().unwrap().get_index_from_tag(a_input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[5].clone(),
                 i,
-                adder_a_input_index,
                 self.adder.clone(),
+                adder_a_input_index,
             );
 
             //B Input -> Signal Gatekeepers & Signal Gatekeepers -> Arithmetic gates
 
             // Xor does not get a signal gatekeeper so that the larger and equal bits will be true.
-            let xor_b_input_index = self.xor_le.borrow_mut().get_index_from_tag(b_input_tag.as_str());
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            let xor_b_input_index = self.xor_le.lock().unwrap().get_index_from_tag(b_input_tag.as_str());
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 0,
-                xor_b_input_index,
                 self.xor_le.clone(),
+                xor_b_input_index,
             );
 
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 1,
-                i,
                 self.input_signal_gatekeepers[6].clone(),
+                i,
             );
 
-            let or_b_input_index = self.or.borrow_mut().get_index_from_tag(b_input_tag.as_str());
-            self.input_signal_gatekeepers[6].borrow_mut().connect_output_to_next_gate(
+            let or_b_input_index = self.or.lock().unwrap().get_index_from_tag(b_input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[6].clone(),
                 i,
-                or_b_input_index,
                 self.or.clone(),
+                or_b_input_index,
             );
 
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 2,
-                i,
                 self.input_signal_gatekeepers[7].clone(),
+                i,
             );
 
-            let and_b_input_index = self.and.borrow_mut().get_index_from_tag(b_input_tag.as_str());
-            self.input_signal_gatekeepers[7].borrow_mut().connect_output_to_next_gate(
+            let and_b_input_index = self.and.lock().unwrap().get_index_from_tag(b_input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[7].clone(),
                 i,
-                and_b_input_index,
                 self.and.clone(),
+                and_b_input_index,
             );
 
-            self.complex_gate.input_gates[b_input_index].borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.complex_gate.input_gates[b_input_index].clone(),
                 3,
-                i,
                 self.input_signal_gatekeepers[8].clone(),
+                i,
             );
 
-            let adder_b_input_index = self.adder.borrow_mut().get_index_from_tag(b_input_tag.as_str());
-            self.input_signal_gatekeepers[8].borrow_mut().connect_output_to_next_gate(
+            let adder_b_input_index = self.adder.lock().unwrap().get_index_from_tag(b_input_tag.as_str());
+            connect_gates(
+                self.input_signal_gatekeepers[8].clone(),
                 i,
-                adder_b_input_index,
                 self.adder.clone(),
+                adder_b_input_index,
             );
 
             let output_tag = format!("o_{}", i);
 
             //Arithmetic gates -> Enable gates
-            let xor_output_index = self.xor_le.borrow_mut().get_index_from_tag(output_tag.as_str());
-            let enable_input_index = self.enable_gates[0].borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.xor_le.borrow_mut().connect_output_to_next_gate(
+            let xor_output_index = self.xor_le.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            let enable_input_index = self.enable_gates[0].lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.xor_le.clone(),
                 xor_output_index,
-                enable_input_index,
                 self.enable_gates[0].clone(),
+                enable_input_index,
             );
 
-            let or_output_index = self.or.borrow_mut().get_index_from_tag(output_tag.as_str());
-            let enable_input_index = self.enable_gates[1].borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.or.borrow_mut().connect_output_to_next_gate(
+            let or_output_index = self.or.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            let enable_input_index = self.enable_gates[1].lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.or.clone(),
                 or_output_index,
-                enable_input_index,
                 self.enable_gates[1].clone(),
+                enable_input_index,
             );
 
-            let and_output_index = self.and.borrow_mut().get_index_from_tag(output_tag.as_str());
-            let enable_input_index = self.enable_gates[2].borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.and.borrow_mut().connect_output_to_next_gate(
+            let and_output_index = self.and.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            let enable_input_index = self.enable_gates[2].lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.and.clone(),
                 and_output_index,
-                enable_input_index,
                 self.enable_gates[2].clone(),
+                enable_input_index,
             );
 
-            let not_output_index = self.not.borrow_mut().get_index_from_tag(output_tag.as_str());
-            let enable_input_index = self.enable_gates[3].borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.not.borrow_mut().connect_output_to_next_gate(
+            let not_output_index = self.not.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            let enable_input_index = self.enable_gates[3].lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.not.clone(),
                 not_output_index,
-                enable_input_index,
                 self.enable_gates[3].clone(),
+                enable_input_index,
             );
 
-            let shl_output_index = self.shift_left.borrow_mut().get_index_from_tag(output_tag.as_str());
-            let enable_input_index = self.enable_gates[4].borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.shift_left.borrow_mut().connect_output_to_next_gate(
+            let shl_output_index = self.shift_left.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            let enable_input_index = self.enable_gates[4].lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.shift_left.clone(),
                 shl_output_index,
-                enable_input_index,
                 self.enable_gates[4].clone(),
+                enable_input_index,
             );
 
-            let shr_output_index = self.shift_right.borrow_mut().get_index_from_tag(output_tag.as_str());
-            let enable_input_index = self.enable_gates[5].borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.shift_right.borrow_mut().connect_output_to_next_gate(
+            let shr_output_index = self.shift_right.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            let enable_input_index = self.enable_gates[5].lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.shift_right.clone(),
                 shr_output_index,
-                enable_input_index,
                 self.enable_gates[5].clone(),
-            );
-
-            let adder_output_index = self.adder.borrow_mut().get_index_from_tag(output_tag.as_str());
-            let enable_input_index = self.enable_gates[6].borrow_mut().get_index_from_tag(input_tag.as_str());
-            self.adder.borrow_mut().connect_output_to_next_gate(
-                adder_output_index,
                 enable_input_index,
-                self.enable_gates[6].clone(),
             );
 
-            let z_input_index = self.z.borrow_mut().get_index_from_tag(input_tag.as_str());
+            let adder_output_index = self.adder.lock().unwrap().get_index_from_tag(output_tag.as_str());
+            let enable_input_index = self.enable_gates[6].lock().unwrap().get_index_from_tag(input_tag.as_str());
+            connect_gates(
+                self.adder.clone(),
+                adder_output_index,
+                self.enable_gates[6].clone(),
+                enable_input_index,
+            );
+
+            let z_input_index = self.z.lock().unwrap().get_index_from_tag(input_tag.as_str());
 
             let alu_output_index = self.get_index_from_tag(output_tag.as_str());
             for j in 0..7 {
                 //Enable gates -> Enable splitters
-                let enable_output_index = self.enable_gates[j].borrow_mut().get_index_from_tag(output_tag.as_str());
-                self.enable_gates[j].borrow_mut().connect_output_to_next_gate(
+                let enable_output_index = self.enable_gates[j].lock().unwrap().get_index_from_tag(output_tag.as_str());
+                connect_gates(
+                    self.enable_gates[j].clone(),
                     enable_output_index,
-                    i,
                     self.enable_splitters[j].clone(),
+                    i,
                 );
 
                 //Enable splitters -> Z
-                let splitter_output_index = self.enable_splitters[j].borrow_mut().get_index_for_output(
+                let splitter_output_index = self.enable_splitters[j].lock().unwrap().get_index_for_output(
                     i, 0,
                 );
-                self.enable_splitters[j].borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    self.enable_splitters[j].clone(),
                     splitter_output_index,
-                    z_input_index,
                     self.z.clone(),
+                    z_input_index,
                 );
 
                 //Enable splitters -> Output
-                let splitter_output_index = self.enable_splitters[j].borrow_mut().get_index_for_output(
-                    i, 1
+                let splitter_output_index = self.enable_splitters[j].lock().unwrap().get_index_for_output(
+                    i, 1,
                 );
-                self.enable_splitters[j].borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    self.enable_splitters[j].clone(),
                     splitter_output_index,
-                    0,
                     output_gates[alu_output_index].clone(),
+                    0,
                 );
             }
         }
 
+
         //Carry In -> Signal gatekeepers & Signal gatekeepers -> Arithmetic gates
-        c_in_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            c_in_input_gate.clone(),
             0,
             self.carry_in_signal_gatekeepers[0].clone(),
+            0,
         );
 
-        let shift_left_shift_in_index = self.shift_left.borrow_mut().get_index_from_tag("S_IN");
-        self.carry_in_signal_gatekeepers[0].borrow_mut().connect_output_to_next_gate(
+
+        let shift_left_shift_in_index = self.shift_left.lock().unwrap().get_index_from_tag("S_IN");
+        connect_gates(
+            self.carry_in_signal_gatekeepers[0].clone(),
             0,
-            shift_left_shift_in_index,
             self.shift_left.clone(),
+            shift_left_shift_in_index,
         );
 
-        c_in_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+
+        connect_gates(
+            c_in_input_gate.clone(),
             0,
             self.carry_in_signal_gatekeepers[1].clone(),
+            0,
         );
 
-        let shift_right_shift_in_index = self.shift_right.borrow_mut().get_index_from_tag("S_IN");
-        self.carry_in_signal_gatekeepers[1].borrow_mut().connect_output_to_next_gate(
+
+        let shift_right_shift_in_index = self.shift_right.lock().unwrap().get_index_from_tag("S_IN");
+        connect_gates(
+            self.carry_in_signal_gatekeepers[1].clone(),
             0,
-            shift_right_shift_in_index,
             self.shift_right.clone(),
+            shift_right_shift_in_index,
         );
 
-        c_in_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+
+        connect_gates(
+            c_in_input_gate.clone(),
             0,
             self.carry_in_signal_gatekeepers[2].clone(),
+            0,
         );
 
-        let adder_carry_in_index = self.adder.borrow_mut().get_index_from_tag("C_IN");
-        self.carry_in_signal_gatekeepers[2].borrow_mut().connect_output_to_next_gate(
+
+        let adder_carry_in_index = self.adder.lock().unwrap().get_index_from_tag("C_IN");
+        connect_gates(
+            self.carry_in_signal_gatekeepers[2].clone(),
             0,
-            adder_carry_in_index,
             self.adder.clone(),
+            adder_carry_in_index,
         );
+
 
         //Simple outputs
-        let xor_larger_output_index = self.xor_le.borrow_mut().get_index_from_tag("L");
+        let xor_larger_output_index = self.xor_le.lock().unwrap().get_index_from_tag("L");
         let a_larger_output_index = self.get_index_from_tag("A_L");
-        self.xor_le.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.xor_le.clone(),
             xor_larger_output_index,
-            0,
             output_gates[a_larger_output_index].clone(),
+            0,
         );
 
-        let xor_equal_output_index = self.xor_le.borrow_mut().get_index_from_tag("E");
+
+        let xor_equal_output_index = self.xor_le.lock().unwrap().get_index_from_tag("E");
         let equal_output_index = self.get_index_from_tag("EQ");
-        self.xor_le.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.xor_le.clone(),
             xor_equal_output_index,
-            0,
             output_gates[equal_output_index].clone(),
+            0,
         );
 
-        let z_output_index = self.z.borrow_mut().get_index_from_tag("O");
+
+        let z_output_index = self.z.lock().unwrap().get_index_from_tag("O");
         let alu_z_output_index = self.get_index_from_tag("Z");
-        self.z.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            self.z.clone(),
             z_output_index,
-            0,
             output_gates[alu_z_output_index].clone(),
+            0,
         );
+
 
         //Shift/Carry out -> Controlled Buffers
-        let shl_shift_out_index = self.shift_left.borrow_mut().get_index_from_tag("S_OUT");
-        self.shift_left.borrow_mut().connect_output_to_next_gate(
+        let shl_shift_out_index = self.shift_left.lock().unwrap().get_index_from_tag("S_OUT");
+        connect_gates(
+            self.shift_left.clone(),
             shl_shift_out_index,
-            0,
             self.shl_controlled_buffer.clone(),
+            0,
         );
 
-        let shl_shift_out_index = self.shift_right.borrow_mut().get_index_from_tag("S_OUT");
-        self.shift_right.borrow_mut().connect_output_to_next_gate(
+
+        let shl_shift_out_index = self.shift_right.lock().unwrap().get_index_from_tag("S_OUT");
+        connect_gates(
+            self.shift_right.clone(),
             shl_shift_out_index,
-            0,
             self.shr_controlled_buffer.clone(),
+            0,
         );
 
-        let adder_carry_out_index = self.adder.borrow_mut().get_index_from_tag("C_OUT");
-        self.adder.borrow_mut().connect_output_to_next_gate(
+
+        let adder_carry_out_index = self.adder.lock().unwrap().get_index_from_tag("C_OUT");
+        connect_gates(
+            self.adder.clone(),
             adder_carry_out_index,
-            0,
             self.adder_controlled_buffer.clone(),
+            0,
         );
+
 
         //Controlled Buffers -> Carry out output
         let alu_carry_output_index = self.get_index_from_tag("C_OUT");
-        self.shl_controlled_buffer.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            self.shl_controlled_buffer.clone(),
             0,
             output_gates[alu_carry_output_index].clone(),
+            0,
         );
 
-        self.shr_controlled_buffer.borrow_mut().connect_output_to_next_gate(
-            0,
+
+        connect_gates(
+            self.shr_controlled_buffer.clone(),
             0,
             output_gates[alu_carry_output_index].clone(),
+            0,
         );
 
-        self.adder_controlled_buffer.borrow_mut().connect_output_to_next_gate(
-            0,
+
+        connect_gates(
+            self.adder_controlled_buffer.clone(),
             0,
             output_gates[alu_carry_output_index].clone(),
+            0,
         );
+
 
         //Decoder Inputs and set starting states to HIGH (HIGH, HIGH, HIGH will set all enables to
         // disabled).
-        a_input_gate.borrow_mut().connect_output_to_next_gate(
+        connect_gates(
+            a_input_gate.clone(),
             0,
+            self.decoder.clone(),
             2,
-            self.decoder.clone(),
         );
 
-        a_input_gate.borrow_mut().update_input_signal(
+
+        a_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -2406,13 +2692,16 @@ impl ArithmeticLogicUnit {
             )
         );
 
-        b_input_gate.borrow_mut().connect_output_to_next_gate(
+
+        connect_gates(
+            b_input_gate.clone(),
             0,
+            self.decoder.clone(),
             1,
-            self.decoder.clone(),
         );
 
-        b_input_gate.borrow_mut().update_input_signal(
+
+        b_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -2420,13 +2709,16 @@ impl ArithmeticLogicUnit {
             )
         );
 
-        c_input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+
+        connect_gates(
+            c_input_gate.clone(),
             0,
             self.decoder.clone(),
+            0,
         );
 
-        c_input_gate.borrow_mut().update_input_signal(
+
+        c_input_gate.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -2443,269 +2735,304 @@ impl ArithmeticLogicUnit {
         // SHR;   Decoder input: 1; Enable Gate idx: 5; Splitter idx: 4; input_gatekeeper idx: 4    ; carry_gatekeeper idx:  1;
         // Adder; Decoder input: 0; Enable Gate idx: 6; Splitter idx: 5; input_gatekeeper idx: 5 & 8; carry_gatekeeper idx:  2;
 
+
         //Decoder -> Splitters
         for j in 0..6 {
-            self.decoder.borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                self.decoder.clone(),
                 5 - j,
-                0,
                 self.decoder_splitters[j].clone(),
+                0,
             );
         }
 
         //Splitters -> Enables
 
+
         //Xor does not need a splitter
-        let enable_gate_enable_index = self.enable_gates[0].borrow_mut().get_index_from_tag("E");
-        self.decoder.borrow_mut().connect_output_to_next_gate(
+        let enable_gate_enable_index = self.enable_gates[0].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder.clone(),
             6,
-            enable_gate_enable_index,
             self.enable_gates[0].clone(),
+            enable_gate_enable_index,
         );
+
 
         //Or
-        let decoder_splitter_output_index = self.decoder_splitters[0].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[0].lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let enable_gate_enable_index = self.enable_gates[1].borrow_mut().get_index_from_tag("E");
-        self.decoder_splitters[0].borrow_mut().connect_output_to_next_gate(
+        let enable_gate_enable_index = self.enable_gates[1].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[0].clone(),
             decoder_splitter_output_index,
-            enable_gate_enable_index,
             self.enable_gates[1].clone(),
+            enable_gate_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[0].borrow_mut().get_index_for_output(
+
+        let decoder_splitter_output_index = self.decoder_splitters[0].lock().unwrap().get_index_for_output(
             0, 1,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[0].borrow().get_index_from_tag("E");
-        self.decoder_splitters[0].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[0].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[0].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[0].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[0].borrow_mut().get_index_for_output(
+
+        let decoder_splitter_output_index = self.decoder_splitters[0].lock().unwrap().get_index_for_output(
             0, 2,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[6].borrow().get_index_from_tag("E");
-        self.decoder_splitters[0].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[6].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[0].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[6].clone(),
+            gatekeeper_enable_index,
         );
+
 
         //And
-        let decoder_splitter_output_index = self.decoder_splitters[1].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[1].lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let enable_gate_enable_index = self.enable_gates[2].borrow_mut().get_index_from_tag("E");
-        self.decoder_splitters[1].borrow_mut().connect_output_to_next_gate(
+        let enable_gate_enable_index = self.enable_gates[2].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[1].clone(),
             decoder_splitter_output_index,
-            enable_gate_enable_index,
             self.enable_gates[2].clone(),
+            enable_gate_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[1].borrow_mut().get_index_for_output(
+
+        let decoder_splitter_output_index = self.decoder_splitters[1].lock().unwrap().get_index_for_output(
             0, 1,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[1].borrow().get_index_from_tag("E");
-        self.decoder_splitters[1].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[1].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[1].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[1].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[1].borrow_mut().get_index_for_output(
+
+        let decoder_splitter_output_index = self.decoder_splitters[1].lock().unwrap().get_index_for_output(
             0, 2,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[7].borrow().get_index_from_tag("E");
-        self.decoder_splitters[1].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[7].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[1].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[7].clone(),
+            gatekeeper_enable_index,
         );
+
 
         //Not
-        let decoder_splitter_output_index = self.decoder_splitters[2].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[2].lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let enable_gate_enable_index = self.enable_gates[3].borrow_mut().get_index_from_tag("E");
-        self.decoder_splitters[2].borrow_mut().connect_output_to_next_gate(
+        let enable_gate_enable_index = self.enable_gates[3].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[2].clone(),
             decoder_splitter_output_index,
-            enable_gate_enable_index,
             self.enable_gates[3].clone(),
+            enable_gate_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[2].borrow_mut().get_index_for_output(
+
+        let decoder_splitter_output_index = self.decoder_splitters[2].lock().unwrap().get_index_for_output(
             0, 1,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[2].borrow().get_index_from_tag("E");
-        self.decoder_splitters[2].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[2].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[2].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[2].clone(),
+            gatekeeper_enable_index,
         );
 
         //Shift Left
-        let decoder_splitter_output_index = self.decoder_splitters[3].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[3].lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let enable_gate_enable_index = self.enable_gates[4].borrow_mut().get_index_from_tag("E");
-        self.decoder_splitters[3].borrow_mut().connect_output_to_next_gate(
+        let enable_gate_enable_index = self.enable_gates[4].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[3].clone(),
             decoder_splitter_output_index,
-            enable_gate_enable_index,
             self.enable_gates[4].clone(),
+            enable_gate_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[3].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[3].lock().unwrap().get_index_for_output(
             0, 1,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[3].borrow().get_index_from_tag("E");
-        self.decoder_splitters[3].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[3].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[3].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[3].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[3].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[3].lock().unwrap().get_index_for_output(
             0, 2,
         );
-        let gatekeeper_enable_index = self.carry_in_signal_gatekeepers[0].borrow().get_index_from_tag("E");
-        self.decoder_splitters[3].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.carry_in_signal_gatekeepers[0].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[3].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.carry_in_signal_gatekeepers[0].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[3].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[3].lock().unwrap().get_index_for_output(
             0, 3,
         );
-        let controlled_buffer_enable_index = self.shl_controlled_buffer.borrow().get_index_from_tag("E");
-        self.decoder_splitters[3].borrow_mut().connect_output_to_next_gate(
+        let controlled_buffer_enable_index = self.shl_controlled_buffer.lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[3].clone(),
             decoder_splitter_output_index,
-            controlled_buffer_enable_index,
             self.shl_controlled_buffer.clone(),
+            controlled_buffer_enable_index,
         );
 
         //Shift right
-        let decoder_splitter_output_index = self.decoder_splitters[4].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[4].lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let enable_gate_enable_index = self.enable_gates[5].borrow_mut().get_index_from_tag("E");
-        self.decoder_splitters[4].borrow_mut().connect_output_to_next_gate(
+        let enable_gate_enable_index = self.enable_gates[5].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[4].clone(),
             decoder_splitter_output_index,
-            enable_gate_enable_index,
             self.enable_gates[5].clone(),
+            enable_gate_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[4].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[4].lock().unwrap().get_index_for_output(
             0, 1,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[4].borrow().get_index_from_tag("E");
-        self.decoder_splitters[4].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[4].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[4].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[4].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[4].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[4].lock().unwrap().get_index_for_output(
             0, 2,
         );
-        let gatekeeper_enable_index = self.carry_in_signal_gatekeepers[1].borrow().get_index_from_tag("E");
-        self.decoder_splitters[4].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.carry_in_signal_gatekeepers[1].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[4].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.carry_in_signal_gatekeepers[1].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[4].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[4].lock().unwrap().get_index_for_output(
             0, 3,
         );
-        let controlled_buffer_enable_index = self.shr_controlled_buffer.borrow().get_index_from_tag("E");
-        self.decoder_splitters[4].borrow_mut().connect_output_to_next_gate(
+        let controlled_buffer_enable_index = self.shr_controlled_buffer.lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[4].clone(),
             decoder_splitter_output_index,
-            controlled_buffer_enable_index,
             self.shr_controlled_buffer.clone(),
+            controlled_buffer_enable_index,
         );
 
         //Adder
-        let decoder_splitter_output_index = self.decoder_splitters[5].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[5].lock().unwrap().get_index_for_output(
             0, 0,
         );
-        let enable_gate_enable_index = self.enable_gates[6].borrow_mut().get_index_from_tag("E");
-        self.decoder_splitters[5].borrow_mut().connect_output_to_next_gate(
+        let enable_gate_enable_index = self.enable_gates[6].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[5].clone(),
             decoder_splitter_output_index,
-            enable_gate_enable_index,
             self.enable_gates[6].clone(),
+            enable_gate_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[5].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[5].lock().unwrap().get_index_for_output(
             0, 1,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[5].borrow().get_index_from_tag("E");
-        self.decoder_splitters[5].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[5].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[5].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[5].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[5].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[5].lock().unwrap().get_index_for_output(
             0, 2,
         );
-        let gatekeeper_enable_index = self.input_signal_gatekeepers[8].borrow().get_index_from_tag("E");
-        self.decoder_splitters[5].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.input_signal_gatekeepers[8].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[5].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.input_signal_gatekeepers[8].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[5].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[5].lock().unwrap().get_index_for_output(
             0, 3,
         );
-        let gatekeeper_enable_index = self.carry_in_signal_gatekeepers[2].borrow().get_index_from_tag("E");
-        self.decoder_splitters[5].borrow_mut().connect_output_to_next_gate(
+        let gatekeeper_enable_index = self.carry_in_signal_gatekeepers[2].lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[5].clone(),
             decoder_splitter_output_index,
-            gatekeeper_enable_index,
             self.carry_in_signal_gatekeepers[2].clone(),
+            gatekeeper_enable_index,
         );
 
-        let decoder_splitter_output_index = self.decoder_splitters[5].borrow_mut().get_index_for_output(
+        let decoder_splitter_output_index = self.decoder_splitters[5].lock().unwrap().get_index_for_output(
             0, 4,
         );
-        let controlled_buffer_enable_index = self.adder_controlled_buffer.borrow().get_index_from_tag("E");
-        self.decoder_splitters[5].borrow_mut().connect_output_to_next_gate(
+        let controlled_buffer_enable_index = self.adder_controlled_buffer.lock().unwrap().get_index_from_tag("E");
+        connect_gates(
+            self.decoder_splitters[5].clone(),
             decoder_splitter_output_index,
-            controlled_buffer_enable_index,
             self.adder_controlled_buffer.clone(),
+            controlled_buffer_enable_index,
         );
 
         //Prime gates
-        self.complex_gate.calculate_output_from_inputs(
+        self.complex_gate.calculate_output_from_inputs_and_set_child_count(
             true,
-            Some(GateType::VariableBitEnableType),
         );
     }
 }
 
 impl LogicGate for ArithmeticLogicUnit {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.complex_gate.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.complex_gate.connect_output(
             self.get_unique_id(),
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.complex_gate.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
         let start = Instant::now();
 
-        let result = self.complex_gate.fetch_output_signals(
+        let result = self.complex_gate.fetch_output_signals_calculate(
             &self.get_tag(),
-            Some(GateType::VariableBitEnableType),
         );
 
         unsafe {
@@ -2713,6 +3040,12 @@ impl LogicGate for ArithmeticLogicUnit {
         }
 
         result
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.complex_gate.fetch_output_signals_no_calculate(
+            &self.get_tag(),
+        )
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -2739,16 +3072,20 @@ impl LogicGate for ArithmeticLogicUnit {
         self.complex_gate.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.complex_gate.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.complex_gate.simple_gate.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        self.complex_gate.input_gates.clone()
     }
 }
 
@@ -2883,9 +3220,12 @@ mod tests {
         ); //Zero      (Z)
         gen_randoms_result.output.push(gen_randoms_result.carry_out); //Carry Out (C_OUT)
 
+
         let alu = ArithmeticLogicUnit::new(num_bits);
 
+
         let alu_operation = AluOperations::get_vectors(opt);
+
 
         run_multi_input_output_logic_gate(
             vec![],
@@ -2981,7 +3321,7 @@ mod tests {
 
     fn generate_random_not_inputs_outputs(num_bits: usize) -> GenerateRandomReturns {
         let high_number_range = usize::pow(2, num_bits as u32);
-        let num: u32 =  rand::thread_rng().gen_range(0..high_number_range) as u32;
+        let num: u32 = rand::thread_rng().gen_range(0..high_number_range) as u32;
 
         let first_binary = format!("{:0width$b}", num, width = num_bits);
 
@@ -3021,7 +3361,7 @@ mod tests {
 
     fn generate_randoms_shl_shr_inputs_outputs(
         num_bits: usize,
-        left_shift: bool
+        left_shift: bool,
     ) -> GenerateRandomReturns {
         let high_number_range = usize::pow(2, num_bits as u32);
         let first_num = rand::thread_rng().gen_range(0..high_number_range);
@@ -3285,7 +3625,7 @@ mod tests {
 
             let left_shift = rand::thread_rng().gen_bool(0.5);
 
-            let variable_bit_left_shift: Rc<RefCell<dyn LogicGate>> =
+            let variable_bit_left_shift: SharedMutex<dyn LogicGate> =
                 if left_shift {
                     VariableBitShiftLeft::<true>::new(num_bits)
                 } else {
@@ -3294,7 +3634,7 @@ mod tests {
 
             let mut gen_randoms_result = generate_randoms_shl_shr_inputs_outputs(
                 num_bits,
-                left_shift
+                left_shift,
             );
 
             gen_randoms_result.output.push(gen_randoms_result.carry_out);
@@ -3348,7 +3688,7 @@ mod tests {
                 num_bits,
             );
 
-            let variable_bit_not: Rc<RefCell<dyn LogicGate>> =
+            let variable_bit_not: SharedMutex<dyn LogicGate> =
                 if and_gate {
                     VariableBitAnd::new(num_bits)
                 } else {
@@ -3625,6 +3965,7 @@ mod tests {
 
             let gen_randoms_result = generate_random_not_inputs_outputs(num_bits);
 
+
             run_alu(num_bits, AluOperations::Not, gen_randoms_result);
         }
     }
@@ -3637,7 +3978,7 @@ mod tests {
 
             let gen_randoms_result = generate_randoms_shl_shr_inputs_outputs(
                 num_bits,
-                left_shift
+                left_shift,
             );
 
             let opt =

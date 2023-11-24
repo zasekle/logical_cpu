@@ -1,8 +1,6 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use crate::logic::foundations::{GateInput, GateOutputState, LogicGate, UniqueID, GateLogicError, GateType, GateLogic, BasicGateMembers, InputSignalReturn, ConnectedOutput, calculate_input_signals_from_all_inputs, Signal, calculate_input_signal_from_single_inputs};
 use crate::logic::foundations::Signal::{HIGH, LOW_, NONE};
+use crate::shared_mutex::{new_shared_mutex, SharedMutex};
 
 pub struct Or {
     pub members: BasicGateMembers,
@@ -10,37 +8,46 @@ pub struct Or {
 
 #[allow(dead_code)]
 impl Or {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Or {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::OrType,
-                        None,
-                    )
-                }
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let or_gate = Or {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::OrType,
+                0,
+                None,
             )
+        };
+        new_shared_mutex(
+            or_gate.get_unique_id().id(),
+            or_gate,
         )
     }
 }
 
 impl LogicGate for Or {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -63,16 +70,20 @@ impl LogicGate for Or {
         self.members.tag = tag.to_string()
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -82,37 +93,46 @@ pub struct And {
 
 #[allow(dead_code)]
 impl And {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                And {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::AndType,
-                        None,
-                    )
-                }
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let and_gate = And {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::AndType,
+                0,
+                None,
             )
+        };
+        new_shared_mutex(
+            and_gate.get_unique_id().id(),
+            and_gate,
         )
     }
 }
 
 impl LogicGate for And {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -135,16 +155,20 @@ impl LogicGate for And {
         self.members.tag = tag.to_string()
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+       self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -154,37 +178,46 @@ pub struct Not {
 
 #[allow(dead_code)]
 impl Not {
-    pub fn new(output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Not {
-                    members: BasicGateMembers::new(
-                        1,
-                        output_num,
-                        GateType::NotType,
-                        None,
-                    )
-                }
+    pub fn new(output_num: usize) -> SharedMutex<Self> {
+        let not_gate = Not {
+            members: BasicGateMembers::new(
+                1,
+                output_num,
+                GateType::NotType,
+                0,
+                None,
             )
+        };
+        new_shared_mutex(
+            not_gate.get_unique_id().id(),
+            not_gate,
         )
     }
 }
 
 impl LogicGate for Not {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -207,16 +240,20 @@ impl LogicGate for Not {
         self.members.tag = tag.to_string()
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -226,37 +263,46 @@ pub struct Nor {
 
 #[allow(dead_code)]
 impl Nor {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Nor {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::NorType,
-                        None,
-                    )
-                }
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let nor_gate = Nor {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::NorType,
+                0,
+                None,
             )
+        };
+        new_shared_mutex(
+            nor_gate.get_unique_id().id(),
+            nor_gate,
         )
     }
 }
 
 impl LogicGate for Nor {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -279,16 +325,20 @@ impl LogicGate for Nor {
         self.members.tag = tag.to_string()
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -298,37 +348,46 @@ pub struct Nand {
 
 #[allow(dead_code)]
 impl Nand {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                Nand {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::NandType,
-                        None,
-                    )
-                }
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let nand_gate = Nand {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::NandType,
+                0,
+                None,
             )
+        };
+        new_shared_mutex(
+            nand_gate.get_unique_id().id(),
+            nand_gate,
         )
     }
 }
 
 impl LogicGate for Nand {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -351,16 +410,20 @@ impl LogicGate for Nand {
         self.members.tag = tag.to_string()
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -369,37 +432,46 @@ pub struct XOr {
 }
 
 impl XOr {
-    pub fn new(input_num: usize, output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                XOr {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        output_num,
-                        GateType::XOrType,
-                        None,
-                    )
-                }
+    pub fn new(input_num: usize, output_num: usize) -> SharedMutex<Self> {
+        let xor_gate = XOr {
+            members: BasicGateMembers::new(
+                input_num,
+                output_num,
+                GateType::XOrType,
+                0,
+                None,
             )
+        };
+        new_shared_mutex(
+            xor_gate.get_unique_id().id(),
+            xor_gate,
         )
     }
 }
 
 impl LogicGate for XOr {
-    fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-        self.members.connect_output_to_next_gate(
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        self.members.connect_output(
             current_gate_output_key,
             next_gate_input_key,
             next_gate,
-        );
+        )
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
     }
 
     fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
         self.members.update_input_signal(input)
     }
 
-    fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-        GateLogic::fetch_output_signals_basic_gate(&mut self.members)
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_calculate_basic_gate(&mut self.members)
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        GateLogic::fetch_output_signals_no_calculate_basic_gate(&mut self.members)
     }
 
     fn get_gate_type(&self) -> GateType {
@@ -422,16 +494,20 @@ impl LogicGate for XOr {
         self.members.tag = tag.to_string()
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -443,21 +519,22 @@ pub struct Splitter {
 
 #[allow(dead_code)]
 impl Splitter {
-    pub fn new(input_num: usize, outputs_per_input: usize) -> Rc<RefCell<Self>> {
+    pub fn new(input_num: usize, outputs_per_input: usize) -> SharedMutex<Self> {
         assert_ne!(outputs_per_input, 0);
-        Rc::new(
-            RefCell::new(
-                Splitter {
-                    members: BasicGateMembers::new(
-                        input_num,
-                        input_num * outputs_per_input,
-                        GateType::SplitterType,
-                        Some(LOW_),
-                    ),
-                    outputs_per_input,
-                    pull_output: None,
-                }
-            )
+        let splitter = Splitter {
+            members: BasicGateMembers::new(
+                input_num,
+                input_num * outputs_per_input,
+                GateType::SplitterType,
+                0,
+                Some(LOW_),
+            ),
+            outputs_per_input,
+            pull_output: None,
+        };
+        new_shared_mutex(
+            splitter.get_unique_id().id(),
+            splitter,
         )
     }
 
@@ -471,41 +548,8 @@ impl Splitter {
     pub fn pull_output(&mut self, signal: Signal) {
         self.pull_output = Some(signal);
     }
-}
-
-impl LogicGate for Splitter {
-    //current_gate_output_key is meant to be extracted from Splitter::get_index_for_output()
-    fn connect_output_to_next_gate(
-        &mut self,
-        current_gate_output_key: usize,
-        next_gate_input_key: usize,
-        next_gate: Rc<RefCell<dyn LogicGate>>,
-    ) {
-        //When gates are being connected, there should be no issues with this error.
-        let output_signal = calculate_input_signal_from_single_inputs(
-            &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
-            // &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
-        ).unwrap();
-
-        GateLogic::connect_output_to_next_gate_no_calculate(
-            self.get_unique_id(),
-            &mut self.members.output_states,
-            current_gate_output_key,
-            next_gate_input_key,
-            next_gate,
-            output_signal,
-            self.members.gate_type,
-            &self.members.tag,
-            self.members.should_print_output,
-        );
-    }
-
-    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        self.members.update_input_signal(input)
-    }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-
         //output_states is outputs_per_input*num_inputs length and input_states is num_inputs length.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
 
@@ -547,6 +591,47 @@ impl LogicGate for Splitter {
 
         Ok(self.members.output_states.clone())
     }
+}
+
+impl LogicGate for Splitter {
+    //current_gate_output_key is meant to be extracted from Splitter::get_index_for_output()
+    fn internal_connect_output(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: SharedMutex<dyn LogicGate>) -> Signal {
+        //When gates are being connected, there should be no issues with this error.
+        let output_signal = calculate_input_signal_from_single_inputs(
+            &self.members.input_signals[current_gate_output_key / self.outputs_per_input]
+            // &self.members.input_signals[current_gate_output_key % self.members.input_signals.len()]
+        ).unwrap();
+
+        GateLogic::connect_output_no_calculate(
+            self.get_unique_id(),
+            &mut self.members.output_states,
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+            output_signal.clone(),
+            self.members.gate_type,
+            &self.members.tag,
+            self.members.should_print_output,
+        );
+
+        output_signal
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        self.members.update_input_signal(input)
+    }
+
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
 
     fn get_gate_type(&self) -> GateType {
         self.members.gate_type
@@ -572,16 +657,20 @@ impl LogicGate for Splitter {
         self.members.get_index_from_tag(tag)
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
 
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
+    }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
     }
 }
 
@@ -591,58 +680,23 @@ pub struct ControlledBuffer {
 
 #[allow(dead_code)]
 impl ControlledBuffer {
-    pub fn new(input_output_num: usize) -> Rc<RefCell<Self>> {
-        Rc::new(
-            RefCell::new(
-                ControlledBuffer {
-                    members: BasicGateMembers::new(
-                        input_output_num + 1,
-                        input_output_num,
-                        GateType::ControlledBufferType,
-                        Some(NONE),
-                    )
-                }
+    pub fn new(input_output_num: usize) -> SharedMutex<Self> {
+        let controlled_buffer = ControlledBuffer {
+            members: BasicGateMembers::new(
+                input_output_num + 1,
+                input_output_num,
+                GateType::ControlledBufferType,
+                0,
+                Some(NONE),
             )
-        )
-    }
-}
-
-impl LogicGate for ControlledBuffer {
-    fn connect_output_to_next_gate(
-        &mut self,
-        current_gate_output_key: usize,
-        next_gate_input_key: usize,
-        next_gate: Rc<RefCell<dyn LogicGate>>,
-    ) {
-        let enable_index = self.get_index_from_tag("E");
-        //When gates are being connected, there should be no issues with this error.
-        let input_signals =
-            calculate_input_signals_from_all_inputs(&self.members.input_signals).unwrap();
-        let output_signal = if input_signals[enable_index] == HIGH {
-            input_signals[current_gate_output_key].clone()
-        } else {
-            NONE
         };
-
-        GateLogic::connect_output_to_next_gate_no_calculate(
-            self.get_unique_id(),
-            &mut self.members.output_states,
-            current_gate_output_key,
-            next_gate_input_key,
-            next_gate,
-            output_signal,
-            self.members.gate_type,
-            &self.members.tag,
-            self.members.should_print_output,
-        );
-    }
-
-    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
-        self.members.update_input_signal(input)
+        new_shared_mutex(
+            controlled_buffer.get_unique_id().id(),
+            controlled_buffer,
+        )
     }
 
     fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-
         //When input index 0 is HIGH, allow the signal through, otherwise return NotConnected.
         let input_signals = calculate_input_signals_from_all_inputs(&self.members.input_signals)?;
         let enable_index = self.get_index_from_tag("E");
@@ -698,6 +752,55 @@ impl LogicGate for ControlledBuffer {
 
         Ok(output)
     }
+}
+
+impl LogicGate for ControlledBuffer {
+    fn internal_connect_output(
+        &mut self,
+        current_gate_output_key: usize,
+        next_gate_input_key: usize,
+        next_gate: SharedMutex<dyn LogicGate>,
+    ) -> Signal {
+        let enable_index = self.get_index_from_tag("E");
+        //When gates are being connected, there should be no issues with this error.
+        let input_signals =
+            calculate_input_signals_from_all_inputs(&self.members.input_signals).unwrap();
+        let output_signal = if input_signals[enable_index] == HIGH {
+            input_signals[current_gate_output_key].clone()
+        } else {
+            NONE
+        };
+
+        GateLogic::connect_output_no_calculate(
+            self.get_unique_id(),
+            &mut self.members.output_states,
+            current_gate_output_key,
+            next_gate_input_key,
+            next_gate,
+            output_signal.clone(),
+            self.members.gate_type,
+            &self.members.tag,
+            self.members.should_print_output,
+        );
+
+        output_signal
+    }
+
+    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
+    }
+
+    fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
+        self.members.update_input_signal(input)
+    }
+
+    fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
+
+    fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+        self.fetch_output_signals()
+    }
 
     fn get_gate_type(&self) -> GateType {
         self.members.gate_type
@@ -727,10 +830,6 @@ impl LogicGate for ControlledBuffer {
         }
     }
 
-    fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-        self.members.internal_update_index_to_id(sending_id, gate_input_index, signal);
-    }
-
     fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
         self.members.remove_connected_input(input_index, connected_id);
     }
@@ -738,13 +837,21 @@ impl LogicGate for ControlledBuffer {
     fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
         self.members.toggle_print_each_input_output_gate(print_each_input_output_gate);
     }
+
+    fn num_children_gates(&self) -> usize {
+        self.members.number_child_gates
+    }
+
+    fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+        panic!("Basic gates do not have input gates");
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use rand::Rng;
     use crate::globals::CLOCK_TICK_NUMBER;
-    use crate::logic::foundations::{ComplexGateMembers, Signal};
+    use crate::logic::foundations::{ComplexGateMembers, connect_gates, Signal};
     use crate::logic::foundations::Signal::{HIGH, LOW_};
     use crate::logic::input_gates::{AutomaticInput, SimpleInput};
     use crate::logic::output_gates::{LogicGateAndOutputGate, SimpleOutput};
@@ -758,13 +865,14 @@ mod tests {
         let output_gate = SimpleOutput::new("OUT");
         let controlled_buffer = ControlledBuffer::new(1);
 
-        controlled_buffer.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            controlled_buffer.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
-        controlled_buffer.borrow_mut().update_input_signal(
+        controlled_buffer.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 signal.clone(),
@@ -772,8 +880,8 @@ mod tests {
             )
         );
 
-        let enable_index = controlled_buffer.borrow_mut().get_index_from_tag("E");
-        controlled_buffer.borrow_mut().update_input_signal(
+        let enable_index = controlled_buffer.lock().unwrap().get_index_from_tag("E");
+        controlled_buffer.lock().unwrap().update_input_signal(
             GateInput::new(
                 enable_index,
                 HIGH,
@@ -781,22 +889,22 @@ mod tests {
             )
         );
 
-        let output = controlled_buffer.borrow_mut().fetch_output_signals().unwrap();
+        let output = controlled_buffer.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         for gate_output_state in output {
             match gate_output_state {
                 GateOutputState::NotConnected(_) => panic!("Output should be connected when pin is low."),
                 GateOutputState::Connected(connected_output) => {
                     assert_eq!(connected_output.throughput.signal, signal);
-                    let connected_id = connected_output.gate.borrow_mut().get_unique_id().id();
-                    let output_id = output_gate.borrow_mut().get_unique_id().id();
+                    let connected_id = connected_output.gate.lock().unwrap().get_unique_id().id();
+                    let output_id = output_gate.lock().unwrap().get_unique_id().id();
                     assert_eq!(connected_id, output_id);
                 }
             }
         }
     }
 
-    fn collect_output_for_run_circuit(collected_output: &mut Vec<Vec<Signal>>, output_gates: &&Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>) {
+    fn collect_output_for_run_circuit(collected_output: &mut Vec<Vec<Signal>>, output_gates: &&Vec<SharedMutex<dyn LogicGateAndOutputGate>>) {
         assert_eq!(output_gates.len(), 1);
 
         let mut single_collected_output = Vec::new();
@@ -1073,14 +1181,15 @@ mod tests {
     fn test_controlled_buffer_initialization() {
         let output_gate = SimpleOutput::new("OUT");
         let controlled_buffer = ControlledBuffer::new(1);
-        let mut mut_controlled_buffer = controlled_buffer.borrow_mut();
-        mut_controlled_buffer.connect_output_to_next_gate(
-            0,
+
+        connect_gates(
+            controlled_buffer.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
-        mut_controlled_buffer.update_input_signal(
+        controlled_buffer.lock().unwrap().update_input_signal(
             GateInput::new(
                 0,
                 HIGH,
@@ -1088,7 +1197,7 @@ mod tests {
             )
         );
 
-        let output = mut_controlled_buffer.fetch_output_signals().unwrap();
+        let output = controlled_buffer.lock().unwrap().fetch_output_signals_calculate().unwrap();
 
         for gate_output_state in output {
             match gate_output_state {
@@ -1112,8 +1221,8 @@ mod tests {
 
     #[test]
     fn test_none_signal_working() {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let num_gates = rand::thread_rng().gen_range(2..=16);
         let throughput_gate_index = rand::thread_rng().gen_range(0..num_gates);
@@ -1136,24 +1245,27 @@ mod tests {
 
             let controlled_buffer = ControlledBuffer::new(1);
 
-            input_gate.borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                input_gate.clone(),
                 0,
                 controlled_buffer.clone(),
+                0,
             );
 
-            controlled_buffer.borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                controlled_buffer.clone(),
                 0,
                 output_gate.clone(),
+                0,
             );
 
-            let enable_index = controlled_buffer.borrow_mut().get_index_from_tag("E");
+            let enable_index = controlled_buffer.lock().unwrap().get_index_from_tag("E");
             if i == throughput_gate_index {
-                single_enable_input_gate.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    single_enable_input_gate.clone(),
                     0,
-                    enable_index,
                     controlled_buffer.clone(),
+                    enable_index,
                 );
             } else {
                 let next_index =
@@ -1162,10 +1274,11 @@ mod tests {
                     } else {
                         i
                     };
-                other_enable_input_gates.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    other_enable_input_gates.clone(),
                     next_index,
-                    enable_index,
                     controlled_buffer.clone(),
+                    enable_index,
                 );
             }
 
@@ -1189,10 +1302,9 @@ mod tests {
                 &input_gates,
                 &output_gates,
                 propagate_signal_through_circuit,
-                &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+                &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                     collect_output_for_run_circuit(&mut collected_output, &output_gates);
                 },
-                None,
             );
 
             propagate_signal_through_circuit = false;
@@ -1204,35 +1316,38 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_controlled_buffer_multiple_inputs() {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let enable_input_gate = AutomaticInput::new(vec![HIGH], 2, "Enable_Inputs");
         let input_gate = AutomaticInput::new(vec![HIGH], 2, "Inputs");
         let output_gate = SimpleOutput::new("OUT");
 
-        let controlled_buffers: [Rc<RefCell<ControlledBuffer>>; 2] = [ControlledBuffer::new(1), ControlledBuffer::new(1)];
+        let controlled_buffers: [SharedMutex<ControlledBuffer>; 2] = [ControlledBuffer::new(1), ControlledBuffer::new(1)];
 
         let output_signal: Vec<Vec<Signal>> = Vec::new();
 
         for i in 0..2 {
-            input_gate.borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                input_gate.clone(),
                 i,
-                0,
                 controlled_buffers[i].clone(),
+                0,
             );
 
-            let enable_index = controlled_buffers[i].borrow_mut().get_index_from_tag("E");
-            enable_input_gate.borrow_mut().connect_output_to_next_gate(
+            let enable_index = controlled_buffers[i].lock().unwrap().get_index_from_tag("E");
+            connect_gates(
+                enable_input_gate.clone(),
                 i,
+                controlled_buffers[i].clone(),
                 enable_index,
-                controlled_buffers[i].clone(),
             );
 
-            controlled_buffers[i].borrow_mut().connect_output_to_next_gate(
-                0,
+            connect_gates(
+                controlled_buffers[i].clone(),
                 0,
                 output_gate.clone(),
+                0,
             );
         }
 
@@ -1246,10 +1361,9 @@ mod tests {
             &input_gates,
             &output_gates,
             false,
-            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
-            None,
         );
 
         assert_eq!(collected_output, output_signal);
@@ -1259,14 +1373,14 @@ mod tests {
     fn test_controlled_buffer_nested_in_complex_gate() {
         struct ControlledBufferWrapper {
             complex_gate: ComplexGateMembers,
-            controlled_buffer: Rc<RefCell<ControlledBuffer>>,
+            controlled_buffer: SharedMutex<ControlledBuffer>,
         }
 
         impl ControlledBufferWrapper {
-            pub fn new() -> Rc<RefCell<Self>> {
-                let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-                let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
-                let mut output_gates_logic: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
+            pub fn new() -> SharedMutex<Self> {
+                let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+                let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
+                let mut output_gates_logic: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
 
                 let output_gate = SimpleOutput::new("Output");
 
@@ -1287,30 +1401,30 @@ mod tests {
 
                 gate.build_and_prime_circuit(output_gates_logic);
 
-                Rc::new(RefCell::new(gate))
+                new_shared_mutex(gate.get_unique_id().id(), gate)
             }
 
             fn build_and_prime_circuit(
                 &mut self,
-                output_gates: Vec<Rc<RefCell<dyn LogicGate>>>,
+                output_gates: Vec<SharedMutex<dyn LogicGate>>,
             ) {
-                self.complex_gate.input_gates[self.get_index_from_tag("Input")]
-                    .borrow_mut()
-                    .connect_output_to_next_gate(
-                        0,
-                        0,
-                        self.controlled_buffer.clone(),
-                    );
-
-                self.controlled_buffer.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    self.complex_gate.input_gates[self.get_index_from_tag("Input")].clone(),
                     0,
+                    self.controlled_buffer.clone(),
+                    0,
+                );
+
+                connect_gates(
+                    self.controlled_buffer.clone(),
                     0,
                     output_gates[0].clone(),
+                    0,
                 );
 
                 //Force the enable to low so that NONE is always returned.
-                let enable_index = self.controlled_buffer.borrow_mut().get_index_from_tag("E");
-                self.controlled_buffer.borrow_mut().update_input_signal(
+                let enable_index = self.controlled_buffer.lock().unwrap().get_index_from_tag("E");
+                self.controlled_buffer.lock().unwrap().update_input_signal(
                     GateInput::new(
                         enable_index,
                         LOW_,
@@ -1319,31 +1433,44 @@ mod tests {
                 );
 
                 //Prime gates
-                self.complex_gate.calculate_output_from_inputs(
+                self.complex_gate.calculate_output_from_inputs_and_set_child_count(
                     true,
-                    None,
                 );
             }
         }
 
         impl LogicGate for ControlledBufferWrapper {
-            fn connect_output_to_next_gate(&mut self, current_gate_output_key: usize, next_gate_input_key: usize, next_gate: Rc<RefCell<dyn LogicGate>>) {
-                self.complex_gate.connect_output_to_next_gate(
+            fn internal_connect_output(
+                &mut self,
+                current_gate_output_key: usize,
+                next_gate_input_key: usize,
+                next_gate: SharedMutex<dyn LogicGate>,
+            ) -> Signal {
+                self.complex_gate.connect_output(
                     self.get_unique_id(),
                     current_gate_output_key,
                     next_gate_input_key,
                     next_gate,
-                );
+                )
+            }
+
+            fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
+                self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
             }
 
             fn update_input_signal(&mut self, input: GateInput) -> InputSignalReturn {
                 self.complex_gate.update_input_signal(input)
             }
 
-            fn fetch_output_signals(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
-                self.complex_gate.fetch_output_signals(
+            fn fetch_output_signals_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+                self.complex_gate.fetch_output_signals_calculate(
                     &self.get_tag(),
-                    None,
+                )
+            }
+
+            fn fetch_output_signals_no_calculate(&mut self) -> Result<Vec<GateOutputState>, GateLogicError> {
+                self.complex_gate.fetch_output_signals_no_calculate(
+                    &self.get_tag(),
                 )
             }
 
@@ -1371,10 +1498,6 @@ mod tests {
                 self.complex_gate.get_index_from_tag(tag)
             }
 
-            fn internal_update_index_to_id(&mut self, sending_id: UniqueID, gate_input_index: usize, signal: Signal) {
-                self.complex_gate.internal_update_index_to_id(sending_id, gate_input_index, signal);
-            }
-
             fn remove_connected_input(&mut self, input_index: usize, connected_id: UniqueID) {
                 self.complex_gate.remove_connected_input(input_index, connected_id);
             }
@@ -1382,10 +1505,18 @@ mod tests {
             fn toggle_print_each_input_output_gate(&mut self, print_each_input_output_gate: bool) {
                 self.complex_gate.toggle_print_each_input_output_gate(print_each_input_output_gate);
             }
+
+            fn num_children_gates(&self) -> usize {
+                self.complex_gate.simple_gate.number_child_gates
+            }
+
+            fn get_input_gates(&self) -> Vec<SharedMutex<dyn LogicGate>> {
+                self.complex_gate.input_gates.clone()
+            }
         }
 
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let input_gate = AutomaticInput::new(vec![HIGH], 2, "Inputs");
         let output_gate = SimpleOutput::new("OUT");
@@ -1394,16 +1525,18 @@ mod tests {
 
         let output_signal = vec![[NONE]];
 
-        input_gate.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            input_gate.clone(),
             0,
             wrapper.clone(),
+            0,
         );
 
-        wrapper.borrow_mut().connect_output_to_next_gate(
-            0,
+        connect_gates(
+            wrapper.clone(),
             0,
             output_gate.clone(),
+            0,
         );
 
         input_gates.push(input_gate);
@@ -1415,10 +1548,9 @@ mod tests {
             &input_gates,
             &output_gates,
             false,
-            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 collect_output_for_run_circuit(&mut collected_output, &output_gates);
             },
-            None,
         );
 
         assert_eq!(collected_output, output_signal);
@@ -1426,8 +1558,8 @@ mod tests {
 
     #[test]
     fn splitter_properly_splits() {
-        let mut input_gates: Vec<Rc<RefCell<dyn LogicGate>>> = Vec::new();
-        let mut output_gates: Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>> = Vec::new();
+        let mut input_gates: Vec<SharedMutex<dyn LogicGate>> = Vec::new();
+        let mut output_gates: Vec<SharedMutex<dyn LogicGateAndOutputGate>> = Vec::new();
 
         let input_num = rand::thread_rng().gen_range(1..=16);
         let outputs_per_input = rand::thread_rng().gen_range(2..=16);
@@ -1447,7 +1579,7 @@ mod tests {
             let input_gate = AutomaticInput::new(
                 vec![signal.clone()],
                 1,
-                input_tag.as_str()
+                input_tag.as_str(),
             );
 
             println!("signal: {:?}", signal.clone());
@@ -1456,10 +1588,11 @@ mod tests {
                 single_turn_output.push(signal.clone());
             }
 
-            input_gate.borrow_mut().connect_output_to_next_gate(
+            connect_gates(
+                input_gate.clone(),
                 0,
-                i,
                 splitter.clone(),
+                i,
             );
 
             input_gates.push(input_gate);
@@ -1471,12 +1604,13 @@ mod tests {
             for j in 0..outputs_per_input {
                 let output_tag = format!("OUT_{}", i);
                 let output_gate = SimpleOutput::new(output_tag.as_str());
-                let splitter_output = splitter.borrow_mut().get_index_for_output(i, j);
+                let splitter_output = splitter.lock().unwrap().get_index_for_output(i, j);
                 println!("i {i} j {j} splitter_output {splitter_output}");
-                splitter.borrow_mut().connect_output_to_next_gate(
+                connect_gates(
+                    splitter.clone(),
                     splitter_output,
-                    0,
                     output_gate.clone(),
+                    0,
                 );
 
                 output_gates.push(output_gate);
@@ -1489,7 +1623,7 @@ mod tests {
             &input_gates,
             &output_gates,
             false,
-            &mut |_clock_tick_inputs, output_gates: &Vec<Rc<RefCell<dyn LogicGateAndOutputGate>>>| {
+            &mut |_clock_tick_inputs, output_gates: &Vec<SharedMutex<dyn LogicGateAndOutputGate>>| {
                 assert_eq!(output_gates.len(), input_num * outputs_per_input);
 
                 let mut single_collected_output = Vec::new();
@@ -1497,7 +1631,6 @@ mod tests {
 
                 collected_output.push(single_collected_output);
             },
-            None,
         );
 
         println!("{:#?}", collected_output);
